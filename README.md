@@ -22,6 +22,14 @@ uv run uvicorn app.main:app --reload
 uv run pytest -v
 ```
 
+## Configuration
+
+Optional environment variables:
+
+- `APP_ENV`
+- `DATABASE_URL`
+- `REDIS_URL`
+
 ## Docker Compose
 
 ### Start dependencies and API
