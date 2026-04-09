@@ -32,6 +32,13 @@ uv run pytest -v
 
 当前项目已接入基于 `SQLAlchemy` 的最小数据库基础设施，并继续使用 `DATABASE_URL` 作为数据库连接配置入口。
 
+当前模型基座已包含：
+
+- `projects`
+- `obstacles`
+
+其中 `obstacles.geom` 按 PostGIS `MultiPolygon (EPSG:4326)` 设计，`raw_payload` 用于保留原始导入数据快照。
+
 ## 数据库迁移
 
 当前项目已接入最小 `Alembic` 迁移体系，可使用以下命令：
