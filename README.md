@@ -30,6 +30,8 @@ uv run pytest -v
 - `DATABASE_URL`
 - `REDIS_URL`
 
+当前项目已接入基于 `SQLAlchemy` 的最小数据库基础设施，并继续使用 `DATABASE_URL` 作为数据库连接配置入口。
+
 ## Docker Compose
 
 ### 启动依赖服务和 API
