@@ -21,3 +21,13 @@ uv run uvicorn app.main:app --reload
 ```bash
 uv run pytest -v
 ```
+
+## Docker Compose
+
+### Start dependencies and API
+
+```bash
+docker compose up api postgres redis
+```
+
+API will be available at `http://localhost:8000/health`.
