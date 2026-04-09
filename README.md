@@ -35,9 +35,10 @@ uv run pytest -v
 当前模型基座已包含：
 
 - `projects`
+- `import_batches`
 - `obstacles`
 
-其中 `obstacles.geom` 按 PostGIS `MultiPolygon (EPSG:4326)` 设计，`raw_payload` 用于保留原始导入数据快照。
+其中 `import_batches` 用于记录导入批次与状态，`obstacles.geom` 按 PostGIS `MultiPolygon (EPSG:4326)` 设计，`raw_payload` 用于保留原始导入数据快照。
 
 ## 数据库迁移
 
