@@ -1,8 +1,8 @@
-version: "4.2"
-
 services:
   api:
-    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: sods-api
     working_dir: /app
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

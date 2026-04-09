@@ -4,27 +4,27 @@
 
 ## Local Development
 
-### Install dependencies
+### 安装依赖
 
 ```bash
 uv sync --dev
 ```
 
-### Run the API
+### 启动 API
 
 ```bash
 uv run uvicorn app.main:app --reload
 ```
 
-### Run tests
+### 运行测试
 
 ```bash
 uv run pytest -v
 ```
 
-## Configuration
+## 配置
 
-Optional environment variables:
+可选环境变量：
 
 - `APP_ENV`
 - `DATABASE_URL`
@@ -32,10 +32,10 @@ Optional environment variables:
 
 ## Docker Compose
 
-### Start dependencies and API
+### 启动依赖服务和 API
 
 ```bash
-docker compose up api postgres redis
+docker compose up --build api postgres redis
 ```
 
-API will be available at `http://localhost:8000/health`.
+API 启动后可通过 `http://localhost:8000/health` 访问健康检查接口。
