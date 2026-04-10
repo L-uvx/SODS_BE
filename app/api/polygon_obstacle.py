@@ -1,0 +1,60 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db_session
+from app.application.polygon_obstacle_import import PolygonObstacleImportService
+from app.schemas.polygon_obstacle import (
+    ImportTaskCreateRequest,
+    ImportTaskResultResponse,
+    ImportTaskStatusResponse,
+)
+
+
+router = APIRouter(prefix="/polygon-obstacle", tags=["polygon-obstacle"])
+
+
+@router.post(
+    "/import",
+    response_model=ImportTaskStatusResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_import_task(
+    payload: ImportTaskCreateRequest = Depends(ImportTaskCreateRequest.as_form),
+    session: Session = Depends(get_db_session),
+) -> ImportTaskStatusResponse:
+    service = PolygonObstacleImportService(session)
+    return service.create_import_task(payload)
+
+
+@router.get(
+    "/import/{task_id}/status",
+    response_model=ImportTaskStatusResponse,
+)
+def get_import_task_status(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> ImportTaskStatusResponse:
+    service = PolygonObstacleImportService(session)
+    result = service.get_import_task_status(task_id)
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="import task not found")
+
+    return result
+
+
+@router.get(
+    "/import/{task_id}/result",
+    response_model=ImportTaskResultResponse,
+)
+def get_import_task_result(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> ImportTaskResultResponse:
+    service = PolygonObstacleImportService(session)
+    result = service.get_import_task_result(task_id)
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="import task not found")
+
+    return result

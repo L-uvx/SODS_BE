@@ -12,6 +12,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.core.config import Settings
 from app.db.base import Base
+import app.db.models  # noqa: F401
 
 
 config = context.config
