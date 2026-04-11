@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.deps import get_db_session
 from app.db.base import Base
 from app.main import app
+from app.models.airport import Airport
 from app.models.import_batch import ImportBatch
 from app.models.project import Project
 
@@ -23,7 +24,7 @@ def _create_test_client() -> Generator[TestClient, None, None]:
     testing_session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     Base.metadata.create_all(
         bind=engine,
-        tables=[Project.__table__, ImportBatch.__table__],
+        tables=[Project.__table__, ImportBatch.__table__, Airport.__table__],
     )
 
     def _override_session() -> Generator[Session, None, None]:
@@ -40,7 +41,7 @@ def _create_test_client() -> Generator[TestClient, None, None]:
 
     Base.metadata.drop_all(
         bind=engine,
-        tables=[ImportBatch.__table__, Project.__table__],
+        tables=[Airport.__table__, ImportBatch.__table__, Project.__table__],
     )
     app.dependency_overrides = {}
 
@@ -129,6 +130,56 @@ def test_get_import_task_result_returns_minimal_result_payload() -> None:
 def test_get_import_task_result_returns_404_for_unknown_task() -> None:
     with _create_test_client() as client:
         response = client.get("/polygon-obstacle/import/missing-task/result")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "import task not found"}
+
+
+def test_get_import_targets_returns_all_airports_with_placeholder_distance() -> None:
+    with _create_test_client() as client:
+        create_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("demo.xlsx", b"fake-excel-content")},
+        )
+        task_id = create_response.json()["taskId"]
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add_all(
+                [
+                    Airport(name="Airport B"),
+                    Airport(name="Airport A"),
+                ]
+            )
+            session.commit()
+
+        response = client.get(f"/polygon-obstacle/import/{task_id}/targets")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": 1,
+            "name": "Airport B",
+            "category": "",
+            "distance": 0,
+            "distanceUnit": "m",
+        },
+        {
+            "id": 2,
+            "name": "Airport A",
+            "category": "",
+            "distance": 0,
+            "distanceUnit": "m",
+        },
+    ]
+
+
+def test_get_import_targets_returns_404_for_unknown_task() -> None:
+    with _create_test_client() as client:
+        response = client.get("/polygon-obstacle/import/missing-task/targets")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "import task not found"}

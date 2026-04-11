@@ -7,6 +7,7 @@ from app.schemas.polygon_obstacle import (
     ImportTaskCreateRequest,
     ImportTaskResultResponse,
     ImportTaskStatusResponse,
+    ImportTargetResponse,
 )
 
 
@@ -53,6 +54,23 @@ def get_import_task_result(
 ) -> ImportTaskResultResponse:
     service = PolygonObstacleImportService(session)
     result = service.get_import_task_result(task_id)
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="import task not found")
+
+    return result
+
+
+@router.get(
+    "/import/{task_id}/targets",
+    response_model=list[ImportTargetResponse],
+)
+def get_import_targets(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> list[ImportTargetResponse]:
+    service = PolygonObstacleImportService(session)
+    result = service.get_import_targets(task_id)
 
     if result is None:
         raise HTTPException(status_code=404, detail="import task not found")

@@ -1,5 +1,7 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.airport import Airport
 from app.models.import_batch import ImportBatch
 from app.models.project import Project
 
@@ -36,3 +38,7 @@ class ImportBatchRepository:
 
     def get_import_batch(self, task_id: str) -> ImportBatch | None:
         return self._session.get(ImportBatch, task_id)
+
+    def list_airports(self) -> list[Airport]:
+        statement = select(Airport).order_by(Airport.id)
+        return list(self._session.scalars(statement))

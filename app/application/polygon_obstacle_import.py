@@ -5,6 +5,7 @@ from app.schemas.polygon_obstacle import (
     ImportTaskCreateRequest,
     ImportTaskResultResponse,
     ImportTaskStatusResponse,
+    ImportTargetResponse,
 )
 
 
@@ -61,3 +62,19 @@ class PolygonObstacleImportService:
             failedCount=0,
             boundingBox=None,
         )
+
+    def get_import_targets(self, task_id: str) -> list[ImportTargetResponse] | None:
+        import_batch = self._repository.get_import_batch(task_id)
+        if import_batch is None:
+            return None
+
+        return [
+            ImportTargetResponse(
+                id=airport.id,
+                name=airport.name,
+                category="",
+                distance=0,
+                distanceUnit="m",
+            )
+            for airport in self._repository.list_airports()
+        ]

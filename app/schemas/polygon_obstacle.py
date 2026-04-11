@@ -52,3 +52,16 @@ class ImportTaskResultResponse(BaseModel):
         populate_by_name=True,
         serialize_by_alias=True,
     )
+
+
+class ImportTargetResponse(BaseModel):
+    id: int
+    name: str
+    category: str
+    distance: int
+    distance_unit: str = Field(alias="distanceUnit")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
