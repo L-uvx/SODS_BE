@@ -7,6 +7,9 @@ def test_project_and_obstacle_tables_are_registered() -> None:
     assert "projects" in Base.metadata.tables
     assert "import_batches" in Base.metadata.tables
     assert "obstacles" in Base.metadata.tables
+    assert "airports" in Base.metadata.tables
+    assert "runways" in Base.metadata.tables
+    assert "stations" in Base.metadata.tables
 
 
 def test_obstacle_has_project_foreign_key() -> None:
@@ -43,3 +46,34 @@ def test_obstacle_source_batch_matches_import_batch_key_type() -> None:
     assert type(obstacle_table.c.source_batch_id.type) is type(
         import_batch_table.c.id.type
     )
+
+
+def test_airport_has_expected_core_columns() -> None:
+    airport_table = Base.metadata.tables["airports"]
+
+    assert airport_table.c.name.nullable is False
+    assert airport_table.c.longitude.type.scale == 6
+    assert airport_table.c.latitude.type.scale == 6
+    assert airport_table.c.altitude.type.scale == 3
+
+
+def test_runway_has_required_airport_foreign_key() -> None:
+    runway_table = Base.metadata.tables["runways"]
+    foreign_keys = list(runway_table.c.airport_id.foreign_keys)
+
+    assert len(foreign_keys) == 1
+    assert foreign_keys[0].target_fullname == "airports.id"
+    assert runway_table.c.airport_id.nullable is False
+    assert runway_table.c.name.nullable is False
+    assert runway_table.c.altitude.type.scale == 3
+
+
+def test_station_has_required_airport_foreign_key() -> None:
+    station_table = Base.metadata.tables["stations"]
+    foreign_keys = list(station_table.c.airport_id.foreign_keys)
+
+    assert len(foreign_keys) == 1
+    assert foreign_keys[0].target_fullname == "airports.id"
+    assert station_table.c.airport_id.nullable is False
+    assert station_table.c.name.nullable is False
+    assert station_table.c.altitude.type.scale == 3
