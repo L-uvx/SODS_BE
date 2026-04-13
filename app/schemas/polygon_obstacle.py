@@ -8,20 +8,23 @@ class ImportTaskCreateRequest(BaseModel):
     project_name: str = Field(alias="projectName")
     obstacle_type: str = Field(alias="obstacleType")
     file_name: str = Field(alias="fileName")
+    file_bytes: bytes = Field(alias="fileBytes")
 
     model_config = ConfigDict(populate_by_name=True)
 
     @classmethod
-    def as_form(
+    async def as_form(
         cls,
         project_name: Annotated[str, Form(alias="projectName")],
         obstacle_type: Annotated[str, Form(alias="obstacleType")],
         excel_file: Annotated[UploadFile, File(alias="excelFile")],
     ) -> "ImportTaskCreateRequest":
+        file_bytes = await excel_file.read()
         return cls(
             projectName=project_name,
             obstacleType=obstacle_type,
             fileName=excel_file.filename,
+            fileBytes=file_bytes,
         )
 
 

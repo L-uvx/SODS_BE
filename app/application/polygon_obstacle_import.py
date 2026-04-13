@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 
+from app.application.polygon_obstacle_excel_parser import parse_polygon_obstacle_excel
 from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
     ImportTaskCreateRequest,
@@ -16,6 +17,8 @@ class PolygonObstacleImportService:
     def create_import_task(
         self, payload: ImportTaskCreateRequest
     ) -> ImportTaskStatusResponse:
+        # Current slice only validates the uploaded template before persistence.
+        parse_polygon_obstacle_excel(payload.file_bytes)
         project = self._repository.create_project(payload.project_name)
         task_id = f"import-batch-{project.id}"
         import_batch = self._repository.create_import_batch(
