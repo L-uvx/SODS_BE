@@ -89,3 +89,23 @@ class ImportTargetResponse(BaseModel):
         populate_by_name=True,
         serialize_by_alias=True,
     )
+
+
+class BootstrapAirportResponse(BaseModel):
+    id: int
+    name: str
+    longitude: float
+    latitude: float
+
+
+class BootstrapResponse(BaseModel):
+    airport: BootstrapAirportResponse | None
+    historical_obstacles: list[ImportedObstacleResponse] = Field(
+        default_factory=list,
+        alias="historicalObstacles",
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )

@@ -371,6 +371,151 @@ def test_get_import_targets_returns_404_for_unknown_task() -> None:
     assert response.json() == {"detail": "import task not found"}
 
 
+def test_get_bootstrap_returns_first_airport_with_coordinates_and_historical_obstacles() -> (
+    None
+):
+    with _create_test_client() as client:
+        client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add_all(
+                [
+                    Airport(name="Airport Missing Coordinates"),
+                    Airport(
+                        name="Airport Near",
+                        longitude=103.975864,
+                        latitude=30.506881,
+                    ),
+                    Airport(
+                        name="Airport Far",
+                        longitude=104.100000,
+                        latitude=30.600000,
+                    ),
+                ]
+            )
+            session.commit()
+
+            response = client.get("/polygon-obstacle/bootstrap")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["airport"] == {
+        "id": 2,
+        "name": "Airport Near",
+        "longitude": 103.975864,
+        "latitude": 30.506881,
+    }
+    assert len(payload["historicalObstacles"]) == 2
+    assert payload["historicalObstacles"][0] == {
+        "id": 1,
+        "name": "障碍物1",
+        "obstacleType": "building",
+        "topElevation": 549.9,
+        "sourceRowNumbers": [2, 3, 4, 5, 6],
+        "boundingBox": None,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [103.9758638888889, 30.506880555555554],
+                        [103.97811111111112, 30.50565],
+                        [103.97690833333334, 30.50386388888889],
+                        [103.97425, 30.50510277777778],
+                        [103.97421944444444, 30.505241666666667],
+                        [103.9758638888889, 30.506880555555554],
+                    ]
+                ]
+            ],
+        },
+    }
+    assert payload["historicalObstacles"][1] == {
+        "id": 2,
+        "name": "障碍物2",
+        "obstacleType": "building",
+        "topElevation": 549.9,
+        "sourceRowNumbers": [7, 8, 9, 10, 11],
+        "boundingBox": None,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [103.9758638888889, 30.506880555555554],
+                        [103.97811111111112, 30.50565],
+                        [103.97690833333334, 30.50386388888889],
+                        [103.97425, 30.50510277777778],
+                        [103.97421944444444, 30.505241666666667],
+                        [103.9758638888889, 30.506880555555554],
+                    ]
+                ]
+            ],
+        },
+    }
+
+
+def test_get_bootstrap_returns_null_airport_when_no_airport_has_coordinates() -> None:
+    with _create_test_client() as client:
+        client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add_all(
+                [
+                    Airport(name="Airport Missing Coordinates 1"),
+                    Airport(name="Airport Missing Coordinates 2"),
+                ]
+            )
+            session.commit()
+
+        response = client.get("/polygon-obstacle/bootstrap")
+
+    assert response.status_code == 200
+    assert response.json()["airport"] is None
+    assert len(response.json()["historicalObstacles"]) == 2
+
+
+def test_get_bootstrap_returns_empty_historical_obstacles_when_no_obstacles_exist() -> (
+    None
+):
+    with _create_test_client() as client:
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    name="Airport Near",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                )
+            )
+            session.commit()
+
+        response = client.get("/polygon-obstacle/bootstrap")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "airport": {
+            "id": 1,
+            "name": "Airport Near",
+            "longitude": 103.975864,
+            "latitude": 30.506881,
+        },
+        "historicalObstacles": [],
+    }
+
+
 def test_create_import_task_requires_minimal_fields() -> None:
     with _create_test_client() as client:
         response = client.post(

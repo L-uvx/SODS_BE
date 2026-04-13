@@ -180,3 +180,44 @@ class ImportBatchRepository:
     def list_airports(self) -> list[Airport]:
         statement = select(Airport).order_by(Airport.id)
         return list(self._session.scalars(statement))
+
+    def get_first_airport_with_coordinates(self) -> Airport | None:
+        statement = (
+            select(Airport)
+            .where(Airport.longitude.is_not(None), Airport.latitude.is_not(None))
+            .order_by(Airport.id)
+            .limit(1)
+        )
+        return self._session.scalar(statement)
+
+    def list_all_obstacles(self) -> list[Obstacle] | list[dict[str, Any]]:
+        if (
+            self._session.bind is not None
+            and self._session.bind.dialect.name == "sqlite"
+        ):
+            rows = (
+                self._session.execute(
+                    text(
+                        """
+                    SELECT id, name, obstacle_type, top_elevation, raw_payload
+                    FROM obstacles
+                    ORDER BY id
+                    """
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            return [
+                {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "obstacle_type": row["obstacle_type"],
+                    "top_elevation": row["top_elevation"],
+                    "raw_payload": json.loads(row["raw_payload"]),
+                }
+                for row in rows
+            ]
+
+        statement = select(Obstacle).order_by(Obstacle.id)
+        return list(self._session.scalars(statement))

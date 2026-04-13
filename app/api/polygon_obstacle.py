@@ -5,6 +5,7 @@ from app.api.deps import get_db_session
 from app.application.polygon_obstacle_excel_parser import PolygonObstacleExcelParseError
 from app.application.polygon_obstacle_import import PolygonObstacleImportService
 from app.schemas.polygon_obstacle import (
+    BootstrapResponse,
     ImportTaskCreateRequest,
     ImportTaskResultResponse,
     ImportTaskStatusResponse,
@@ -13,6 +14,17 @@ from app.schemas.polygon_obstacle import (
 
 
 router = APIRouter(prefix="/polygon-obstacle", tags=["polygon-obstacle"])
+
+
+@router.get(
+    "/bootstrap",
+    response_model=BootstrapResponse,
+)
+def get_bootstrap(
+    session: Session = Depends(get_db_session),
+) -> BootstrapResponse:
+    service = PolygonObstacleImportService(session)
+    return service.get_bootstrap()
 
 
 @router.post(
