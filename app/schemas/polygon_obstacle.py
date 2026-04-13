@@ -50,6 +50,27 @@ class ImportTaskResultResponse(BaseModel):
     imported_count: int = Field(alias="importedCount")
     failed_count: int = Field(alias="failedCount")
     bounding_box: dict[str, float] | None = Field(alias="boundingBox")
+    obstacles: list["ImportedObstacleResponse"] = Field(default_factory=list)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class ImportedObstacleGeometryResponse(BaseModel):
+    type: str
+    coordinates: list[list[list[list[float]]]]
+
+
+class ImportedObstacleResponse(BaseModel):
+    id: int
+    name: str
+    obstacle_type: str = Field(alias="obstacleType")
+    top_elevation: float = Field(alias="topElevation")
+    source_row_numbers: list[int] = Field(alias="sourceRowNumbers")
+    bounding_box: dict[str, float] | None = Field(alias="boundingBox")
+    geometry: ImportedObstacleGeometryResponse
 
     model_config = ConfigDict(
         populate_by_name=True,

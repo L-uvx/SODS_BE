@@ -1,8 +1,11 @@
 from sqlalchemy.orm import Session
 
 from app.application.polygon_obstacle_excel_parser import parse_polygon_obstacle_excel
+from app.application.polygon_obstacle_geometry import build_multipolygon_geometry
 from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
+    ImportedObstacleGeometryResponse,
+    ImportedObstacleResponse,
     ImportTaskCreateRequest,
     ImportTaskResultResponse,
     ImportTaskStatusResponse,
@@ -17,8 +20,7 @@ class PolygonObstacleImportService:
     def create_import_task(
         self, payload: ImportTaskCreateRequest
     ) -> ImportTaskStatusResponse:
-        # Current slice only validates the uploaded template before persistence.
-        parse_polygon_obstacle_excel(payload.file_bytes)
+        parsed_obstacles = parse_polygon_obstacle_excel(payload.file_bytes)
         project = self._repository.create_project(payload.project_name)
         task_id = f"import-batch-{project.id}"
         import_batch = self._repository.create_import_batch(
@@ -26,6 +28,45 @@ class PolygonObstacleImportService:
             project_id=project.id,
             obstacle_type=payload.obstacle_type,
             file_name=payload.file_name,
+        )
+        obstacle_payloads = []
+        for obstacle in parsed_obstacles:
+            built_geometry = build_multipolygon_geometry(obstacle)
+            obstacle_payloads.append(
+                {
+                    "name": obstacle.name,
+                    "top_elevation": obstacle.top_elevation,
+                    "source_row_numbers": [
+                        point.row_number for point in obstacle.points
+                    ],
+                    "geometry_wkt": built_geometry.wkt,
+                    "raw_payload": {
+                        "sourceRowNumbers": [
+                            point.row_number for point in obstacle.points
+                        ],
+                        "geometry": {
+                            "type": "MultiPolygon",
+                            "coordinates": built_geometry.coordinates,
+                        },
+                        "points": [
+                            {
+                                "rowNumber": point.row_number,
+                                "longitudeText": point.longitude_text,
+                                "latitudeText": point.latitude_text,
+                                "longitudeDecimal": point.longitude_decimal,
+                                "latitudeDecimal": point.latitude_decimal,
+                            }
+                            for point in obstacle.points
+                        ],
+                    },
+                }
+            )
+
+        self._repository.create_obstacles(
+            project_id=project.id,
+            obstacle_type=payload.obstacle_type,
+            source_batch_id=import_batch.id,
+            obstacles=obstacle_payloads,
         )
 
         return ImportTaskStatusResponse(
@@ -56,14 +97,51 @@ class PolygonObstacleImportService:
         if import_batch is None:
             return None
 
+        obstacles = self._repository.list_obstacles_by_batch_id(import_batch.id)
+
+        def _build_imported_obstacle_response(
+            obstacle: object,
+        ) -> ImportedObstacleResponse:
+            if isinstance(obstacle, dict):
+                raw_payload = obstacle["raw_payload"]
+                return ImportedObstacleResponse(
+                    id=obstacle["id"],
+                    name=obstacle["name"],
+                    obstacleType=obstacle["obstacle_type"] or "",
+                    topElevation=float(obstacle["top_elevation"] or 0),
+                    sourceRowNumbers=raw_payload["sourceRowNumbers"],
+                    boundingBox=None,
+                    geometry=ImportedObstacleGeometryResponse(
+                        type=raw_payload["geometry"]["type"],
+                        coordinates=raw_payload["geometry"]["coordinates"],
+                    ),
+                )
+
+            raw_payload = obstacle.raw_payload
+            return ImportedObstacleResponse(
+                id=obstacle.id,
+                name=obstacle.name,
+                obstacleType=obstacle.obstacle_type or "",
+                topElevation=float(obstacle.top_elevation or 0),
+                sourceRowNumbers=raw_payload["sourceRowNumbers"],
+                boundingBox=None,
+                geometry=ImportedObstacleGeometryResponse(
+                    type=raw_payload["geometry"]["type"],
+                    coordinates=raw_payload["geometry"]["coordinates"],
+                ),
+            )
+
         return ImportTaskResultResponse(
             taskId=import_batch.id,
             status=import_batch.status,
             projectId=import_batch.project_id,
             obstacleBatchId=import_batch.id,
-            importedCount=0,
+            importedCount=len(obstacles),
             failedCount=0,
             boundingBox=None,
+            obstacles=[
+                _build_imported_obstacle_response(obstacle) for obstacle in obstacles
+            ],
         )
 
     def get_import_targets(self, task_id: str) -> list[ImportTargetResponse] | None:
