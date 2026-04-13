@@ -357,7 +357,7 @@ def test_get_import_targets_returns_all_airports_with_placeholder_distance() -> 
             "id": 2,
             "name": "Airport Far",
             "category": "机场",
-            "distance": 15.69,
+            "distance": 18.24,
             "distanceUnit": "km",
         },
     ]
