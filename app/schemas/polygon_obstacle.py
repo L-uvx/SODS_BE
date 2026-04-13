@@ -82,7 +82,7 @@ class ImportTargetResponse(BaseModel):
     id: int
     name: str
     category: str
-    distance: int
+    distance: float
     distance_unit: str = Field(alias="distanceUnit")
 
     model_config = ConfigDict(

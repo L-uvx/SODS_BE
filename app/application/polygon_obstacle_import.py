@@ -2,6 +2,9 @@ from sqlalchemy.orm import Session
 
 from app.application.polygon_obstacle_excel_parser import parse_polygon_obstacle_excel
 from app.application.polygon_obstacle_geometry import build_multipolygon_geometry
+from app.application.polygon_obstacle_targets import (
+    calculate_minimum_target_distance_km,
+)
 from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
     ImportedObstacleGeometryResponse,
@@ -149,13 +152,34 @@ class PolygonObstacleImportService:
         if import_batch is None:
             return None
 
-        return [
-            ImportTargetResponse(
-                id=airport.id,
-                name=airport.name,
-                category="",
-                distance=0,
-                distanceUnit="m",
+        obstacles = self._repository.list_obstacles_by_batch_id(import_batch.id)
+        obstacle_geometries: list[dict[str, object]] = []
+        for obstacle in obstacles:
+            raw_payload = (
+                obstacle["raw_payload"]
+                if isinstance(obstacle, dict)
+                else obstacle.raw_payload
             )
-            for airport in self._repository.list_airports()
-        ]
+            obstacle_geometries.append(raw_payload["geometry"])
+
+        targets: list[ImportTargetResponse] = []
+        for airport in self._repository.list_airports():
+            if airport.longitude is None or airport.latitude is None:
+                continue
+
+            distance_km = calculate_minimum_target_distance_km(
+                airport_longitude=float(airport.longitude),
+                airport_latitude=float(airport.latitude),
+                obstacle_geometries=obstacle_geometries,
+            )
+            targets.append(
+                ImportTargetResponse(
+                    id=airport.id,
+                    name=airport.name,
+                    category="机场",
+                    distance=distance_km,
+                    distanceUnit="km",
+                )
+            )
+
+        return sorted(targets, key=lambda target: (target.distance, target.id))

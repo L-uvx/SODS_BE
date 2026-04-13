@@ -327,8 +327,17 @@ def test_get_import_targets_returns_all_airports_with_placeholder_distance() -> 
         with next(iter(app.dependency_overrides[get_db_session]())) as session:
             session.add_all(
                 [
-                    Airport(name="Airport B"),
-                    Airport(name="Airport A"),
+                    Airport(
+                        name="Airport Near",
+                        longitude=103.975864,
+                        latitude=30.506881,
+                    ),
+                    Airport(
+                        name="Airport Far",
+                        longitude=104.100000,
+                        latitude=30.600000,
+                    ),
+                    Airport(name="Airport Missing Coordinates"),
                 ]
             )
             session.commit()
@@ -339,17 +348,17 @@ def test_get_import_targets_returns_all_airports_with_placeholder_distance() -> 
     assert response.json() == [
         {
             "id": 1,
-            "name": "Airport B",
-            "category": "",
-            "distance": 0,
-            "distanceUnit": "m",
+            "name": "Airport Near",
+            "category": "机场",
+            "distance": 0.0,
+            "distanceUnit": "km",
         },
         {
             "id": 2,
-            "name": "Airport A",
-            "category": "",
-            "distance": 0,
-            "distanceUnit": "m",
+            "name": "Airport Far",
+            "category": "机场",
+            "distance": 15.69,
+            "distanceUnit": "km",
         },
     ]
 
