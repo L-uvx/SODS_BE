@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import datetime, timezone
 import json
 from typing import Any
 
@@ -30,15 +31,62 @@ class ImportBatchRepository:
         project_id: int,
         obstacle_type: str,
         file_name: str,
+        source_file_path: str,
     ) -> ImportBatch:
         import_batch = ImportBatch(
             id=task_id,
             project_id=project_id,
-            status="succeeded",
+            status="pending",
             import_type=obstacle_type,
             source_file_name=file_name,
+            source_file_path=source_file_path,
+            progress_percent=0,
+            status_message="import task created",
         )
         self._session.add(import_batch)
+        self._session.commit()
+        self._session.refresh(import_batch)
+        return import_batch
+
+    def mark_import_batch_running(self, task_id: str) -> ImportBatch | None:
+        import_batch = self.get_import_batch(task_id)
+        if import_batch is None:
+            return None
+
+        import_batch.status = "running"
+        import_batch.progress_percent = 50
+        import_batch.status_message = "import task running"
+        import_batch.started_at = datetime.now(timezone.utc)
+        import_batch.error_message = None
+        self._session.commit()
+        self._session.refresh(import_batch)
+        return import_batch
+
+    def mark_import_batch_succeeded(self, task_id: str) -> ImportBatch | None:
+        import_batch = self.get_import_batch(task_id)
+        if import_batch is None:
+            return None
+
+        import_batch.status = "succeeded"
+        import_batch.progress_percent = 100
+        import_batch.status_message = "import task succeeded"
+        import_batch.finished_at = datetime.now(timezone.utc)
+        self._session.commit()
+        self._session.refresh(import_batch)
+        return import_batch
+
+    def mark_import_batch_failed(
+        self, task_id: str, error_message: str
+    ) -> ImportBatch | None:
+        import_batch = self.get_import_batch(task_id)
+        if import_batch is None:
+            return None
+
+        import_batch.status = "failed"
+        import_batch.progress_percent = 100
+        import_batch.status_message = "import task failed"
+        import_batch.error_message = error_message
+        import_batch.finished_at = datetime.now(timezone.utc)
         self._session.commit()
         self._session.refresh(import_batch)
         return import_batch

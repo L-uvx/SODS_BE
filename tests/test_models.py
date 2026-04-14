@@ -38,6 +38,9 @@ def test_import_batch_has_project_foreign_key_and_status() -> None:
     assert foreign_keys[0].target_fullname == "projects.id"
     assert import_batch_table.c.status.nullable is False
     assert import_batch_table.c.status.type.length == 50
+    assert import_batch_table.c.source_file_path.type.length == 1000
+    assert import_batch_table.c.progress_percent.nullable is False
+    assert import_batch_table.c.status_message.type.length == 255
 
 
 def test_analysis_task_has_import_batch_foreign_key_and_json_columns() -> None:

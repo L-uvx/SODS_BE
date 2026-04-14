@@ -9,8 +9,26 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/sods_be
       REDIS_URL: redis://redis:6379/0
+      IMPORT_STORAGE_DIR: /app/var/imports
     ports:
       - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sods-worker
+    working_dir: /app
+    command: /opt/venv/bin/celery -A app.core.celery_app:celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/sods_be
+      REDIS_URL: redis://redis:6379/0
+      IMPORT_STORAGE_DIR: /app/var/imports
     volumes:
       - .:/app
     depends_on:

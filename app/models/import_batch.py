@@ -14,6 +14,9 @@ class ImportBatch(Base):
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     import_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_file_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    progress_percent: Mapped[int] = mapped_column(nullable=False, default=0)
+    status_message: Mapped[str | None] = mapped_column(String(255), nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

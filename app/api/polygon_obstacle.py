@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session
-from app.application.polygon_obstacle_excel_parser import PolygonObstacleExcelParseError
 from app.application.polygon_obstacle_import import PolygonObstacleImportService
 from app.schemas.polygon_obstacle import (
     AnalysisTaskCreateRequest,
@@ -40,13 +39,7 @@ def create_import_task(
     session: Session = Depends(get_db_session),
 ) -> ImportTaskStatusResponse:
     service = PolygonObstacleImportService(session)
-    try:
-        return service.create_import_task(payload)
-    except PolygonObstacleExcelParseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
+    return service.create_import_task(payload)
 
 
 @router.get(

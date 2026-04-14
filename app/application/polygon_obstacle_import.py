@@ -1,10 +1,17 @@
+from pathlib import Path
+import re
+
 from sqlalchemy.orm import Session
 
-from app.application.polygon_obstacle_excel_parser import parse_polygon_obstacle_excel
+from app.application.polygon_obstacle_excel_parser import (
+    PolygonObstacleExcelParseError,
+    parse_polygon_obstacle_excel,
+)
 from app.application.polygon_obstacle_geometry import build_multipolygon_geometry
 from app.application.polygon_obstacle_targets import (
     calculate_minimum_target_distance_km,
 )
+from app.core import runtime
 from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
     AnalysisResultTargetResponse,
@@ -29,63 +36,86 @@ class PolygonObstacleImportService:
     def create_import_task(
         self, payload: ImportTaskCreateRequest
     ) -> ImportTaskStatusResponse:
-        parsed_obstacles = parse_polygon_obstacle_excel(payload.file_bytes)
         project = self._repository.create_project(payload.project_name)
         task_id = f"import-batch-{project.id}"
+        source_file_path = self._store_import_file(
+            task_id=task_id,
+            file_name=payload.file_name,
+            file_bytes=payload.file_bytes,
+        )
         import_batch = self._repository.create_import_batch(
             task_id=task_id,
             project_id=project.id,
             obstacle_type=payload.obstacle_type,
             file_name=payload.file_name,
+            source_file_path=source_file_path,
         )
-        obstacle_payloads = []
-        for obstacle in parsed_obstacles:
-            built_geometry = build_multipolygon_geometry(obstacle)
-            obstacle_payloads.append(
-                {
-                    "name": obstacle.name,
-                    "top_elevation": obstacle.top_elevation,
-                    "source_row_numbers": [
-                        point.row_number for point in obstacle.points
-                    ],
-                    "geometry_wkt": built_geometry.wkt,
-                    "raw_payload": {
-                        "sourceRowNumbers": [
-                            point.row_number for point in obstacle.points
-                        ],
-                        "geometry": {
-                            "type": "MultiPolygon",
-                            "coordinates": built_geometry.coordinates,
-                        },
-                        "points": [
-                            {
-                                "rowNumber": point.row_number,
-                                "longitudeText": point.longitude_text,
-                                "latitudeText": point.latitude_text,
-                                "longitudeDecimal": point.longitude_decimal,
-                                "latitudeDecimal": point.latitude_decimal,
-                            }
-                            for point in obstacle.points
-                        ],
-                    },
-                }
-            )
-
-        self._repository.create_obstacles(
-            project_id=project.id,
-            obstacle_type=payload.obstacle_type,
-            source_batch_id=import_batch.id,
-            obstacles=obstacle_payloads,
-        )
+        self._dispatch_import_task(import_batch.id)
 
         return ImportTaskStatusResponse(
             taskId=import_batch.id,
             status=import_batch.status,
-            message="import task created",
-            progressPercent=100,
+            message=import_batch.status_message or "import task created",
+            progressPercent=import_batch.progress_percent,
             projectId=project.id,
             obstacleBatchId=import_batch.id,
         )
+
+    def run_import_task(self, task_id: str) -> None:
+        import_batch = self._repository.mark_import_batch_running(task_id)
+        if import_batch is None:
+            return
+
+        try:
+            source_file_path = import_batch.source_file_path
+            if not source_file_path:
+                raise PolygonObstacleExcelParseError("missing import source file path")
+
+            parsed_obstacles = parse_polygon_obstacle_excel(
+                Path(source_file_path).read_bytes()
+            )
+            obstacle_payloads = []
+            for obstacle in parsed_obstacles:
+                built_geometry = build_multipolygon_geometry(obstacle)
+                obstacle_payloads.append(
+                    {
+                        "name": obstacle.name,
+                        "top_elevation": obstacle.top_elevation,
+                        "source_row_numbers": [
+                            point.row_number for point in obstacle.points
+                        ],
+                        "geometry_wkt": built_geometry.wkt,
+                        "raw_payload": {
+                            "sourceRowNumbers": [
+                                point.row_number for point in obstacle.points
+                            ],
+                            "geometry": {
+                                "type": "MultiPolygon",
+                                "coordinates": built_geometry.coordinates,
+                            },
+                            "points": [
+                                {
+                                    "rowNumber": point.row_number,
+                                    "longitudeText": point.longitude_text,
+                                    "latitudeText": point.latitude_text,
+                                    "longitudeDecimal": point.longitude_decimal,
+                                    "latitudeDecimal": point.latitude_decimal,
+                                }
+                                for point in obstacle.points
+                            ],
+                        },
+                    }
+                )
+
+            self._repository.create_obstacles(
+                project_id=import_batch.project_id,
+                obstacle_type=import_batch.import_type or "",
+                source_batch_id=import_batch.id,
+                obstacles=obstacle_payloads,
+            )
+            self._repository.mark_import_batch_succeeded(task_id)
+        except PolygonObstacleExcelParseError as exc:
+            self._repository.mark_import_batch_failed(task_id, str(exc))
 
     def get_import_task_status(self, task_id: str) -> ImportTaskStatusResponse | None:
         import_batch = self._repository.get_import_batch(task_id)
@@ -95,8 +125,8 @@ class PolygonObstacleImportService:
         return ImportTaskStatusResponse(
             taskId=import_batch.id,
             status=import_batch.status,
-            message="import task created",
-            progressPercent=100,
+            message=import_batch.status_message or "import task created",
+            progressPercent=import_batch.progress_percent,
             projectId=import_batch.project_id,
             obstacleBatchId=import_batch.id,
         )
@@ -179,6 +209,32 @@ class PolygonObstacleImportService:
             )
 
         return sorted(targets, key=lambda target: (target.distance, target.id))
+
+    def _dispatch_import_task(self, task_id: str) -> None:
+        if runtime.dispatch_import_task is not None:
+            runtime.dispatch_import_task(task_id)
+
+    def _store_import_file(
+        self,
+        *,
+        task_id: str,
+        file_name: str,
+        file_bytes: bytes,
+    ) -> str:
+        if runtime.settings is None:
+            raise RuntimeError("application settings are not initialized")
+
+        storage_dir = runtime.settings.import_storage_dir
+        task_directory = storage_dir / task_id
+        task_directory.mkdir(parents=True, exist_ok=True)
+        sanitized_name = self._sanitize_file_name(file_name)
+        file_path = task_directory / sanitized_name
+        file_path.write_bytes(file_bytes)
+        return str(file_path.resolve())
+
+    def _sanitize_file_name(self, file_name: str) -> str:
+        sanitized = re.sub(r"[^A-Za-z0-9._-]", "_", file_name).strip("._")
+        return sanitized or "import.xlsx"
 
     def create_analysis_task(
         self, payload: AnalysisTaskCreateRequest

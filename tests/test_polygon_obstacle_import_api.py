@@ -2,6 +2,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from io import BytesIO
 import json
+from pathlib import Path as SysPath
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_db_session
+from app.core import runtime
 from app.db.base import Base
 from app.main import app
 from app.models.airport import Airport
@@ -34,6 +36,22 @@ def _build_invalid_excel_bytes() -> bytes:
     buffer = BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
+
+
+class _DispatchRecorder:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def delay(self, import_task_id: str) -> None:
+        self.calls.append({"import_task_id": import_task_id})
+
+
+def _run_import_task(client: TestClient, task_id: str) -> None:
+    with next(iter(app.dependency_overrides[get_db_session]())) as session:
+        from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+        service = PolygonObstacleImportService(session)
+        service.run_import_task(task_id)
 
 
 @contextmanager
@@ -100,6 +118,9 @@ def _create_test_client() -> Generator[TestClient, None, None]:
 
 def test_create_import_task_returns_minimal_task_payload() -> None:
     with _create_test_client() as client:
+        dispatch_recorder = _DispatchRecorder()
+        app.state.dispatch_import_task = dispatch_recorder.delay
+        runtime.dispatch_import_task = dispatch_recorder.delay
         response = client.post(
             "/polygon-obstacle/import",
             data={
@@ -112,16 +133,19 @@ def test_create_import_task_returns_minimal_task_payload() -> None:
     assert response.status_code == 201
     assert response.json() == {
         "taskId": "import-batch-1",
-        "status": "succeeded",
+        "status": "pending",
         "message": "import task created",
-        "progressPercent": 100,
+        "progressPercent": 0,
         "projectId": 1,
         "obstacleBatchId": "import-batch-1",
     }
+    assert dispatch_recorder.calls == [{"import_task_id": "import-batch-1"}]
 
 
 def test_get_import_task_status_returns_existing_task() -> None:
     with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
         create_response = client.post(
             "/polygon-obstacle/import",
             data={
@@ -137,9 +161,9 @@ def test_get_import_task_status_returns_existing_task() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "taskId": task_id,
-        "status": "succeeded",
+        "status": "pending",
         "message": "import task created",
-        "progressPercent": 100,
+        "progressPercent": 0,
         "projectId": 1,
         "obstacleBatchId": task_id,
     }
@@ -155,6 +179,8 @@ def test_get_import_task_status_returns_404_for_unknown_task() -> None:
 
 def test_get_import_task_result_returns_minimal_result_payload() -> None:
     with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
         create_response = client.post(
             "/polygon-obstacle/import",
             data={
@@ -170,65 +196,20 @@ def test_get_import_task_result_returns_minimal_result_payload() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "taskId": task_id,
-        "status": "succeeded",
+        "status": "pending",
         "projectId": 1,
         "obstacleBatchId": task_id,
-        "importedCount": 2,
+        "importedCount": 0,
         "failedCount": 0,
         "boundingBox": None,
-        "obstacles": [
-            {
-                "id": 1,
-                "name": "障碍物1",
-                "obstacleType": "building",
-                "topElevation": 549.9,
-                "sourceRowNumbers": [2, 3, 4, 5, 6],
-                "boundingBox": None,
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [103.9758638888889, 30.506880555555554],
-                                [103.97811111111112, 30.50565],
-                                [103.97690833333334, 30.50386388888889],
-                                [103.97425, 30.50510277777778],
-                                [103.97421944444444, 30.505241666666667],
-                                [103.9758638888889, 30.506880555555554],
-                            ]
-                        ]
-                    ],
-                },
-            },
-            {
-                "id": 2,
-                "name": "障碍物2",
-                "obstacleType": "building",
-                "topElevation": 549.9,
-                "sourceRowNumbers": [7, 8, 9, 10, 11],
-                "boundingBox": None,
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [103.9758638888889, 30.506880555555554],
-                                [103.97811111111112, 30.50565],
-                                [103.97690833333334, 30.50386388888889],
-                                [103.97425, 30.50510277777778],
-                                [103.97421944444444, 30.505241666666667],
-                                [103.9758638888889, 30.506880555555554],
-                            ]
-                        ]
-                    ],
-                },
-            },
-        ],
+        "obstacles": [],
     }
 
 
 def test_create_import_task_persists_obstacles_to_database() -> None:
     with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
         create_response = client.post(
             "/polygon-obstacle/import",
             data={
@@ -252,67 +233,34 @@ def test_create_import_task_persists_obstacles_to_database() -> None:
             )
 
     assert task_id == "import-batch-1"
-    assert len(obstacles) == 2
-    assert obstacles[0].name == "障碍物1"
-    assert obstacles[0].project_id == 1
-    assert obstacles[0].source_batch_id == "import-batch-1"
-    assert obstacles[0].obstacle_type == "building"
-    assert float(obstacles[0].top_elevation) == 549.9
-    assert json.loads(obstacles[0].raw_payload) == {
-        "sourceRowNumbers": [2, 3, 4, 5, 6],
-        "geometry": {
-            "type": "MultiPolygon",
-            "coordinates": [
-                [
-                    [
-                        [103.9758638888889, 30.506880555555554],
-                        [103.97811111111112, 30.50565],
-                        [103.97690833333334, 30.50386388888889],
-                        [103.97425, 30.50510277777778],
-                        [103.97421944444444, 30.505241666666667],
-                        [103.9758638888889, 30.506880555555554],
-                    ]
-                ]
-            ],
-        },
-        "points": [
-            {
-                "rowNumber": 2,
-                "longitudeText": '103°58′33.11"',
-                "latitudeText": '030°30′24.77"',
-                "longitudeDecimal": 103.9758638888889,
-                "latitudeDecimal": 30.506880555555554,
+    assert obstacles == []
+
+
+def test_create_import_task_persists_source_file_path_for_worker() -> None:
+    with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        create_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
             },
-            {
-                "rowNumber": 3,
-                "longitudeText": '103°58′41.20"',
-                "latitudeText": '030°30′20.34"',
-                "longitudeDecimal": 103.97811111111112,
-                "latitudeDecimal": 30.50565,
-            },
-            {
-                "rowNumber": 4,
-                "longitudeText": '103°58′36.87"',
-                "latitudeText": '030°30′13.91"',
-                "longitudeDecimal": 103.97690833333334,
-                "latitudeDecimal": 30.50386388888889,
-            },
-            {
-                "rowNumber": 5,
-                "longitudeText": '103°58′27.30"',
-                "latitudeText": '030°30′18.37"',
-                "longitudeDecimal": 103.97425,
-                "latitudeDecimal": 30.50510277777778,
-            },
-            {
-                "rowNumber": 6,
-                "longitudeText": '103°58′27.19"',
-                "latitudeText": '030°30′18.87"',
-                "longitudeDecimal": 103.97421944444444,
-                "latitudeDecimal": 30.505241666666667,
-            },
-        ],
-    }
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+
+        task_id = create_response.json()["taskId"]
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            import_batch = session.get(ImportBatch, task_id)
+
+    assert import_batch is not None
+    assert import_batch.status == "pending"
+    assert import_batch.source_file_name == "import_demo.xlsx"
+    assert import_batch.source_file_path is not None
+    assert SysPath(import_batch.source_file_path).name == "import_demo.xlsx"
+    assert SysPath(import_batch.source_file_path).parent.name == task_id
+    assert SysPath(import_batch.source_file_path).exists()
 
 
 def test_get_import_task_result_returns_404_for_unknown_task() -> None:
@@ -325,6 +273,8 @@ def test_get_import_task_result_returns_404_for_unknown_task() -> None:
 
 def test_get_import_targets_returns_all_airports_with_placeholder_distance() -> None:
     with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
         create_response = client.post(
             "/polygon-obstacle/import",
             data={
@@ -334,6 +284,7 @@ def test_get_import_targets_returns_all_airports_with_placeholder_distance() -> 
             files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
         )
         task_id = create_response.json()["taskId"]
+        _run_import_task(client, task_id)
 
         with next(iter(app.dependency_overrides[get_db_session]())) as session:
             session.add_all(
@@ -386,6 +337,8 @@ def test_get_bootstrap_returns_first_airport_with_coordinates_and_historical_obs
     None
 ):
     with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
         client.post(
             "/polygon-obstacle/import",
             data={
@@ -394,6 +347,7 @@ def test_get_bootstrap_returns_first_airport_with_coordinates_and_historical_obs
             },
             files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
         )
+        _run_import_task(client, "import-batch-1")
 
         with next(iter(app.dependency_overrides[get_db_session]())) as session:
             session.add_all(
@@ -474,6 +428,8 @@ def test_get_bootstrap_returns_first_airport_with_coordinates_and_historical_obs
 
 def test_get_bootstrap_returns_null_airport_when_no_airport_has_coordinates() -> None:
     with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
         client.post(
             "/polygon-obstacle/import",
             data={
@@ -482,6 +438,7 @@ def test_get_bootstrap_returns_null_airport_when_no_airport_has_coordinates() ->
             },
             files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
         )
+        _run_import_task(client, "import-batch-1")
 
         with next(iter(app.dependency_overrides[get_db_session]())) as session:
             session.add_all(
@@ -540,9 +497,11 @@ def test_create_import_task_requires_minimal_fields() -> None:
     assert response.status_code == 422
 
 
-def test_create_import_task_returns_400_for_invalid_excel_template() -> None:
+def test_run_import_task_marks_failed_for_invalid_excel_template() -> None:
     with _create_test_client() as client:
-        response = client.post(
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        create_response = client.post(
             "/polygon-obstacle/import",
             data={
                 "projectName": "Wuhan Demo",
@@ -550,16 +509,27 @@ def test_create_import_task_returns_400_for_invalid_excel_template() -> None:
             },
             files={"excelFile": ("invalid.xlsx", _build_invalid_excel_bytes())},
         )
+        task_id = create_response.json()["taskId"]
+        _run_import_task(client, task_id)
 
-    assert response.status_code == 400
+        response = client.get(f"/polygon-obstacle/import/{task_id}/status")
+
+    assert response.status_code == 200
     assert response.json() == {
-        "detail": "invalid header row: expected ['障碍物名称', '经度', '纬度', '顶部高程'], got ['经度', '障碍物名称', '纬度', '顶部高程']"
+        "taskId": task_id,
+        "status": "failed",
+        "message": "import task failed",
+        "progressPercent": 100,
+        "projectId": 1,
+        "obstacleBatchId": task_id,
     }
 
 
-def test_create_import_task_returns_400_for_non_excel_file() -> None:
+def test_run_import_task_marks_failed_for_non_excel_file() -> None:
     with _create_test_client() as client:
-        response = client.post(
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        create_response = client.post(
             "/polygon-obstacle/import",
             data={
                 "projectName": "Wuhan Demo",
@@ -567,9 +537,20 @@ def test_create_import_task_returns_400_for_non_excel_file() -> None:
             },
             files={"excelFile": ("invalid.txt", b"not-an-excel-file")},
         )
+        task_id = create_response.json()["taskId"]
+        _run_import_task(client, task_id)
 
-    assert response.status_code == 400
-    assert response.json() == {"detail": "invalid excel file"}
+        response = client.get(f"/polygon-obstacle/import/{task_id}/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "taskId": task_id,
+        "status": "failed",
+        "message": "import task failed",
+        "progressPercent": 100,
+        "projectId": 1,
+        "obstacleBatchId": task_id,
+    }
 
 
 def test_create_analysis_task_returns_minimal_task_payload() -> None:
@@ -712,6 +693,8 @@ def test_get_analysis_task_status_returns_404_for_unknown_task() -> None:
 
 def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
     with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
         create_import_response = client.post(
             "/polygon-obstacle/import",
             data={
@@ -721,6 +704,7 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
             files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
         )
         import_task_id = create_import_response.json()["taskId"]
+        _run_import_task(client, import_task_id)
 
         with next(iter(app.dependency_overrides[get_db_session]())) as session:
             session.add_all(
