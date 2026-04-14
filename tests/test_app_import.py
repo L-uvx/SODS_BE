@@ -22,6 +22,7 @@ def test_model_registry_populates_base_metadata() -> None:
 
 def test_celery_registers_polygon_obstacle_import_task() -> None:
     sys.modules.pop("app.main", None)
+    sys.modules.pop("app.tasks.polygon_obstacle_analysis", None)
     sys.modules.pop("app.tasks.polygon_obstacle_import", None)
     sys.modules.pop("app.core.celery_app", None)
 
@@ -29,3 +30,4 @@ def test_celery_registers_polygon_obstacle_import_task() -> None:
     celery_app = celery_module.celery_app
 
     assert "polygon_obstacle_import.run_import_task" in celery_app.tasks
+    assert "polygon_obstacle_analysis.run_analysis_task" in celery_app.tasks

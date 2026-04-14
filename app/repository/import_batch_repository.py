@@ -100,14 +100,15 @@ class ImportBatchRepository:
         task_id: str,
         import_batch_id: str,
         selected_target_ids: list[int],
-        result_payload: dict[str, Any],
     ) -> AnalysisTask:
         analysis_task = AnalysisTask(
             id=task_id,
             import_batch_id=import_batch_id,
-            status="succeeded",
+            status="pending",
+            progress_percent=0,
+            status_message="analysis task created",
             selected_target_ids=selected_target_ids,
-            result_payload=result_payload,
+            result_payload=None,
         )
         self._session.add(analysis_task)
         self._session.commit()
@@ -116,6 +117,50 @@ class ImportBatchRepository:
 
     def get_analysis_task(self, task_id: str) -> AnalysisTask | None:
         return self._session.get(AnalysisTask, task_id)
+
+    def mark_analysis_task_running(self, task_id: str) -> AnalysisTask | None:
+        analysis_task = self.get_analysis_task(task_id)
+        if analysis_task is None:
+            return None
+
+        analysis_task.status = "running"
+        analysis_task.progress_percent = 50
+        analysis_task.status_message = "analysis task running"
+        analysis_task.error_message = None
+        self._session.commit()
+        self._session.refresh(analysis_task)
+        return analysis_task
+
+    def mark_analysis_task_succeeded(
+        self, task_id: str, result_payload: dict[str, Any]
+    ) -> AnalysisTask | None:
+        analysis_task = self.get_analysis_task(task_id)
+        if analysis_task is None:
+            return None
+
+        analysis_task.status = "succeeded"
+        analysis_task.progress_percent = 100
+        analysis_task.status_message = "analysis task succeeded"
+        analysis_task.error_message = None
+        analysis_task.result_payload = result_payload
+        self._session.commit()
+        self._session.refresh(analysis_task)
+        return analysis_task
+
+    def mark_analysis_task_failed(
+        self, task_id: str, error_message: str
+    ) -> AnalysisTask | None:
+        analysis_task = self.get_analysis_task(task_id)
+        if analysis_task is None:
+            return None
+
+        analysis_task.status = "failed"
+        analysis_task.progress_percent = 100
+        analysis_task.status_message = "analysis task failed"
+        analysis_task.error_message = error_message
+        self._session.commit()
+        self._session.refresh(analysis_task)
+        return analysis_task
 
     def create_obstacles(
         self,

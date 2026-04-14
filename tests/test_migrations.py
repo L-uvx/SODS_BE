@@ -31,3 +31,4 @@ def test_initial_revision_creates_core_tables_and_postgis() -> None:
     assert '"source_file_path"' in revision_text
     assert '"progress_percent"' in revision_text
     assert '"status_message"' in revision_text
+    assert '"error_message"' in revision_text

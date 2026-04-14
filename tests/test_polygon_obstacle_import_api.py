@@ -42,8 +42,8 @@ class _DispatchRecorder:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-    def delay(self, import_task_id: str) -> None:
-        self.calls.append({"import_task_id": import_task_id})
+    def delay(self, task_id: str) -> None:
+        self.calls.append({"task_id": task_id})
 
 
 def _run_import_task(client: TestClient, task_id: str) -> None:
@@ -52,6 +52,14 @@ def _run_import_task(client: TestClient, task_id: str) -> None:
 
         service = PolygonObstacleImportService(session)
         service.run_import_task(task_id)
+
+
+def _run_analysis_task(client: TestClient, task_id: str) -> None:
+    with next(iter(app.dependency_overrides[get_db_session]())) as session:
+        from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+        service = PolygonObstacleImportService(session)
+        service.run_analysis_task(task_id)
 
 
 @contextmanager
@@ -139,7 +147,7 @@ def test_create_import_task_returns_minimal_task_payload() -> None:
         "projectId": 1,
         "obstacleBatchId": "import-batch-1",
     }
-    assert dispatch_recorder.calls == [{"import_task_id": "import-batch-1"}]
+    assert dispatch_recorder.calls == [{"task_id": "import-batch-1"}]
 
 
 def test_get_import_task_status_returns_existing_task() -> None:
@@ -555,6 +563,9 @@ def test_run_import_task_marks_failed_for_non_excel_file() -> None:
 
 def test_create_analysis_task_returns_minimal_task_payload() -> None:
     with _create_test_client() as client:
+        dispatch_recorder = _DispatchRecorder()
+        app.state.dispatch_analysis_task = dispatch_recorder.delay
+        runtime.dispatch_analysis_task = dispatch_recorder.delay
         create_import_response = client.post(
             "/polygon-obstacle/import",
             data={
@@ -593,12 +604,13 @@ def test_create_analysis_task_returns_minimal_task_payload() -> None:
     assert response.status_code == 201
     assert response.json() == {
         "analysisTaskId": "analysis-task-1",
-        "status": "succeeded",
+        "status": "pending",
         "message": "analysis task created",
-        "progressPercent": 100,
+        "progressPercent": 0,
         "importTaskId": import_task_id,
         "targetIds": [1, 2],
     }
+    assert dispatch_recorder.calls == [{"task_id": "analysis-task-1"}]
 
 
 def test_create_analysis_task_returns_404_for_unknown_import_task() -> None:
@@ -641,6 +653,8 @@ def test_create_analysis_task_rejects_empty_target_ids() -> None:
 
 def test_get_analysis_task_status_returns_existing_task() -> None:
     with _create_test_client() as client:
+        app.state.dispatch_analysis_task = _DispatchRecorder().delay
+        runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
         create_import_response = client.post(
             "/polygon-obstacle/import",
             data={
@@ -675,8 +689,58 @@ def test_get_analysis_task_status_returns_existing_task() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "analysisTaskId": analysis_task_id,
-        "status": "succeeded",
+        "status": "pending",
         "message": "analysis task created",
+        "progressPercent": 0,
+        "importTaskId": import_task_id,
+        "targetIds": [1],
+    }
+
+
+def test_run_analysis_task_marks_status_succeeded() -> None:
+    with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        app.state.dispatch_analysis_task = _DispatchRecorder().delay
+        runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
+        create_import_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+        import_task_id = create_import_response.json()["taskId"]
+        _run_import_task(client, import_task_id)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    name="Airport Near",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                )
+            )
+            session.commit()
+
+        create_analysis_response = client.post(
+            "/polygon-obstacle/analysis",
+            json={
+                "importTaskId": import_task_id,
+                "targetIds": [1],
+            },
+        )
+        analysis_task_id = create_analysis_response.json()["analysisTaskId"]
+
+        _run_analysis_task(client, analysis_task_id)
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "analysisTaskId": analysis_task_id,
+        "status": "succeeded",
+        "message": "analysis task succeeded",
         "progressPercent": 100,
         "importTaskId": import_task_id,
         "targetIds": [1],
@@ -695,6 +759,8 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
     with _create_test_client() as client:
         app.state.dispatch_import_task = _DispatchRecorder().delay
         runtime.dispatch_import_task = app.state.dispatch_import_task
+        app.state.dispatch_analysis_task = _DispatchRecorder().delay
+        runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
         create_import_response = client.post(
             "/polygon-obstacle/import",
             data={
@@ -731,6 +797,7 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
             },
         )
         analysis_task_id = create_analysis_response.json()["analysisTaskId"]
+        _run_analysis_task(client, analysis_task_id)
 
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
@@ -746,6 +813,53 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
         ],
         "obstacleCount": 2,
         "summary": "已基于当前导入障碍物和所选机场生成最小分析结果。",
+    }
+
+
+def test_get_analysis_task_result_returns_empty_payload_before_completion() -> None:
+    with _create_test_client() as client:
+        app.state.dispatch_analysis_task = _DispatchRecorder().delay
+        runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
+        create_import_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+        import_task_id = create_import_response.json()["taskId"]
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    name="Airport Near",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                )
+            )
+            session.commit()
+
+        create_analysis_response = client.post(
+            "/polygon-obstacle/analysis",
+            json={
+                "importTaskId": import_task_id,
+                "targetIds": [1],
+            },
+        )
+        analysis_task_id = create_analysis_response.json()["analysisTaskId"]
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "analysisTaskId": analysis_task_id,
+        "status": "pending",
+        "importTaskId": import_task_id,
+        "targetIds": [1],
+        "selectedTargets": [],
+        "obstacleCount": 0,
+        "summary": "",
     }
 
 

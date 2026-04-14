@@ -6,13 +6,16 @@ from app.application.polygon_obstacle_import_cleanup import cleanup_import_stora
 from app.core import runtime
 from app.core.config import Settings
 from app.db.session import SessionLocal
+from app.tasks.polygon_obstacle_analysis import run_analysis_task
 from app.tasks.polygon_obstacle_import import run_import_task
 
 app = FastAPI()
 app.state.settings = Settings.from_env()
 app.state.dispatch_import_task = run_import_task.delay
+app.state.dispatch_analysis_task = run_analysis_task.delay
 runtime.settings = app.state.settings
 runtime.dispatch_import_task = app.state.dispatch_import_task
+runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
 app.include_router(polygon_obstacle_router)
 
 

@@ -50,6 +50,9 @@ def test_analysis_task_has_import_batch_foreign_key_and_json_columns() -> None:
     assert len(foreign_keys) == 1
     assert foreign_keys[0].target_fullname == "import_batches.id"
     assert analysis_task_table.c.status.nullable is False
+    assert analysis_task_table.c.progress_percent.nullable is False
+    assert analysis_task_table.c.status_message.type.length == 255
+    assert analysis_task_table.c.error_message.type.length == 1000
     assert analysis_task_table.c.selected_target_ids.nullable is False
     assert analysis_task_table.c.result_payload.type.python_type is dict
 

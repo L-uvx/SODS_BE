@@ -243,34 +243,51 @@ class PolygonObstacleImportService:
         if import_batch is None:
             return None
 
-        selected_airports = self._repository.list_airports_by_ids(payload.target_ids)
-        selected_targets = [
-            {"id": airport.id, "name": airport.name, "category": "机场"}
-            for airport in selected_airports
-        ]
-        obstacle_count = len(
-            self._repository.list_obstacles_by_batch_id(import_batch.id)
-        )
         analysis_task_id = self._build_analysis_task_id()
-        self._repository.create_analysis_task(
+        analysis_task = self._repository.create_analysis_task(
             task_id=analysis_task_id,
             import_batch_id=import_batch.id,
             selected_target_ids=payload.target_ids,
-            result_payload={
-                "selectedTargets": selected_targets,
-                "obstacleCount": obstacle_count,
-                "summary": "已基于当前导入障碍物和所选机场生成最小分析结果。",
-            },
         )
+        self._dispatch_analysis_task(analysis_task.id)
 
         return AnalysisTaskStatusResponse(
             analysisTaskId=analysis_task_id,
-            status="succeeded",
-            message="analysis task created",
-            progressPercent=100,
+            status=analysis_task.status,
+            message=analysis_task.status_message,
+            progressPercent=analysis_task.progress_percent,
             importTaskId=import_batch.id,
             targetIds=payload.target_ids,
         )
+
+    def run_analysis_task(self, task_id: str) -> None:
+        analysis_task = self._repository.mark_analysis_task_running(task_id)
+        if analysis_task is None:
+            return
+
+        try:
+            selected_airports = self._repository.list_airports_by_ids(
+                analysis_task.selected_target_ids
+            )
+            selected_targets = [
+                {"id": airport.id, "name": airport.name, "category": "机场"}
+                for airport in selected_airports
+            ]
+            obstacle_count = len(
+                self._repository.list_obstacles_by_batch_id(
+                    analysis_task.import_batch_id
+                )
+            )
+            self._repository.mark_analysis_task_succeeded(
+                task_id,
+                {
+                    "selectedTargets": selected_targets,
+                    "obstacleCount": obstacle_count,
+                    "summary": "已基于当前导入障碍物和所选机场生成最小分析结果。",
+                },
+            )
+        except Exception as exc:
+            self._repository.mark_analysis_task_failed(task_id, str(exc))
 
     def get_analysis_task_status(
         self, task_id: str
@@ -282,8 +299,8 @@ class PolygonObstacleImportService:
         return AnalysisTaskStatusResponse(
             analysisTaskId=analysis_task.id,
             status=analysis_task.status,
-            message="analysis task created",
-            progressPercent=100,
+            message=analysis_task.status_message,
+            progressPercent=analysis_task.progress_percent,
             importTaskId=analysis_task.import_batch_id,
             targetIds=analysis_task.selected_target_ids,
         )
@@ -308,6 +325,10 @@ class PolygonObstacleImportService:
             obstacleCount=result_payload.get("obstacleCount", 0),
             summary=result_payload.get("summary", ""),
         )
+
+    def _dispatch_analysis_task(self, task_id: str) -> None:
+        if runtime.dispatch_analysis_task is not None:
+            runtime.dispatch_analysis_task(task_id)
 
     def _build_analysis_task_id(self) -> str:
         existing_task = self._repository.get_analysis_task("analysis-task-1")
