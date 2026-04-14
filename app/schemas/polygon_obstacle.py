@@ -109,3 +109,47 @@ class BootstrapResponse(BaseModel):
         populate_by_name=True,
         serialize_by_alias=True,
     )
+
+
+class AnalysisTaskCreateRequest(BaseModel):
+    import_task_id: str = Field(alias="importTaskId")
+    target_ids: list[int] = Field(alias="targetIds", min_length=1)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AnalysisTaskStatusResponse(BaseModel):
+    analysis_task_id: str = Field(alias="analysisTaskId")
+    status: str
+    message: str
+    progress_percent: int = Field(alias="progressPercent")
+    import_task_id: str = Field(alias="importTaskId")
+    target_ids: list[int] = Field(alias="targetIds")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisResultTargetResponse(BaseModel):
+    id: int
+    name: str
+    category: str
+
+
+class AnalysisTaskResultResponse(BaseModel):
+    analysis_task_id: str = Field(alias="analysisTaskId")
+    status: str
+    import_task_id: str = Field(alias="importTaskId")
+    target_ids: list[int] = Field(alias="targetIds")
+    selected_targets: list[AnalysisResultTargetResponse] = Field(
+        alias="selectedTargets"
+    )
+    obstacle_count: int = Field(alias="obstacleCount")
+    summary: str
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )

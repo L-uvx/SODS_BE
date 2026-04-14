@@ -7,6 +7,10 @@ from app.application.polygon_obstacle_targets import (
 )
 from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
+    AnalysisResultTargetResponse,
+    AnalysisTaskCreateRequest,
+    AnalysisTaskResultResponse,
+    AnalysisTaskStatusResponse,
     BootstrapAirportResponse,
     BootstrapResponse,
     ImportedObstacleGeometryResponse,
@@ -175,6 +179,92 @@ class PolygonObstacleImportService:
             )
 
         return sorted(targets, key=lambda target: (target.distance, target.id))
+
+    def create_analysis_task(
+        self, payload: AnalysisTaskCreateRequest
+    ) -> AnalysisTaskStatusResponse | None:
+        import_batch = self._repository.get_import_batch(payload.import_task_id)
+        if import_batch is None:
+            return None
+
+        selected_airports = self._repository.list_airports_by_ids(payload.target_ids)
+        selected_targets = [
+            {"id": airport.id, "name": airport.name, "category": "机场"}
+            for airport in selected_airports
+        ]
+        obstacle_count = len(
+            self._repository.list_obstacles_by_batch_id(import_batch.id)
+        )
+        analysis_task_id = self._build_analysis_task_id()
+        self._repository.create_analysis_task(
+            task_id=analysis_task_id,
+            import_batch_id=import_batch.id,
+            selected_target_ids=payload.target_ids,
+            result_payload={
+                "selectedTargets": selected_targets,
+                "obstacleCount": obstacle_count,
+                "summary": "已基于当前导入障碍物和所选机场生成最小分析结果。",
+            },
+        )
+
+        return AnalysisTaskStatusResponse(
+            analysisTaskId=analysis_task_id,
+            status="succeeded",
+            message="analysis task created",
+            progressPercent=100,
+            importTaskId=import_batch.id,
+            targetIds=payload.target_ids,
+        )
+
+    def get_analysis_task_status(
+        self, task_id: str
+    ) -> AnalysisTaskStatusResponse | None:
+        analysis_task = self._repository.get_analysis_task(task_id)
+        if analysis_task is None:
+            return None
+
+        return AnalysisTaskStatusResponse(
+            analysisTaskId=analysis_task.id,
+            status=analysis_task.status,
+            message="analysis task created",
+            progressPercent=100,
+            importTaskId=analysis_task.import_batch_id,
+            targetIds=analysis_task.selected_target_ids,
+        )
+
+    def get_analysis_task_result(
+        self, task_id: str
+    ) -> AnalysisTaskResultResponse | None:
+        analysis_task = self._repository.get_analysis_task(task_id)
+        if analysis_task is None:
+            return None
+
+        result_payload = analysis_task.result_payload or {}
+        return AnalysisTaskResultResponse(
+            analysisTaskId=analysis_task.id,
+            status=analysis_task.status,
+            importTaskId=analysis_task.import_batch_id,
+            targetIds=analysis_task.selected_target_ids,
+            selectedTargets=[
+                AnalysisResultTargetResponse(**target)
+                for target in result_payload.get("selectedTargets", [])
+            ],
+            obstacleCount=result_payload.get("obstacleCount", 0),
+            summary=result_payload.get("summary", ""),
+        )
+
+    def _build_analysis_task_id(self) -> str:
+        existing_task = self._repository.get_analysis_task("analysis-task-1")
+        if existing_task is None:
+            return "analysis-task-1"
+
+        next_suffix = 1
+        while (
+            self._repository.get_analysis_task(f"analysis-task-{next_suffix}")
+            is not None
+        ):
+            next_suffix += 1
+        return f"analysis-task-{next_suffix}"
 
     def _build_imported_obstacle_response(
         self,

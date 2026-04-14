@@ -6,6 +6,7 @@ from app.db.base import Base
 def test_project_and_obstacle_tables_are_registered() -> None:
     assert "projects" in Base.metadata.tables
     assert "import_batches" in Base.metadata.tables
+    assert "analysis_tasks" in Base.metadata.tables
     assert "obstacles" in Base.metadata.tables
     assert "airports" in Base.metadata.tables
     assert "runways" in Base.metadata.tables
@@ -37,6 +38,17 @@ def test_import_batch_has_project_foreign_key_and_status() -> None:
     assert foreign_keys[0].target_fullname == "projects.id"
     assert import_batch_table.c.status.nullable is False
     assert import_batch_table.c.status.type.length == 50
+
+
+def test_analysis_task_has_import_batch_foreign_key_and_json_columns() -> None:
+    analysis_task_table = Base.metadata.tables["analysis_tasks"]
+    foreign_keys = list(analysis_task_table.c.import_batch_id.foreign_keys)
+
+    assert len(foreign_keys) == 1
+    assert foreign_keys[0].target_fullname == "import_batches.id"
+    assert analysis_task_table.c.status.nullable is False
+    assert analysis_task_table.c.selected_target_ids.nullable is False
+    assert analysis_task_table.c.result_payload.type.python_type is dict
 
 
 def test_obstacle_source_batch_matches_import_batch_key_type() -> None:

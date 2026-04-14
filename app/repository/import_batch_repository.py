@@ -7,6 +7,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models.airport import Airport
+from app.models.analysis_task import AnalysisTask
 from app.models.import_batch import ImportBatch
 from app.models.obstacle import Obstacle
 from app.models.project import Project
@@ -44,6 +45,29 @@ class ImportBatchRepository:
 
     def get_import_batch(self, task_id: str) -> ImportBatch | None:
         return self._session.get(ImportBatch, task_id)
+
+    def create_analysis_task(
+        self,
+        *,
+        task_id: str,
+        import_batch_id: str,
+        selected_target_ids: list[int],
+        result_payload: dict[str, Any],
+    ) -> AnalysisTask:
+        analysis_task = AnalysisTask(
+            id=task_id,
+            import_batch_id=import_batch_id,
+            status="succeeded",
+            selected_target_ids=selected_target_ids,
+            result_payload=result_payload,
+        )
+        self._session.add(analysis_task)
+        self._session.commit()
+        self._session.refresh(analysis_task)
+        return analysis_task
+
+    def get_analysis_task(self, task_id: str) -> AnalysisTask | None:
+        return self._session.get(AnalysisTask, task_id)
 
     def create_obstacles(
         self,
@@ -179,6 +203,15 @@ class ImportBatchRepository:
 
     def list_airports(self) -> list[Airport]:
         statement = select(Airport).order_by(Airport.id)
+        return list(self._session.scalars(statement))
+
+    def list_airports_by_ids(self, airport_ids: list[int]) -> list[Airport]:
+        if not airport_ids:
+            return []
+
+        statement = (
+            select(Airport).where(Airport.id.in_(airport_ids)).order_by(Airport.id)
+        )
         return list(self._session.scalars(statement))
 
     def get_first_airport_with_coordinates(self) -> Airport | None:

@@ -15,6 +15,7 @@ from app.api.deps import get_db_session
 from app.db.base import Base
 from app.main import app
 from app.models.airport import Airport
+from app.models.analysis_task import AnalysisTask
 from app.models.import_batch import ImportBatch
 from app.models.project import Project
 
@@ -45,7 +46,12 @@ def _create_test_client() -> Generator[TestClient, None, None]:
     testing_session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     Base.metadata.create_all(
         bind=engine,
-        tables=[Project.__table__, ImportBatch.__table__, Airport.__table__],
+        tables=[
+            Project.__table__,
+            ImportBatch.__table__,
+            AnalysisTask.__table__,
+            Airport.__table__,
+        ],
     )
     with engine.begin() as connection:
         connection.execute(
@@ -82,7 +88,12 @@ def _create_test_client() -> Generator[TestClient, None, None]:
 
     Base.metadata.drop_all(
         bind=engine,
-        tables=[Airport.__table__, ImportBatch.__table__, Project.__table__],
+        tables=[
+            Airport.__table__,
+            AnalysisTask.__table__,
+            ImportBatch.__table__,
+            Project.__table__,
+        ],
     )
     app.dependency_overrides = {}
 
@@ -559,3 +570,204 @@ def test_create_import_task_returns_400_for_non_excel_file() -> None:
 
     assert response.status_code == 400
     assert response.json() == {"detail": "invalid excel file"}
+
+
+def test_create_analysis_task_returns_minimal_task_payload() -> None:
+    with _create_test_client() as client:
+        create_import_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+        import_task_id = create_import_response.json()["taskId"]
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add_all(
+                [
+                    Airport(
+                        name="Airport Near",
+                        longitude=103.975864,
+                        latitude=30.506881,
+                    ),
+                    Airport(
+                        name="Airport Far",
+                        longitude=104.100000,
+                        latitude=30.600000,
+                    ),
+                ]
+            )
+            session.commit()
+
+        response = client.post(
+            "/polygon-obstacle/analysis",
+            json={
+                "importTaskId": import_task_id,
+                "targetIds": [1, 2],
+            },
+        )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "analysisTaskId": "analysis-task-1",
+        "status": "succeeded",
+        "message": "analysis task created",
+        "progressPercent": 100,
+        "importTaskId": import_task_id,
+        "targetIds": [1, 2],
+    }
+
+
+def test_create_analysis_task_returns_404_for_unknown_import_task() -> None:
+    with _create_test_client() as client:
+        response = client.post(
+            "/polygon-obstacle/analysis",
+            json={
+                "importTaskId": "missing-import-task",
+                "targetIds": [1],
+            },
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "import task not found"}
+
+
+def test_create_analysis_task_rejects_empty_target_ids() -> None:
+    with _create_test_client() as client:
+        create_import_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+        import_task_id = create_import_response.json()["taskId"]
+
+        response = client.post(
+            "/polygon-obstacle/analysis",
+            json={
+                "importTaskId": import_task_id,
+                "targetIds": [],
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "too_short"
+
+
+def test_get_analysis_task_status_returns_existing_task() -> None:
+    with _create_test_client() as client:
+        create_import_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+        import_task_id = create_import_response.json()["taskId"]
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    name="Airport Near",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                )
+            )
+            session.commit()
+
+        create_analysis_response = client.post(
+            "/polygon-obstacle/analysis",
+            json={
+                "importTaskId": import_task_id,
+                "targetIds": [1],
+            },
+        )
+        analysis_task_id = create_analysis_response.json()["analysisTaskId"]
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "analysisTaskId": analysis_task_id,
+        "status": "succeeded",
+        "message": "analysis task created",
+        "progressPercent": 100,
+        "importTaskId": import_task_id,
+        "targetIds": [1],
+    }
+
+
+def test_get_analysis_task_status_returns_404_for_unknown_task() -> None:
+    with _create_test_client() as client:
+        response = client.get("/polygon-obstacle/analysis/missing-task/status")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "analysis task not found"}
+
+
+def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
+    with _create_test_client() as client:
+        create_import_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+        import_task_id = create_import_response.json()["taskId"]
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add_all(
+                [
+                    Airport(
+                        name="Airport Near",
+                        longitude=103.975864,
+                        latitude=30.506881,
+                    ),
+                    Airport(
+                        name="Airport Far",
+                        longitude=104.100000,
+                        latitude=30.600000,
+                    ),
+                ]
+            )
+            session.commit()
+
+        create_analysis_response = client.post(
+            "/polygon-obstacle/analysis",
+            json={
+                "importTaskId": import_task_id,
+                "targetIds": [1, 2],
+            },
+        )
+        analysis_task_id = create_analysis_response.json()["analysisTaskId"]
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "analysisTaskId": analysis_task_id,
+        "status": "succeeded",
+        "importTaskId": import_task_id,
+        "targetIds": [1, 2],
+        "selectedTargets": [
+            {"id": 1, "name": "Airport Near", "category": "机场"},
+            {"id": 2, "name": "Airport Far", "category": "机场"},
+        ],
+        "obstacleCount": 2,
+        "summary": "已基于当前导入障碍物和所选机场生成最小分析结果。",
+    }
+
+
+def test_get_analysis_task_result_returns_404_for_unknown_task() -> None:
+    with _create_test_client() as client:
+        response = client.get("/polygon-obstacle/analysis/missing-task/result")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "analysis task not found"}

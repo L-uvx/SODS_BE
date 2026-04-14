@@ -24,6 +24,7 @@ def test_initial_revision_creates_core_tables_and_postgis() -> None:
     assert '"projects"' in revision_text
     assert '"import_batches"' in revision_text
     assert '"obstacles"' in revision_text
+    assert '"analysis_tasks"' in revision_text
     assert '"airports"' in revision_text
     assert '"runways"' in revision_text
     assert '"stations"' in revision_text
