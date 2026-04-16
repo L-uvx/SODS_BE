@@ -153,3 +153,30 @@ class AnalysisTaskResultResponse(BaseModel):
         populate_by_name=True,
         serialize_by_alias=True,
     )
+
+
+class ExportTaskStatusResponse(BaseModel):
+    export_task_id: str = Field(alias="exportTaskId")
+    analysis_task_id: str = Field(alias="analysisTaskId")
+    status: str
+    message: str
+    progress_percent: int = Field(alias="progressPercent")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class ExportTaskResultResponse(BaseModel):
+    export_task_id: str = Field(alias="exportTaskId")
+    analysis_task_id: str = Field(alias="analysisTaskId")
+    status: str
+    file_name: str | None = Field(alias="fileName")
+    download_url: str | None = Field(alias="downloadUrl")
+    error_message: str | None = Field(alias="errorMessage")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )

@@ -11,6 +11,7 @@ def test_project_and_obstacle_tables_are_registered() -> None:
     assert "airports" in Base.metadata.tables
     assert "runways" in Base.metadata.tables
     assert "stations" in Base.metadata.tables
+    assert "report_exports" in Base.metadata.tables
 
 
 def test_obstacle_has_project_foreign_key() -> None:
@@ -95,3 +96,17 @@ def test_station_has_required_airport_foreign_key() -> None:
     assert station_table.c.airport_id.nullable is False
     assert station_table.c.name.nullable is False
     assert station_table.c.altitude.type.scale == 3
+
+
+def test_report_export_has_analysis_task_foreign_key_and_status_columns() -> None:
+    report_export_table = Base.metadata.tables["report_exports"]
+    foreign_keys = list(report_export_table.c.analysis_task_id.foreign_keys)
+
+    assert len(foreign_keys) == 1
+    assert foreign_keys[0].target_fullname == "analysis_tasks.id"
+    assert report_export_table.c.status.nullable is False
+    assert report_export_table.c.progress_percent.nullable is False
+    assert report_export_table.c.status_message.type.length == 255
+    assert report_export_table.c.error_message.type.length == 1000
+    assert report_export_table.c.file_name.type.length == 255
+    assert report_export_table.c.file_path.type.length == 1000

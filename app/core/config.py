@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 
 
@@ -12,6 +13,10 @@ class Settings:
     import_success_retention_minutes: int
     import_failed_retention_minutes: int
     import_stale_retention_minutes: int
+    export_storage_dir: Path = field(default_factory=lambda: Path("var/exports"))
+    export_success_retention_minutes: int = 10
+    export_failed_retention_minutes: int = 30
+    export_stale_retention_minutes: int = 30
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -31,5 +36,15 @@ class Settings:
             ),
             import_stale_retention_minutes=int(
                 os.getenv("IMPORT_STALE_RETENTION_MINUTES", "30")
+            ),
+            export_storage_dir=Path(os.getenv("EXPORT_STORAGE_DIR", "var/exports")),
+            export_success_retention_minutes=int(
+                os.getenv("EXPORT_SUCCESS_RETENTION_MINUTES", "10")
+            ),
+            export_failed_retention_minutes=int(
+                os.getenv("EXPORT_FAILED_RETENTION_MINUTES", "30")
+            ),
+            export_stale_retention_minutes=int(
+                os.getenv("EXPORT_STALE_RETENTION_MINUTES", "30")
             ),
         )

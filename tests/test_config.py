@@ -9,6 +9,10 @@ def test_settings_use_default_values(monkeypatch) -> None:
     monkeypatch.delenv("IMPORT_SUCCESS_RETENTION_MINUTES", raising=False)
     monkeypatch.delenv("IMPORT_FAILED_RETENTION_MINUTES", raising=False)
     monkeypatch.delenv("IMPORT_STALE_RETENTION_MINUTES", raising=False)
+    monkeypatch.delenv("EXPORT_STORAGE_DIR", raising=False)
+    monkeypatch.delenv("EXPORT_SUCCESS_RETENTION_MINUTES", raising=False)
+    monkeypatch.delenv("EXPORT_FAILED_RETENTION_MINUTES", raising=False)
+    monkeypatch.delenv("EXPORT_STALE_RETENTION_MINUTES", raising=False)
 
     settings = Settings.from_env()
 
@@ -22,6 +26,10 @@ def test_settings_use_default_values(monkeypatch) -> None:
     assert settings.import_success_retention_minutes == 10
     assert settings.import_failed_retention_minutes == 30
     assert settings.import_stale_retention_minutes == 30
+    assert settings.export_storage_dir.as_posix() == "var/exports"
+    assert settings.export_success_retention_minutes == 10
+    assert settings.export_failed_retention_minutes == 30
+    assert settings.export_stale_retention_minutes == 30
 
 
 def test_settings_allow_environment_overrides(monkeypatch) -> None:
@@ -32,6 +40,10 @@ def test_settings_allow_environment_overrides(monkeypatch) -> None:
     monkeypatch.setenv("IMPORT_SUCCESS_RETENTION_MINUTES", "3")
     monkeypatch.setenv("IMPORT_FAILED_RETENTION_MINUTES", "7")
     monkeypatch.setenv("IMPORT_STALE_RETENTION_MINUTES", "11")
+    monkeypatch.setenv("EXPORT_STORAGE_DIR", "/tmp/exports")
+    monkeypatch.setenv("EXPORT_SUCCESS_RETENTION_MINUTES", "13")
+    monkeypatch.setenv("EXPORT_FAILED_RETENTION_MINUTES", "17")
+    monkeypatch.setenv("EXPORT_STALE_RETENTION_MINUTES", "19")
 
     settings = Settings.from_env()
 
@@ -42,3 +54,7 @@ def test_settings_allow_environment_overrides(monkeypatch) -> None:
     assert settings.import_success_retention_minutes == 3
     assert settings.import_failed_retention_minutes == 7
     assert settings.import_stale_retention_minutes == 11
+    assert settings.export_storage_dir.as_posix() == "/tmp/exports"
+    assert settings.export_success_retention_minutes == 13
+    assert settings.export_failed_retention_minutes == 17
+    assert settings.export_stale_retention_minutes == 19

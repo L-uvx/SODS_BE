@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.models.import_batch import ImportBatch
+from app.models.report_export import ReportExport
 
 
 def cleanup_import_storage(settings: Settings, session: Session) -> None:
@@ -28,6 +29,26 @@ def cleanup_import_storage(settings: Settings, session: Session) -> None:
             shutil.rmtree(task_directory, ignore_errors=True)
 
 
+def cleanup_export_storage(settings: Settings, session: Session) -> None:
+    storage_dir = settings.export_storage_dir
+    storage_dir.mkdir(parents=True, exist_ok=True)
+
+    for task_directory in storage_dir.iterdir():
+        if not task_directory.is_dir():
+            continue
+
+        report_export = session.get(ReportExport, task_directory.name)
+        if report_export is None:
+            if _is_older_than_minutes(
+                task_directory, settings.export_stale_retention_minutes
+            ):
+                shutil.rmtree(task_directory, ignore_errors=True)
+            continue
+
+        if _should_delete_export_directory(report_export, settings):
+            shutil.rmtree(task_directory, ignore_errors=True)
+
+
 def _should_delete_import_directory(
     import_batch: ImportBatch,
     settings: Settings,
@@ -45,6 +66,28 @@ def _should_delete_import_directory(
     if import_batch.status in {"pending", "running"}:
         reference_time = import_batch.started_at or import_batch.created_at
         return _is_expired(reference_time, settings.import_stale_retention_minutes)
+
+    return False
+
+
+def _should_delete_export_directory(
+    report_export: ReportExport,
+    settings: Settings,
+) -> bool:
+    if report_export.status == "succeeded":
+        return _is_expired(
+            report_export.finished_at, settings.export_success_retention_minutes
+        )
+
+    if report_export.status == "failed":
+        return _is_expired(
+            report_export.finished_at, settings.export_failed_retention_minutes
+        )
+
+    if report_export.status in {"pending", "running"}:
+        return _is_expired(
+            report_export.created_at, settings.export_stale_retention_minutes
+        )
 
     return False
 

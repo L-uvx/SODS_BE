@@ -21,4 +21,5 @@ celery_app.conf.update(
 # Import task modules explicitly so workers started with
 # `-A app.core.celery_app:celery_app` always register them.
 import app.tasks.polygon_obstacle_import  # noqa: F401,E402
+import app.tasks.polygon_obstacle_export  # noqa: F401,E402
 import app.tasks.polygon_obstacle_analysis  # noqa: F401,E402

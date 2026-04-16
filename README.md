@@ -8,7 +8,8 @@
 2. 多边形障碍物导入与导入结果查询
 3. 候选机场查询与 `bootstrap` 初始化接口
 4. analysis 任务创建、状态查询与结果查询
-5. import / analysis 两段 Celery 异步任务执行
+5. export 任务创建、状态查询、结果查询与报告下载
+6. import / analysis / export 三段 Celery 异步任务执行
 
 ## 快速启动
 
@@ -83,7 +84,7 @@ cd /home/lo1yer/Project/SODS_BE
 核心回归：
 
 ```bash
-/home/lo1yer/anaconda3/bin/uv run pytest tests/test_app_import.py tests/test_config.py tests/test_models.py tests/test_migrations.py tests/test_polygon_obstacle_excel_parser.py tests/test_polygon_obstacle_targets.py tests/test_polygon_obstacle_import_api.py tests/test_polygon_obstacle_import_cleanup.py -v
+/home/lo1yer/anaconda3/bin/uv run pytest tests/test_polygon_obstacle_export_api.py tests/test_app_import.py tests/test_config.py tests/test_models.py tests/test_migrations.py tests/test_polygon_obstacle_excel_parser.py tests/test_polygon_obstacle_targets.py tests/test_polygon_obstacle_import_api.py tests/test_polygon_obstacle_import_cleanup.py -v
 ```
 
 迁移：
@@ -113,13 +114,19 @@ cd /home/lo1yer/Project/SODS_BE
 5. `IMPORT_SUCCESS_RETENTION_MINUTES`
 6. `IMPORT_FAILED_RETENTION_MINUTES`
 7. `IMPORT_STALE_RETENTION_MINUTES`
+8. `EXPORT_STORAGE_DIR`
+9. `EXPORT_SUCCESS_RETENTION_MINUTES`
+10. `EXPORT_FAILED_RETENTION_MINUTES`
+11. `EXPORT_STALE_RETENTION_MINUTES`
 
 ## 关键注意事项
 
 1. 当前 `obstacles.geom` 的正式口径是 `MultiPolygon / 4326`，不要回退成 `Point` 或其他占位类型。
-2. 当前 import 与 analysis 都已完成 Celery 异步化，不要误判为同步请求内执行。
+2. 当前 import、analysis 与 export 都已完成 Celery 异步化，不要误判为同步请求内执行。
 3. 当前 worker 任务注册依赖 `app/core/celery_app.py` 对任务模块的显式导入，不要删除该导入。
 4. 当前容器内虚拟环境固定在 `/opt/venv`，不要改回 `/app/.venv`。
 5. 当前 Docker 镜像已切换为非 root 用户运行，避免再改回 root。
 6. 当前 `docker-compose.yml` 中 worker 已直接使用 `/opt/venv/bin/celery` 启动，不要改回 `uv run celery`。
 7. 当前 `stations` 只是机场内部基础数据，不属于当前 `GET /polygon-obstacle/import/{taskId}/targets` 返回范围。
+8. 当前导出结果查询接口返回 `downloadUrl`，实际文件下载走独立的 `GET /polygon-obstacle/exports/{exportTaskId}/download`。
+9. 当前 export 文件已接入与 import 一致的启动补偿清理：成功任务保留 10 分钟，失败任务保留 30 分钟，`pending/running` 与孤儿目录超过 30 分钟清理。

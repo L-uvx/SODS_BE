@@ -12,6 +12,7 @@ from app.models.analysis_task import AnalysisTask
 from app.models.import_batch import ImportBatch
 from app.models.obstacle import Obstacle
 from app.models.project import Project
+from app.models.report_export import ReportExport
 
 
 class ImportBatchRepository:
@@ -161,6 +162,77 @@ class ImportBatchRepository:
         self._session.commit()
         self._session.refresh(analysis_task)
         return analysis_task
+
+    def create_report_export(
+        self, *, task_id: str, analysis_task_id: str
+    ) -> ReportExport:
+        report_export = ReportExport(
+            id=task_id,
+            analysis_task_id=analysis_task_id,
+            status="pending",
+            progress_percent=0,
+            status_message="export task created",
+            file_name=None,
+            file_path=None,
+        )
+        self._session.add(report_export)
+        self._session.commit()
+        self._session.refresh(report_export)
+        return report_export
+
+    def get_report_export(self, task_id: str) -> ReportExport | None:
+        return self._session.get(ReportExport, task_id)
+
+    def mark_report_export_running(self, task_id: str) -> ReportExport | None:
+        report_export = self.get_report_export(task_id)
+        if report_export is None:
+            return None
+
+        report_export.status = "running"
+        report_export.progress_percent = 50
+        report_export.status_message = "export task running"
+        report_export.error_message = None
+        self._session.commit()
+        self._session.refresh(report_export)
+        return report_export
+
+    def mark_report_export_succeeded(
+        self,
+        task_id: str,
+        *,
+        file_name: str,
+        file_path: str,
+    ) -> ReportExport | None:
+        report_export = self.get_report_export(task_id)
+        if report_export is None:
+            return None
+
+        report_export.status = "succeeded"
+        report_export.progress_percent = 100
+        report_export.status_message = "export task succeeded"
+        report_export.error_message = None
+        report_export.file_name = file_name
+        report_export.file_path = file_path
+        report_export.finished_at = datetime.now(timezone.utc)
+        self._session.commit()
+        self._session.refresh(report_export)
+        return report_export
+
+    def mark_report_export_failed(
+        self, task_id: str, error_message: str
+    ) -> ReportExport | None:
+        report_export = self.get_report_export(task_id)
+        if report_export is None:
+            return None
+
+        report_export.status = "failed"
+        report_export.progress_percent = 100
+        report_export.status_message = "export task failed"
+        report_export.error_message = error_message
+        report_export.finished_at = datetime.now(timezone.utc)
+        self._session.commit()
+        self._session.refresh(report_export)
+        return report_export
 
     def create_obstacles(
         self,

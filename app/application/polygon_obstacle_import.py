@@ -12,6 +12,9 @@ from app.application.polygon_obstacle_targets import (
     calculate_minimum_target_distance_km,
 )
 from app.core import runtime
+from app.core.config import Settings
+from app.report.docx_builder import build_analysis_report_docx
+from app.report.export_payload_builder import build_export_payload
 from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
     AnalysisResultTargetResponse,
@@ -20,6 +23,8 @@ from app.schemas.polygon_obstacle import (
     AnalysisTaskStatusResponse,
     BootstrapAirportResponse,
     BootstrapResponse,
+    ExportTaskResultResponse,
+    ExportTaskStatusResponse,
     ImportedObstacleGeometryResponse,
     ImportedObstacleResponse,
     ImportTaskCreateRequest,
@@ -330,6 +335,105 @@ class PolygonObstacleImportService:
         if runtime.dispatch_analysis_task is not None:
             runtime.dispatch_analysis_task(task_id)
 
+    def create_export_task(
+        self, analysis_task_id: str
+    ) -> ExportTaskStatusResponse | None:
+        analysis_task = self._repository.get_analysis_task(analysis_task_id)
+        if analysis_task is None:
+            return None
+        if analysis_task.status != "succeeded":
+            raise ValueError("analysis task is not ready for export")
+
+        export_task_id = self._build_export_task_id()
+        report_export = self._repository.create_report_export(
+            task_id=export_task_id,
+            analysis_task_id=analysis_task_id,
+        )
+        self._dispatch_export_task(report_export.id)
+        return ExportTaskStatusResponse(
+            exportTaskId=report_export.id,
+            analysisTaskId=analysis_task_id,
+            status=report_export.status,
+            message=report_export.status_message,
+            progressPercent=report_export.progress_percent,
+        )
+
+    def run_export_task(self, task_id: str) -> None:
+        report_export = self._repository.mark_report_export_running(task_id)
+        if report_export is None:
+            return
+
+        try:
+            analysis_task = self._repository.get_analysis_task(
+                report_export.analysis_task_id
+            )
+            if analysis_task is None or analysis_task.status != "succeeded":
+                raise ValueError("analysis task is not ready for export")
+
+            payload = build_export_payload(analysis_task)
+            file_path, file_name = self._build_export_output_path(
+                task_id=task_id,
+                analysis_task_id=analysis_task.id,
+            )
+            build_analysis_report_docx(payload, file_path)
+            self._repository.mark_report_export_succeeded(
+                task_id,
+                file_name=file_name,
+                file_path=str(file_path.resolve()),
+            )
+        except Exception as exc:
+            self._repository.mark_report_export_failed(task_id, str(exc))
+
+    def get_export_task_status(
+        self, analysis_task_id: str, export_task_id: str
+    ) -> ExportTaskStatusResponse | None:
+        report_export = self._repository.get_report_export(export_task_id)
+        if report_export is None or report_export.analysis_task_id != analysis_task_id:
+            return None
+
+        return ExportTaskStatusResponse(
+            exportTaskId=report_export.id,
+            analysisTaskId=report_export.analysis_task_id,
+            status=report_export.status,
+            message=report_export.status_message,
+            progressPercent=report_export.progress_percent,
+        )
+
+    def get_export_task_result(
+        self, analysis_task_id: str, export_task_id: str
+    ) -> ExportTaskResultResponse | None:
+        report_export = self._repository.get_report_export(export_task_id)
+        if report_export is None or report_export.analysis_task_id != analysis_task_id:
+            return None
+
+        return ExportTaskResultResponse(
+            exportTaskId=report_export.id,
+            analysisTaskId=report_export.analysis_task_id,
+            status=report_export.status,
+            fileName=report_export.file_name,
+            downloadUrl=(
+                f"/polygon-obstacle/exports/{report_export.id}/download"
+                if report_export.status == "succeeded" and report_export.file_path
+                else None
+            ),
+            errorMessage=report_export.error_message,
+        )
+
+    def get_export_download(self, export_task_id: str) -> tuple[str, str] | None:
+        report_export = self._repository.get_report_export(export_task_id)
+        if (
+            report_export is None
+            or report_export.status != "succeeded"
+            or not report_export.file_path
+            or not report_export.file_name
+        ):
+            return None
+
+        file_path = Path(report_export.file_path)
+        if not file_path.exists():
+            return None
+        return str(file_path), report_export.file_name
+
     def _build_analysis_task_id(self) -> str:
         existing_task = self._repository.get_analysis_task("analysis-task-1")
         if existing_task is None:
@@ -342,6 +446,32 @@ class PolygonObstacleImportService:
         ):
             next_suffix += 1
         return f"analysis-task-{next_suffix}"
+
+    def _dispatch_export_task(self, task_id: str) -> None:
+        if runtime.dispatch_export_task is not None:
+            runtime.dispatch_export_task(task_id)
+
+    def _build_export_task_id(self) -> str:
+        existing_task = self._repository.get_report_export("export-task-1")
+        if existing_task is None:
+            return "export-task-1"
+
+        next_suffix = 1
+        while (
+            self._repository.get_report_export(f"export-task-{next_suffix}") is not None
+        ):
+            next_suffix += 1
+        return f"export-task-{next_suffix}"
+
+    def _build_export_output_path(
+        self, *, task_id: str, analysis_task_id: str
+    ) -> tuple[Path, str]:
+        if runtime.settings is None:
+            runtime.settings = Settings.from_env()
+
+        export_directory = runtime.settings.export_storage_dir / task_id
+        file_name = f"polygon-obstacle-analysis-{analysis_task_id}.docx"
+        return export_directory / file_name, file_name
 
     def _build_imported_obstacle_response(
         self,
