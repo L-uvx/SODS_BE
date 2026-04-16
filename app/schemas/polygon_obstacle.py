@@ -158,6 +158,8 @@ class AnalysisSpatialObstacleBoundingBoxResponse(BaseModel):
 class AnalysisSpatialObstacleResponse(BaseModel):
     obstacle_id: int = Field(alias="obstacleId")
     name: str
+    raw_obstacle_type: str | None = Field(alias="rawObstacleType", default=None)
+    global_obstacle_category: str = Field(alias="globalObstacleCategory")
     distance_to_airport_meters: float = Field(alias="distanceToAirportMeters")
     local_bounding_box: AnalysisSpatialObstacleBoundingBoxResponse = Field(
         alias="localBoundingBox"
@@ -182,6 +184,27 @@ class AnalysisSpatialStationResponse(BaseModel):
     )
 
 
+class AnalysisRuleResultResponse(BaseModel):
+    station_id: int = Field(alias="stationId")
+    station_type: str = Field(alias="stationType")
+    obstacle_id: int = Field(alias="obstacleId")
+    obstacle_name: str = Field(alias="obstacleName")
+    raw_obstacle_type: str | None = Field(alias="rawObstacleType", default=None)
+    global_obstacle_category: str = Field(alias="globalObstacleCategory")
+    rule_name: str = Field(alias="ruleName")
+    zone_name: str = Field(alias="zoneName")
+    zone_definition: dict[str, object] = Field(alias="zoneDefinition")
+    is_applicable: bool = Field(alias="isApplicable")
+    is_compliant: bool = Field(alias="isCompliant")
+    message: str
+    metrics: dict[str, float | str | bool | None]
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
 class AnalysisSpatialAirportFactsResponse(BaseModel):
     airport_id: int = Field(alias="airportId")
     reference_point: AnalysisSpatialReferencePointResponse = Field(
@@ -191,6 +214,7 @@ class AnalysisSpatialAirportFactsResponse(BaseModel):
     station_count: int = Field(alias="stationCount")
     obstacles: list[AnalysisSpatialObstacleResponse]
     stations: list[AnalysisSpatialStationResponse]
+    rule_results: list[AnalysisRuleResultResponse] = Field(alias="ruleResults")
 
     model_config = ConfigDict(
         populate_by_name=True,

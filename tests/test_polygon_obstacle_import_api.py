@@ -958,6 +958,63 @@ def test_get_analysis_task_result_returns_spatial_facts_after_worker_runs() -> N
     assert "stations" in payload["spatialFacts"]["airports"][0]
 
 
+def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=104.123456,
+                    latitude=30.123456,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="NDB Station",
+                    airport_id=1,
+                    station_type="NDB",
+                    longitude=104.123456,
+                    latitude=30.123456,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    payload = response.json()
+    rule_results = payload["spatialFacts"]["airports"][0]["ruleResults"]
+    assert rule_results[0]["stationType"] == "NDB"
+    assert rule_results[0]["ruleName"] == "ndb_minimum_distance_50m"
+    assert rule_results[0]["globalObstacleCategory"] == "building_general"
+
+
 def test_run_analysis_task_skips_station_without_coordinates() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)

@@ -4,7 +4,9 @@ import re
 from sqlalchemy.orm import Session
 
 from app.analysis.context_builder import build_airport_analysis_context
+from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.spatial_facts import build_airport_spatial_facts
+from app.analysis.rules.ndb import NdbRuleProfile
 from app.application.polygon_obstacle_excel_parser import (
     PolygonObstacleExcelParseError,
     parse_polygon_obstacle_excel,
@@ -292,7 +294,7 @@ class PolygonObstacleImportService:
                 import_batch_id=analysis_task.import_batch_id,
             )
             airport_facts = [
-                build_airport_spatial_facts(context) for context in contexts
+                self._build_airport_analysis_result(context) for context in contexts
             ]
             obstacle_count = len(
                 self._repository.list_obstacles_by_batch_id(
@@ -310,6 +312,55 @@ class PolygonObstacleImportService:
             )
         except Exception as exc:
             self._repository.mark_analysis_task_failed(task_id, str(exc))
+
+    def _build_airport_analysis_result(self, context: object) -> dict[str, object]:
+        airport_facts = build_airport_spatial_facts(context)
+        airport = context.airport
+        projector = AirportLocalProjector(
+            float(airport.longitude), float(airport.latitude)
+        )
+        ndb_profile = NdbRuleProfile()
+        rule_results: list[dict[str, object]] = []
+
+        for station in context.stations:
+            if station.station_type != "NDB":
+                continue
+            if station.longitude is None or station.latitude is None:
+                continue
+
+            station_point = projector.project_point(
+                float(station.longitude),
+                float(station.latitude),
+            )
+            for obstacle in airport_facts["obstacles"]:
+                result = ndb_profile.analyze(
+                    station=station,
+                    obstacle=obstacle,
+                    station_point=station_point,
+                )
+                if result is not None:
+                    rule_results.append(
+                        {
+                            "stationId": result.station_id,
+                            "stationType": result.station_type,
+                            "obstacleId": result.obstacle_id,
+                            "obstacleName": result.obstacle_name,
+                            "rawObstacleType": result.raw_obstacle_type,
+                            "globalObstacleCategory": result.global_obstacle_category,
+                            "ruleName": result.rule_name,
+                            "zoneName": result.zone_name,
+                            "zoneDefinition": result.zone_definition,
+                            "isApplicable": result.is_applicable,
+                            "isCompliant": result.is_compliant,
+                            "message": result.message,
+                            "metrics": result.metrics,
+                        }
+                    )
+
+        airport_facts["ruleResults"] = rule_results
+        for obstacle in airport_facts["obstacles"]:
+            obstacle.pop("geometry", None)
+        return airport_facts
 
     def get_analysis_task_status(
         self, task_id: str

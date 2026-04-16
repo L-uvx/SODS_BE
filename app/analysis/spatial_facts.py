@@ -72,7 +72,9 @@ def build_airport_spatial_facts(context: Any) -> dict[str, Any]:
             {
                 "obstacleId": obstacle_id,
                 "name": obstacle_name,
+                "rawObstacleType": obstacle_type,
                 "globalObstacleCategory": normalize_obstacle_type(obstacle_type),
+                "geometry": geometry,
                 "distanceToAirportMeters": _distance_to_airport(projector, geometry),
                 "localBoundingBox": _build_local_bounding_box(projector, geometry),
             }

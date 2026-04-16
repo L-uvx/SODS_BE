@@ -32,6 +32,7 @@ NDB_MINIMUM_SEPARATION_METERS = {
 
 NDB_CONICAL_CLEARANCE = {
     "inner_radius_m": 50.0,
+    "outer_radius_m": 37040.0,
     "vertical_angle_deg": 3.0,
 }
 
