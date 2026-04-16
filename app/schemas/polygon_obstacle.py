@@ -171,21 +171,9 @@ class AnalysisSpatialObstacleResponse(BaseModel):
     )
 
 
-class AnalysisSpatialStationResponse(BaseModel):
-    station_id: int = Field(alias="stationId")
-    name: str
-    local_x: float = Field(alias="localX")
-    local_y: float = Field(alias="localY")
-    altitude: float | None
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        serialize_by_alias=True,
-    )
-
-
 class AnalysisRuleResultResponse(BaseModel):
     station_id: int = Field(alias="stationId")
+    station_name: str = Field(alias="stationName")
     station_type: str = Field(alias="stationType")
     obstacle_id: int = Field(alias="obstacleId")
     obstacle_name: str = Field(alias="obstacleName")
@@ -213,7 +201,6 @@ class AnalysisSpatialAirportFactsResponse(BaseModel):
     runway_count: int = Field(alias="runwayCount")
     station_count: int = Field(alias="stationCount")
     obstacles: list[AnalysisSpatialObstacleResponse]
-    stations: list[AnalysisSpatialStationResponse]
     rule_results: list[AnalysisRuleResultResponse] = Field(alias="ruleResults")
 
     model_config = ConfigDict(

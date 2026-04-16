@@ -342,6 +342,7 @@ class PolygonObstacleImportService:
                     rule_results.append(
                         {
                             "stationId": result.station_id,
+                            "stationName": station.name,
                             "stationType": result.station_type,
                             "obstacleId": result.obstacle_id,
                             "obstacleName": result.obstacle_name,
@@ -358,6 +359,7 @@ class PolygonObstacleImportService:
                     )
 
         airport_facts["ruleResults"] = rule_results
+        airport_facts.pop("stations", None)
         for obstacle in airport_facts["obstacles"]:
             obstacle.pop("geometry", None)
         return airport_facts
