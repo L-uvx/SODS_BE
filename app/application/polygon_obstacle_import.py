@@ -3,6 +3,8 @@ import re
 
 from sqlalchemy.orm import Session
 
+from app.analysis.context_builder import build_airport_analysis_context
+from app.analysis.spatial_facts import build_airport_spatial_facts
 from app.application.polygon_obstacle_excel_parser import (
     PolygonObstacleExcelParseError,
     parse_polygon_obstacle_excel,
@@ -18,6 +20,7 @@ from app.report.export_payload_builder import build_export_payload
 from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
     AnalysisResultTargetResponse,
+    AnalysisSpatialFactsResponse,
     AnalysisTaskCreateRequest,
     AnalysisTaskResultResponse,
     AnalysisTaskStatusResponse,
@@ -278,6 +281,14 @@ class PolygonObstacleImportService:
                 {"id": airport.id, "name": airport.name, "category": "机场"}
                 for airport in selected_airports
             ]
+            contexts = build_airport_analysis_context(
+                repository=self._repository,
+                airport_ids=analysis_task.selected_target_ids,
+                import_batch_id=analysis_task.import_batch_id,
+            )
+            airport_facts = [
+                build_airport_spatial_facts(context) for context in contexts
+            ]
             obstacle_count = len(
                 self._repository.list_obstacles_by_batch_id(
                     analysis_task.import_batch_id
@@ -288,7 +299,8 @@ class PolygonObstacleImportService:
                 {
                     "selectedTargets": selected_targets,
                     "obstacleCount": obstacle_count,
-                    "summary": "已基于当前导入障碍物和所选机场生成最小分析结果。",
+                    "summary": "已完成局部坐标系与最小空间事实计算。",
+                    "spatialFacts": {"airports": airport_facts},
                 },
             )
         except Exception as exc:
@@ -318,6 +330,7 @@ class PolygonObstacleImportService:
             return None
 
         result_payload = analysis_task.result_payload or {}
+        spatial_facts_payload = result_payload.get("spatialFacts")
         return AnalysisTaskResultResponse(
             analysisTaskId=analysis_task.id,
             status=analysis_task.status,
@@ -329,6 +342,11 @@ class PolygonObstacleImportService:
             ],
             obstacleCount=result_payload.get("obstacleCount", 0),
             summary=result_payload.get("summary", ""),
+            spatialFacts=(
+                AnalysisSpatialFactsResponse(**spatial_facts_payload)
+                if spatial_facts_payload is not None
+                else None
+            ),
         )
 
     def _dispatch_analysis_task(self, task_id: str) -> None:

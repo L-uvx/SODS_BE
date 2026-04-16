@@ -1,0 +1,89 @@
+from types import SimpleNamespace
+
+from app.analysis.spatial_facts import build_airport_spatial_facts
+
+
+def test_build_airport_spatial_facts_returns_station_local_coordinates() -> None:
+    airport = SimpleNamespace(id=1, name="Airport A", longitude=104.0, latitude=30.0)
+    station = SimpleNamespace(
+        id=101,
+        name="Station A",
+        longitude=104.001,
+        latitude=30.0,
+        altitude=498.2,
+    )
+    obstacle = SimpleNamespace(
+        id=201,
+        name="Obstacle A",
+        raw_payload={
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [
+                        [
+                            [104.0, 30.0],
+                            [104.0005, 30.0],
+                            [104.0005, 30.0005],
+                            [104.0, 30.0005],
+                            [104.0, 30.0],
+                        ]
+                    ]
+                ],
+            }
+        },
+    )
+    context = SimpleNamespace(
+        airport=airport,
+        runways=[],
+        stations=[station],
+        obstacles=[obstacle],
+    )
+
+    facts = build_airport_spatial_facts(context)
+
+    assert facts["airportId"] == 1
+    assert facts["stationCount"] == 1
+    assert facts["stations"][0]["stationId"] == 101
+    assert facts["stations"][0]["localX"] > 0
+
+
+def test_build_airport_spatial_facts_skips_station_without_coordinates() -> None:
+    airport = SimpleNamespace(id=1, name="Airport A", longitude=104.0, latitude=30.0)
+    station = SimpleNamespace(
+        id=102,
+        name="Station B",
+        longitude=None,
+        latitude=None,
+        altitude=500.0,
+    )
+    obstacle = SimpleNamespace(
+        id=201,
+        name="Obstacle A",
+        raw_payload={
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [
+                        [
+                            [104.0, 30.0],
+                            [104.0005, 30.0],
+                            [104.0005, 30.0005],
+                            [104.0, 30.0005],
+                            [104.0, 30.0],
+                        ]
+                    ]
+                ],
+            }
+        },
+    )
+    context = SimpleNamespace(
+        airport=airport,
+        runways=[],
+        stations=[station],
+        obstacles=[obstacle],
+    )
+
+    facts = build_airport_spatial_facts(context)
+
+    assert facts["stationCount"] == 1
+    assert facts["stations"] == []

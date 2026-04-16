@@ -138,6 +138,70 @@ class AnalysisResultTargetResponse(BaseModel):
     category: str
 
 
+class AnalysisSpatialReferencePointResponse(BaseModel):
+    longitude: float
+    latitude: float
+
+
+class AnalysisSpatialObstacleBoundingBoxResponse(BaseModel):
+    min_x: float = Field(alias="minX")
+    min_y: float = Field(alias="minY")
+    max_x: float = Field(alias="maxX")
+    max_y: float = Field(alias="maxY")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisSpatialObstacleResponse(BaseModel):
+    obstacle_id: int = Field(alias="obstacleId")
+    name: str
+    distance_to_airport_meters: float = Field(alias="distanceToAirportMeters")
+    local_bounding_box: AnalysisSpatialObstacleBoundingBoxResponse = Field(
+        alias="localBoundingBox"
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisSpatialStationResponse(BaseModel):
+    station_id: int = Field(alias="stationId")
+    name: str
+    local_x: float = Field(alias="localX")
+    local_y: float = Field(alias="localY")
+    altitude: float | None
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisSpatialAirportFactsResponse(BaseModel):
+    airport_id: int = Field(alias="airportId")
+    reference_point: AnalysisSpatialReferencePointResponse = Field(
+        alias="referencePoint"
+    )
+    runway_count: int = Field(alias="runwayCount")
+    station_count: int = Field(alias="stationCount")
+    obstacles: list[AnalysisSpatialObstacleResponse]
+    stations: list[AnalysisSpatialStationResponse]
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisSpatialFactsResponse(BaseModel):
+    airports: list[AnalysisSpatialAirportFactsResponse]
+
+
 class AnalysisTaskResultResponse(BaseModel):
     analysis_task_id: str = Field(alias="analysisTaskId")
     status: str
@@ -148,6 +212,10 @@ class AnalysisTaskResultResponse(BaseModel):
     )
     obstacle_count: int = Field(alias="obstacleCount")
     summary: str
+    spatial_facts: AnalysisSpatialFactsResponse | None = Field(
+        alias="spatialFacts",
+        default=None,
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,

@@ -20,6 +20,8 @@ from app.models.airport import Airport
 from app.models.analysis_task import AnalysisTask
 from app.models.import_batch import ImportBatch
 from app.models.project import Project
+from app.models.runway import Runway
+from app.models.station import Station
 
 
 def _read_valid_excel_bytes() -> bytes:
@@ -62,6 +64,37 @@ def _run_analysis_task(client: TestClient, task_id: str) -> None:
         service.run_analysis_task(task_id)
 
 
+def _create_succeeded_import_task(client: TestClient) -> str:
+    app.state.dispatch_import_task = _DispatchRecorder().delay
+    runtime.dispatch_import_task = app.state.dispatch_import_task
+    create_response = client.post(
+        "/polygon-obstacle/import",
+        data={
+            "projectName": "Wuhan Demo",
+            "obstacleType": "building",
+        },
+        files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+    )
+    task_id = create_response.json()["taskId"]
+    _run_import_task(client, task_id)
+    return task_id
+
+
+def _create_analysis_task(
+    client: TestClient, import_task_id: str, target_ids: list[int]
+) -> str:
+    app.state.dispatch_analysis_task = _DispatchRecorder().delay
+    runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
+    create_response = client.post(
+        "/polygon-obstacle/analysis",
+        json={
+            "importTaskId": import_task_id,
+            "targetIds": target_ids,
+        },
+    )
+    return create_response.json()["analysisTaskId"]
+
+
 @contextmanager
 def _create_test_client() -> Generator[TestClient, None, None]:
     engine = create_engine(
@@ -77,6 +110,8 @@ def _create_test_client() -> Generator[TestClient, None, None]:
             ImportBatch.__table__,
             AnalysisTask.__table__,
             Airport.__table__,
+            Runway.__table__,
+            Station.__table__,
         ],
     )
     with engine.begin() as connection:
@@ -115,6 +150,8 @@ def _create_test_client() -> Generator[TestClient, None, None]:
     Base.metadata.drop_all(
         bind=engine,
         tables=[
+            Station.__table__,
+            Runway.__table__,
             Airport.__table__,
             AnalysisTask.__table__,
             ImportBatch.__table__,
@@ -802,18 +839,146 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "analysisTaskId": analysis_task_id,
-        "status": "succeeded",
-        "importTaskId": import_task_id,
-        "targetIds": [1, 2],
-        "selectedTargets": [
-            {"id": 1, "name": "Airport Near", "category": "机场"},
-            {"id": 2, "name": "Airport Far", "category": "机场"},
-        ],
-        "obstacleCount": 2,
-        "summary": "已基于当前导入障碍物和所选机场生成最小分析结果。",
-    }
+    payload = response.json()
+    assert payload["analysisTaskId"] == analysis_task_id
+    assert payload["status"] == "succeeded"
+    assert payload["importTaskId"] == import_task_id
+    assert payload["targetIds"] == [1, 2]
+    assert payload["selectedTargets"] == [
+        {"id": 1, "name": "Airport Near", "category": "机场"},
+        {"id": 2, "name": "Airport Far", "category": "机场"},
+    ]
+    assert payload["obstacleCount"] == 2
+    assert payload["summary"] == "已完成局部坐标系与最小空间事实计算。"
+    assert [
+        airport_facts["airportId"]
+        for airport_facts in payload["spatialFacts"]["airports"]
+    ] == [1, 2]
+
+
+def test_get_analysis_task_result_returns_spatial_facts_after_worker_runs() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=104.123456,
+                    latitude=30.123456,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["analysisTaskId"] == analysis_task_id
+    assert payload["status"] == "succeeded"
+    assert payload["spatialFacts"]["airports"][0]["airportId"] == 1
+    assert "referencePoint" in payload["spatialFacts"]["airports"][0]
+    assert "obstacles" in payload["spatialFacts"]["airports"][0]
+    assert "stations" in payload["spatialFacts"]["airports"][0]
+
+
+def test_run_analysis_task_skips_station_without_coordinates() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=104.11,
+                    latitude=30.11,
+                )
+            )
+            session.execute(
+                text(
+                    """
+                    INSERT INTO stations (
+                        id, station_type, station_group, name, longitude, latitude,
+                        altitude, station_sub_type, airport_id, created_at, updated_at
+                    ) VALUES
+                    (101, 'nav', NULL, 'Station A', 104.12, 30.12, 498.2, 'ils', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                    (102, 'nav', NULL, 'Station B', NULL, NULL, 500.0, 'ils', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """
+                )
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    stations = response.json()["spatialFacts"]["airports"][0]["stations"]
+    assert [station["stationId"] for station in stations] == [101]
+
+
+def test_run_analysis_task_fails_when_airport_has_no_coordinates() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=None,
+                    latitude=None,
+                )
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert response.json()["message"] == "analysis task failed"
+
+
+def test_get_analysis_task_result_returns_parallel_airport_facts_for_multiple_targets() -> (
+    None
+):
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add_all(
+                [
+                    Airport(
+                        id=1,
+                        name="Airport A",
+                        longitude=104.1,
+                        latitude=30.1,
+                    ),
+                    Airport(
+                        id=2,
+                        name="Airport B",
+                        longitude=104.2,
+                        latitude=30.2,
+                    ),
+                ]
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1, 2])
+        _run_analysis_task(client, analysis_task_id)
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    airport_ids = [
+        item["airportId"] for item in response.json()["spatialFacts"]["airports"]
+    ]
+    assert airport_ids == [1, 2]
 
 
 def test_get_analysis_task_result_returns_empty_payload_before_completion() -> None:
@@ -860,6 +1025,7 @@ def test_get_analysis_task_result_returns_empty_payload_before_completion() -> N
         "selectedTargets": [],
         "obstacleCount": 0,
         "summary": "",
+        "spatialFacts": None,
     }
 
 

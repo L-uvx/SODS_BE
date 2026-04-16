@@ -13,6 +13,8 @@ from app.models.import_batch import ImportBatch
 from app.models.obstacle import Obstacle
 from app.models.project import Project
 from app.models.report_export import ReportExport
+from app.models.runway import Runway
+from app.models.station import Station
 
 
 class ImportBatchRepository:
@@ -376,6 +378,18 @@ class ImportBatchRepository:
 
         statement = (
             select(Airport).where(Airport.id.in_(airport_ids)).order_by(Airport.id)
+        )
+        return list(self._session.scalars(statement))
+
+    def list_runways_by_airport_id(self, airport_id: int) -> list[Runway]:
+        statement = (
+            select(Runway).where(Runway.airport_id == airport_id).order_by(Runway.id)
+        )
+        return list(self._session.scalars(statement))
+
+    def list_stations_by_airport_id(self, airport_id: int) -> list[Station]:
+        statement = (
+            select(Station).where(Station.airport_id == airport_id).order_by(Station.id)
         )
         return list(self._session.scalars(statement))
 
