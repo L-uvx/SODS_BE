@@ -3,6 +3,7 @@ from typing import Any
 from shapely.geometry import MultiPolygon, Point, shape
 
 from app.analysis.local_coordinate import AirportLocalProjector
+from app.analysis.obstacle_categories import normalize_obstacle_type
 
 
 def _build_local_bounding_box(
@@ -58,10 +59,12 @@ def build_airport_spatial_facts(context: Any) -> dict[str, Any]:
         if isinstance(obstacle, dict):
             obstacle_id = obstacle["id"]
             obstacle_name = obstacle["name"]
+            obstacle_type = obstacle.get("obstacle_type")
             raw_payload = obstacle["raw_payload"]
         else:
             obstacle_id = obstacle.id
             obstacle_name = obstacle.name
+            obstacle_type = getattr(obstacle, "obstacle_type", None)
             raw_payload = obstacle.raw_payload
 
         geometry = raw_payload["geometry"]
@@ -69,6 +72,7 @@ def build_airport_spatial_facts(context: Any) -> dict[str, Any]:
             {
                 "obstacleId": obstacle_id,
                 "name": obstacle_name,
+                "globalObstacleCategory": normalize_obstacle_type(obstacle_type),
                 "distanceToAirportMeters": _distance_to_airport(projector, geometry),
                 "localBoundingBox": _build_local_bounding_box(projector, geometry),
             }

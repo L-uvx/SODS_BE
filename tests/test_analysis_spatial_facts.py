@@ -87,3 +87,38 @@ def test_build_airport_spatial_facts_skips_station_without_coordinates() -> None
 
     assert facts["stationCount"] == 1
     assert facts["stations"] == []
+
+
+def test_build_airport_spatial_facts_includes_global_obstacle_category() -> None:
+    airport = SimpleNamespace(id=1, name="Airport A", longitude=104.0, latitude=30.0)
+    obstacle = SimpleNamespace(
+        id=201,
+        name="Obstacle A",
+        obstacle_type="建筑物/构建物",
+        raw_payload={
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [
+                        [
+                            [104.0, 30.0],
+                            [104.0005, 30.0],
+                            [104.0005, 30.0005],
+                            [104.0, 30.0005],
+                            [104.0, 30.0],
+                        ]
+                    ]
+                ],
+            }
+        },
+    )
+    context = SimpleNamespace(
+        airport=airport,
+        runways=[],
+        stations=[],
+        obstacles=[obstacle],
+    )
+
+    facts = build_airport_spatial_facts(context)
+
+    assert facts["obstacles"][0]["globalObstacleCategory"] == "building_general"
