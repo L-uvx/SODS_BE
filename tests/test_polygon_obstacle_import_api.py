@@ -316,7 +316,9 @@ def test_get_import_task_result_returns_404_for_unknown_task() -> None:
     assert response.json() == {"detail": "import task not found"}
 
 
-def test_get_import_targets_returns_all_airports_with_placeholder_distance() -> None:
+def test_get_import_targets_returns_all_airports_with_distance_from_nearest_station() -> (
+    None
+):
     with _create_test_client() as client:
         app.state.dispatch_import_task = _DispatchRecorder().delay
         runtime.dispatch_import_task = app.state.dispatch_import_task
@@ -347,6 +349,24 @@ def test_get_import_targets_returns_all_airports_with_placeholder_distance() -> 
                     Airport(name="Airport Missing Coordinates"),
                 ]
             )
+            session.add_all(
+                [
+                    Station(
+                        id=101,
+                        name="Near Station",
+                        airport_id=1,
+                        longitude=103.975864,
+                        latitude=30.506881,
+                    ),
+                    Station(
+                        id=201,
+                        name="Far Station",
+                        airport_id=2,
+                        longitude=103.975864,
+                        latitude=30.506881,
+                    ),
+                ]
+            )
             session.commit()
 
         response = client.get(f"/polygon-obstacle/import/{task_id}/targets")
@@ -364,9 +384,60 @@ def test_get_import_targets_returns_all_airports_with_placeholder_distance() -> 
             "id": 2,
             "name": "Airport Far",
             "category": "机场",
-            "distance": 18.24,
+            "distance": 0.0,
             "distanceUnit": "km",
         },
+    ]
+
+
+def test_get_import_targets_returns_zero_distance_when_airport_has_no_valid_station() -> (
+    None
+):
+    with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        create_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Wuhan Demo",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+        task_id = create_response.json()["taskId"]
+        _run_import_task(client, task_id)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport Without Station Coordinates",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="Station Without Coordinates",
+                    airport_id=1,
+                    longitude=None,
+                    latitude=None,
+                )
+            )
+            session.commit()
+
+        response = client.get(f"/polygon-obstacle/import/{task_id}/targets")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": 1,
+            "name": "Airport Without Station Coordinates",
+            "category": "机场",
+            "distance": 0.0,
+            "distanceUnit": "km",
+        }
     ]
 
 

@@ -201,9 +201,14 @@ class PolygonObstacleImportService:
             if airport.longitude is None or airport.latitude is None:
                 continue
 
+            station_points = [
+                (float(station.longitude), float(station.latitude))
+                for station in self._repository.list_stations_by_airport_id(airport.id)
+                if station.longitude is not None and station.latitude is not None
+            ]
+
             distance_km = calculate_minimum_target_distance_km(
-                airport_longitude=float(airport.longitude),
-                airport_latitude=float(airport.latitude),
+                station_points=station_points,
                 obstacle_geometries=obstacle_geometries,
             )
             targets.append(
