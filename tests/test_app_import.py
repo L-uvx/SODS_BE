@@ -1,7 +1,9 @@
 import importlib
 import sys
+from contextlib import ExitStack
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.base import Base
@@ -69,6 +71,45 @@ def test_app_startup_triggers_export_cleanup(monkeypatch, tmp_path: Path) -> Non
     app_main.cleanup_stale_import_storage()
 
     assert calls == [tmp_path / "exports"]
+
+
+def test_app_lifespan_triggers_cleanup_on_startup(monkeypatch, tmp_path: Path) -> None:
+    sys.modules.pop("app.main", None)
+    app_main = importlib.import_module("app.main")
+
+    calls: list[tuple[str, Path]] = []
+
+    def _fake_export_cleanup(settings, session) -> None:
+        calls.append(("export", settings.export_storage_dir))
+
+    def _fake_import_cleanup(settings, session) -> None:
+        calls.append(("import", settings.import_storage_dir))
+
+    monkeypatch.setattr(app_main, "cleanup_export_storage", _fake_export_cleanup)
+    monkeypatch.setattr(app_main, "cleanup_import_storage", _fake_import_cleanup)
+    app_main.app.state.settings = app_main.app.state.settings.__class__(
+        app_env="test",
+        database_url="sqlite://",
+        redis_url="redis://localhost:6379/0",
+        import_storage_dir=tmp_path / "imports",
+        import_success_retention_minutes=10,
+        import_failed_retention_minutes=30,
+        import_stale_retention_minutes=30,
+        export_storage_dir=tmp_path / "exports",
+        export_success_retention_minutes=10,
+        export_failed_retention_minutes=30,
+        export_stale_retention_minutes=30,
+    )
+
+    with ExitStack() as stack:
+        client = stack.enter_context(TestClient(app_main.app))
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert calls == [
+        ("import", tmp_path / "imports"),
+        ("export", tmp_path / "exports"),
+    ]
 
 
 def test_app_startup_ignores_sqlalchemy_error_from_export_cleanup(

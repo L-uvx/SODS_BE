@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -11,19 +13,7 @@ from app.tasks.polygon_obstacle_analysis import run_analysis_task
 from app.tasks.polygon_obstacle_export import run_export_task
 from app.tasks.polygon_obstacle_import import run_import_task
 
-app = FastAPI()
-app.state.settings = Settings.from_env()
-app.state.dispatch_import_task = run_import_task.delay
-app.state.dispatch_analysis_task = run_analysis_task.delay
-app.state.dispatch_export_task = run_export_task.delay
-runtime.settings = app.state.settings
-runtime.dispatch_import_task = app.state.dispatch_import_task
-runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
-runtime.dispatch_export_task = app.state.dispatch_export_task
-app.include_router(polygon_obstacle_router)
 
-
-@app.on_event("startup")
 def cleanup_stale_import_storage() -> None:
     session = SessionLocal()
     try:
@@ -34,6 +24,24 @@ def cleanup_stale_import_storage() -> None:
         return
     finally:
         session.close()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    cleanup_stale_import_storage()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+app.state.settings = Settings.from_env()
+app.state.dispatch_import_task = run_import_task.delay
+app.state.dispatch_analysis_task = run_analysis_task.delay
+app.state.dispatch_export_task = run_export_task.delay
+runtime.settings = app.state.settings
+runtime.dispatch_import_task = app.state.dispatch_import_task
+runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
+runtime.dispatch_export_task = app.state.dispatch_export_task
+app.include_router(polygon_obstacle_router)
 
 
 @app.get("/health")
