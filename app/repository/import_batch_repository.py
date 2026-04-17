@@ -372,6 +372,14 @@ class ImportBatchRepository:
         statement = select(Airport).order_by(Airport.id)
         return list(self._session.scalars(statement))
 
+    def list_airports_with_coordinates(self) -> list[Airport]:
+        statement = (
+            select(Airport)
+            .where(Airport.longitude.is_not(None), Airport.latitude.is_not(None))
+            .order_by(Airport.id)
+        )
+        return list(self._session.scalars(statement))
+
     def list_airports_by_ids(self, airport_ids: list[int]) -> list[Airport]:
         if not airport_ids:
             return []
@@ -392,15 +400,6 @@ class ImportBatchRepository:
             select(Station).where(Station.airport_id == airport_id).order_by(Station.id)
         )
         return list(self._session.scalars(statement))
-
-    def get_first_airport_with_coordinates(self) -> Airport | None:
-        statement = (
-            select(Airport)
-            .where(Airport.longitude.is_not(None), Airport.latitude.is_not(None))
-            .order_by(Airport.id)
-            .limit(1)
-        )
-        return self._session.scalar(statement)
 
     def list_all_obstacles(self) -> list[Obstacle] | list[dict[str, Any]]:
         if (

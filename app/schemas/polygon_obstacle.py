@@ -96,10 +96,28 @@ class BootstrapAirportResponse(BaseModel):
     name: str
     longitude: float
     latitude: float
+    stations: list["BootstrapStationResponse"] = Field(default_factory=list)
+
+
+class BootstrapStationResponse(BaseModel):
+    id: int
+    name: str
+    station_type: str | None = Field(alias="stationType")
+    longitude: float
+    latitude: float
+    altitude: float | None
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+BootstrapAirportResponse.model_rebuild()
 
 
 class BootstrapResponse(BaseModel):
-    airport: BootstrapAirportResponse | None
+    airports: list[BootstrapAirportResponse] = Field(default_factory=list)
     historical_obstacles: list[ImportedObstacleResponse] = Field(
         default_factory=list,
         alias="historicalObstacles",
@@ -227,6 +245,18 @@ class AnalysisProtectionZoneCircleGeometryResponse(BaseModel):
     )
 
 
+class AnalysisProtectionZoneRadialBandGeometryResponse(BaseModel):
+    shape_type: str = Field(alias="shapeType")
+    center: AnalysisSpatialReferencePointResponse
+    inner_radius_meters: float = Field(alias="innerRadiusMeters")
+    outer_radius_meters: float = Field(alias="outerRadiusMeters")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
 class AnalysisProtectionZoneSectorGeometryResponse(BaseModel):
     shape_type: str = Field(alias="shapeType")
     center: AnalysisSpatialReferencePointResponse
@@ -243,6 +273,13 @@ class AnalysisProtectionZoneSectorGeometryResponse(BaseModel):
 
 class AnalysisProtectionZoneVerticalResponse(BaseModel):
     mode: str
+    base_reference: str = Field(alias="baseReference")
+    base_height_meters: float = Field(alias="baseHeightMeters")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
 
 
 class AnalysisProtectionZoneHeightFunctionResponse(BaseModel):
@@ -291,6 +328,7 @@ class AnalysisProtectionZoneResponse(BaseModel):
     region_name: str = Field(alias="regionName")
     geometry: (
         AnalysisProtectionZoneCircleGeometryResponse
+        | AnalysisProtectionZoneRadialBandGeometryResponse
         | AnalysisProtectionZoneSectorGeometryResponse
     )
     vertical: (

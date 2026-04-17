@@ -30,6 +30,7 @@ from app.schemas.polygon_obstacle import (
     AnalysisTaskStatusResponse,
     BootstrapAirportResponse,
     BootstrapResponse,
+    BootstrapStationResponse,
     ExportTaskResultResponse,
     ExportTaskStatusResponse,
     ImportedObstacleGeometryResponse,
@@ -165,20 +166,38 @@ class PolygonObstacleImportService:
         )
 
     def get_bootstrap(self) -> BootstrapResponse:
-        airport = self._repository.get_first_airport_with_coordinates()
+        airports = self._repository.list_airports_with_coordinates()
         obstacles = self._repository.list_all_obstacles()
 
         return BootstrapResponse(
-            airport=(
+            airports=[
                 BootstrapAirportResponse(
                     id=airport.id,
                     name=airport.name,
                     longitude=float(airport.longitude),
                     latitude=float(airport.latitude),
+                    stations=[
+                        BootstrapStationResponse(
+                            id=station.id,
+                            name=station.name,
+                            stationType=station.station_type,
+                            longitude=float(station.longitude),
+                            latitude=float(station.latitude),
+                            altitude=(
+                                float(station.altitude)
+                                if station.altitude is not None
+                                else None
+                            ),
+                        )
+                        for station in self._repository.list_stations_by_airport_id(
+                            airport.id
+                        )
+                        if station.longitude is not None
+                        and station.latitude is not None
+                    ],
                 )
-                if airport is not None
-                else None
-            ),
+                for airport in airports
+            ],
             historicalObstacles=[
                 self._build_imported_obstacle_response(obstacle)
                 for obstacle in obstacles
@@ -502,7 +521,40 @@ class PolygonObstacleImportService:
                     },
                     "radiusMeters": float(radius_meters),
                 },
-                "vertical": {"mode": "flat"},
+                "vertical": {
+                    "mode": "flat",
+                    "baseReference": "station",
+                    "baseHeightMeters": float(station.altitude or 0.0),
+                },
+            }
+
+        if shape == "radial_band":
+            metrics = rule_result["metrics"]
+            return {
+                **base_feature,
+                "geometry": {
+                    "shapeType": "radial_band",
+                    "center": {
+                        "longitude": float(station.longitude),
+                        "latitude": float(station.latitude),
+                    },
+                    "innerRadiusMeters": float(zone_definition["min_radius_m"]),
+                    "outerRadiusMeters": float(zone_definition["max_radius_m"]),
+                },
+                "vertical": {
+                    "mode": "analytic_surface",
+                    "baseReference": "station",
+                    "baseHeightMeters": float(metrics["baseHeightMeters"]),
+                    "heightFunction": {
+                        "type": "elevation_angle",
+                        "elevationAngleDegrees": float(
+                            metrics["elevationAngleDegrees"]
+                        ),
+                        "distanceMetric": "radial",
+                        "startDistanceMeters": float(zone_definition["min_radius_m"]),
+                        "endDistanceMeters": float(zone_definition["max_radius_m"]),
+                    },
+                },
             }
 
         if shape == "sector":

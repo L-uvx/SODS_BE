@@ -125,8 +125,6 @@ def test_ndb_conical_clearance_rule_returns_uniform_result() -> None:
     assert result.rule_name == "ndb_conical_clearance_3deg"
     assert result.zone_code == "ndb_conical_clearance_3deg"
     assert result.region_code == "default"
-    assert result.zone_definition["shape"] == "sector"
-    assert result.zone_definition["start_azimuth_deg"] == 0.0
-    assert result.zone_definition["end_azimuth_deg"] == 360.0
+    assert result.zone_definition["shape"] == "radial_band"
     assert result.metrics["baseHeightMeters"] == 500.0
     assert result.metrics["elevationAngleDegrees"] == 3.0

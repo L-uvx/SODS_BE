@@ -1,6 +1,3 @@
-from app.analysis.rules.ndb.common import NdbRule
-
-
 import math
 
 from app.analysis.rule_result import AnalysisRuleResult
@@ -11,12 +8,10 @@ class NdbConicalClearance3DegRule(NdbRule):
     rule_name = "ndb_conical_clearance_3deg"
     zone_name = "NDB 3 degree conical clearance zone"
     zone_definition = {
-        "shape": "sector",
+        "shape": "radial_band",
         "min_radius_m": 50.0,
         "max_radius_m": 37040.0,
         "vertical_angle_deg": 3.0,
-        "start_azimuth_deg": 0.0,
-        "end_azimuth_deg": 360.0,
     }
 
     def analyze(
