@@ -449,7 +449,7 @@ def test_get_import_targets_returns_404_for_unknown_task() -> None:
     assert response.json() == {"detail": "import task not found"}
 
 
-def test_get_bootstrap_returns_first_airport_with_coordinates_and_historical_obstacles() -> (
+def test_get_bootstrap_returns_airports_with_nested_stations_and_historical_obstacles() -> (
     None
 ):
     with _create_test_client() as client:
@@ -481,18 +481,72 @@ def test_get_bootstrap_returns_first_airport_with_coordinates_and_historical_obs
                     ),
                 ]
             )
+            session.flush()
+            session.add_all(
+                [
+                    Station(
+                        airport_id=2,
+                        name="NDB Station",
+                        station_type="NDB",
+                        longitude=103.976000,
+                        latitude=30.507000,
+                        altitude=500.0,
+                    ),
+                    Station(
+                        airport_id=2,
+                        name="Station Missing Coordinates",
+                        station_type="VOR",
+                    ),
+                    Station(
+                        airport_id=3,
+                        name="VOR Station",
+                        station_type="VOR",
+                        longitude=104.101000,
+                        latitude=30.601000,
+                        altitude=520.0,
+                    ),
+                ]
+            )
             session.commit()
 
             response = client.get("/polygon-obstacle/bootstrap")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["airport"] == {
-        "id": 2,
-        "name": "Airport Near",
-        "longitude": 103.975864,
-        "latitude": 30.506881,
-    }
+    assert payload["airports"] == [
+        {
+            "id": 2,
+            "name": "Airport Near",
+            "longitude": 103.975864,
+            "latitude": 30.506881,
+            "stations": [
+                {
+                    "id": 1,
+                    "name": "NDB Station",
+                    "stationType": "NDB",
+                    "longitude": 103.976,
+                    "latitude": 30.507,
+                    "altitude": 500.0,
+                }
+            ],
+        },
+        {
+            "id": 3,
+            "name": "Airport Far",
+            "longitude": 104.1,
+            "latitude": 30.6,
+            "stations": [
+                {
+                    "id": 3,
+                    "name": "VOR Station",
+                    "stationType": "VOR",
+                    "longitude": 104.101,
+                    "latitude": 30.601,
+                    "altitude": 520.0,
+                }
+            ],
+        },
+    ]
     assert len(payload["historicalObstacles"]) == 2
     assert payload["historicalObstacles"][0] == {
         "id": 1,
@@ -542,7 +596,7 @@ def test_get_bootstrap_returns_first_airport_with_coordinates_and_historical_obs
     }
 
 
-def test_get_bootstrap_returns_null_airport_when_no_airport_has_coordinates() -> None:
+def test_get_bootstrap_returns_empty_airports_when_no_airport_has_coordinates() -> None:
     with _create_test_client() as client:
         app.state.dispatch_import_task = _DispatchRecorder().delay
         runtime.dispatch_import_task = app.state.dispatch_import_task
@@ -568,7 +622,7 @@ def test_get_bootstrap_returns_null_airport_when_no_airport_has_coordinates() ->
         response = client.get("/polygon-obstacle/bootstrap")
 
     assert response.status_code == 200
-    assert response.json()["airport"] is None
+    assert response.json()["airports"] == []
     assert len(response.json()["historicalObstacles"]) == 2
 
 
@@ -584,18 +638,41 @@ def test_get_bootstrap_returns_empty_historical_obstacles_when_no_obstacles_exis
                     latitude=30.506881,
                 )
             )
+            session.flush()
+            session.add(
+                Station(
+                    airport_id=1,
+                    name="NDB Station",
+                    station_type="NDB",
+                    longitude=103.976000,
+                    latitude=30.507000,
+                    altitude=500.0,
+                )
+            )
             session.commit()
 
         response = client.get("/polygon-obstacle/bootstrap")
 
     assert response.status_code == 200
     assert response.json() == {
-        "airport": {
-            "id": 1,
-            "name": "Airport Near",
-            "longitude": 103.975864,
-            "latitude": 30.506881,
-        },
+        "airports": [
+            {
+                "id": 1,
+                "name": "Airport Near",
+                "longitude": 103.975864,
+                "latitude": 30.506881,
+                "stations": [
+                    {
+                        "id": 1,
+                        "name": "NDB Station",
+                        "stationType": "NDB",
+                        "longitude": 103.976,
+                        "latitude": 30.507,
+                        "altitude": 500.0,
+                    }
+                ],
+            }
+        ],
         "historicalObstacles": [],
     }
 
@@ -1100,14 +1177,18 @@ def test_get_analysis_task_result_returns_protection_zones() -> None:
         "center": {"longitude": 104.123456, "latitude": 30.123456},
         "radiusMeters": 50.0,
     }
-    assert protection_zone["vertical"] == {"mode": "flat"}
+    assert protection_zone["vertical"] == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 500.0,
+    }
     assert protection_zone["properties"] == {
         "label": "NDB Station NDB 50m minimum distance zone default"
     }
     assert protection_zone["renderGeometry"] is None
 
 
-def test_get_analysis_task_result_returns_sector_analytic_surface_protection_zone() -> (
+def test_get_analysis_task_result_returns_radial_band_analytic_surface_protection_zone() -> (
     None
 ):
     with _create_test_client() as client:
@@ -1160,20 +1241,18 @@ def test_get_analysis_task_result_returns_sector_analytic_surface_protection_zon
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
     assert response.status_code == 200
-    sector_zone = next(
+    radial_band_zone = next(
         item
         for item in response.json()["protectionZones"]
         if item["ruleCode"] == "ndb_conical_clearance_3deg"
     )
-    assert sector_zone["geometry"] == {
-        "shapeType": "sector",
+    assert radial_band_zone["geometry"] == {
+        "shapeType": "radial_band",
         "center": {"longitude": 104.123456, "latitude": 30.123456},
         "innerRadiusMeters": 50.0,
         "outerRadiusMeters": 37040.0,
-        "startAzimuthDegrees": 0.0,
-        "endAzimuthDegrees": 360.0,
     }
-    assert sector_zone["vertical"] == {
+    assert radial_band_zone["vertical"] == {
         "mode": "analytic_surface",
         "baseReference": "station",
         "baseHeightMeters": 500.0,
@@ -1185,7 +1264,7 @@ def test_get_analysis_task_result_returns_sector_analytic_surface_protection_zon
             "endDistanceMeters": 37040.0,
         },
     }
-    assert sector_zone["renderGeometry"] is None
+    assert radial_band_zone["renderGeometry"] is None
 
 
 def test_get_analysis_task_result_returns_ndb_300m_rule_result_for_hill() -> None:
