@@ -89,3 +89,44 @@ def test_ndb_minimum_distance_rules_return_uniform_results() -> None:
     assert result_300.metrics["requiredDistanceMeters"] == 300.0
     assert result_500.rule_name == "ndb_minimum_distance_500m"
     assert result_500.metrics["requiredDistanceMeters"] == 500.0
+
+
+def test_ndb_conical_clearance_rule_returns_uniform_result() -> None:
+    station = type("Station", (), {"id": 1, "station_type": "NDB"})()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "Obstacle A",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [200.0, 0.0],
+                        [210.0, 0.0],
+                        [210.0, 10.0],
+                        [200.0, 10.0],
+                        [200.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+        "topElevation": 520.0,
+    }
+
+    result = NdbConicalClearance3DegRule().analyze(
+        station=station,
+        obstacle=obstacle,
+        station_point=(0.0, 0.0),
+        station_altitude=500.0,
+    )
+
+    assert result.rule_name == "ndb_conical_clearance_3deg"
+    assert result.zone_code == "ndb_conical_clearance_3deg"
+    assert result.region_code == "default"
+    assert result.zone_definition["shape"] == "sector"
+    assert result.zone_definition["start_azimuth_deg"] == 0.0
+    assert result.zone_definition["end_azimuth_deg"] == 360.0
+    assert result.metrics["baseHeightMeters"] == 500.0
+    assert result.metrics["elevationAngleDegrees"] == 3.0

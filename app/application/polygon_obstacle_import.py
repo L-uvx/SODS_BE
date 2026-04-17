@@ -7,6 +7,7 @@ from app.analysis.context_builder import build_airport_analysis_context
 from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.spatial_facts import build_airport_spatial_facts
 from app.analysis.rules.ndb import NdbRuleProfile
+from app.analysis.rules.ndb.conical_clearance import NdbConicalClearance3DegRule
 from app.application.polygon_obstacle_excel_parser import (
     PolygonObstacleExcelParseError,
     parse_polygon_obstacle_excel,
@@ -21,6 +22,7 @@ from app.report.docx_builder import build_analysis_report_docx
 from app.report.export_payload_builder import build_export_payload
 from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
+    AnalysisProtectionZoneResponse,
     AnalysisResultTargetResponse,
     AnalysisSpatialFactsResponse,
     AnalysisTaskCreateRequest,
@@ -296,6 +298,14 @@ class PolygonObstacleImportService:
             airport_facts = [
                 self._build_airport_analysis_result(context) for context in contexts
             ]
+            protection_zones = [
+                protection_zone
+                for context, airport_fact in zip(contexts, airport_facts, strict=False)
+                for protection_zone in self._build_airport_protection_zones(
+                    context=context,
+                    airport_facts=airport_fact,
+                )
+            ]
             obstacle_count = len(
                 self._repository.list_obstacles_by_batch_id(
                     analysis_task.import_batch_id
@@ -308,6 +318,7 @@ class PolygonObstacleImportService:
                     "obstacleCount": obstacle_count,
                     "summary": "已完成局部坐标系与最小空间事实计算。",
                     "spatialFacts": {"airports": airport_facts},
+                    "protectionZones": protection_zones,
                 },
             )
         except Exception as exc:
@@ -320,6 +331,7 @@ class PolygonObstacleImportService:
             float(airport.longitude), float(airport.latitude)
         )
         ndb_profile = NdbRuleProfile()
+        conical_rule = NdbConicalClearance3DegRule()
         rule_results: list[dict[str, object]] = []
 
         for station in context.stations:
@@ -349,7 +361,10 @@ class PolygonObstacleImportService:
                             "rawObstacleType": result.raw_obstacle_type,
                             "globalObstacleCategory": result.global_obstacle_category,
                             "ruleName": result.rule_name,
+                            "zoneCode": result.zone_code,
                             "zoneName": result.zone_name,
+                            "regionCode": result.region_code,
+                            "regionName": result.region_name,
                             "zoneDefinition": result.zone_definition,
                             "isApplicable": result.is_applicable,
                             "isCompliant": result.is_compliant,
@@ -357,12 +372,171 @@ class PolygonObstacleImportService:
                             "metrics": result.metrics,
                         }
                     )
+                conical_result = conical_rule.analyze(
+                    station=station,
+                    obstacle=obstacle,
+                    station_point=station_point,
+                    station_altitude=(
+                        float(station.altitude)
+                        if station.altitude is not None
+                        else None
+                    ),
+                )
+                rule_results.append(
+                    {
+                        "stationId": conical_result.station_id,
+                        "stationName": station.name,
+                        "stationType": conical_result.station_type,
+                        "obstacleId": conical_result.obstacle_id,
+                        "obstacleName": conical_result.obstacle_name,
+                        "rawObstacleType": conical_result.raw_obstacle_type,
+                        "globalObstacleCategory": conical_result.global_obstacle_category,
+                        "ruleName": conical_result.rule_name,
+                        "zoneCode": conical_result.zone_code,
+                        "zoneName": conical_result.zone_name,
+                        "regionCode": conical_result.region_code,
+                        "regionName": conical_result.region_name,
+                        "zoneDefinition": conical_result.zone_definition,
+                        "isApplicable": conical_result.is_applicable,
+                        "isCompliant": conical_result.is_compliant,
+                        "message": conical_result.message,
+                        "metrics": conical_result.metrics,
+                    }
+                )
 
         airport_facts["ruleResults"] = rule_results
         airport_facts.pop("stations", None)
         for obstacle in airport_facts["obstacles"]:
             obstacle.pop("geometry", None)
         return airport_facts
+
+    def _build_airport_protection_zones(
+        self,
+        *,
+        context: object,
+        airport_facts: dict[str, object],
+    ) -> list[dict[str, object]]:
+        airport = context.airport
+        stations_by_id = {station.id: station for station in context.stations}
+        protection_zones: list[dict[str, object]] = []
+        seen_keys: set[tuple[object, ...]] = set()
+
+        for rule_result in airport_facts.get("ruleResults", []):
+            rule_code = str(rule_result["ruleName"])
+            key = (
+                airport.id,
+                rule_result["stationId"],
+                rule_code,
+                rule_result["zoneCode"],
+                rule_result["regionCode"],
+            )
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+
+            station = stations_by_id.get(rule_result["stationId"])
+            if station is None or station.longitude is None or station.latitude is None:
+                continue
+
+            zone_definition = rule_result["zoneDefinition"]
+            zone_feature = self._build_protection_zone_feature(
+                airport=airport,
+                station=station,
+                rule_code=rule_code,
+                rule_result=rule_result,
+                zone_definition=zone_definition,
+            )
+            if zone_feature is None:
+                continue
+
+            protection_zones.append(zone_feature)
+
+        return protection_zones
+
+    def _build_protection_zone_feature(
+        self,
+        *,
+        airport: object,
+        station: object,
+        rule_code: str,
+        rule_result: dict[str, object],
+        zone_definition: dict[str, object],
+    ) -> dict[str, object] | None:
+        base_feature = {
+            "id": (
+                f"airport-{airport.id}-station-{station.id}-"
+                f"zone-{rule_result['zoneCode']}-region-{rule_result['regionCode']}"
+            ),
+            "airportId": airport.id,
+            "airportName": airport.name,
+            "stationId": station.id,
+            "stationName": station.name,
+            "stationType": station.station_type,
+            "ruleCode": rule_code,
+            "ruleName": rule_result["ruleName"],
+            "zoneCode": rule_result["zoneCode"],
+            "zoneName": rule_result["zoneName"],
+            "regionCode": rule_result["regionCode"],
+            "regionName": rule_result["regionName"],
+            "properties": {
+                "label": (
+                    f"{station.name} {rule_result['zoneName']} "
+                    f"{rule_result['regionName']}"
+                )
+            },
+            "renderGeometry": None,
+        }
+
+        shape = zone_definition.get("shape")
+        if shape == "circle":
+            radius_meters = zone_definition.get("radius_m")
+            if radius_meters is None:
+                return None
+            return {
+                **base_feature,
+                "geometry": {
+                    "shapeType": "circle",
+                    "center": {
+                        "longitude": float(station.longitude),
+                        "latitude": float(station.latitude),
+                    },
+                    "radiusMeters": float(radius_meters),
+                },
+                "vertical": {"mode": "flat"},
+            }
+
+        if shape == "sector":
+            metrics = rule_result["metrics"]
+            return {
+                **base_feature,
+                "geometry": {
+                    "shapeType": "sector",
+                    "center": {
+                        "longitude": float(station.longitude),
+                        "latitude": float(station.latitude),
+                    },
+                    "innerRadiusMeters": float(zone_definition["min_radius_m"]),
+                    "outerRadiusMeters": float(zone_definition["max_radius_m"]),
+                    "startAzimuthDegrees": float(zone_definition["start_azimuth_deg"]),
+                    "endAzimuthDegrees": float(zone_definition["end_azimuth_deg"]),
+                },
+                "vertical": {
+                    "mode": "analytic_surface",
+                    "baseReference": "station",
+                    "baseHeightMeters": float(metrics["baseHeightMeters"]),
+                    "heightFunction": {
+                        "type": "elevation_angle",
+                        "elevationAngleDegrees": float(
+                            metrics["elevationAngleDegrees"]
+                        ),
+                        "distanceMetric": "radial",
+                        "startDistanceMeters": float(zone_definition["min_radius_m"]),
+                        "endDistanceMeters": float(zone_definition["max_radius_m"]),
+                    },
+                },
+            }
+
+        return None
 
     def get_analysis_task_status(
         self, task_id: str
@@ -405,6 +579,10 @@ class PolygonObstacleImportService:
                 if spatial_facts_payload is not None
                 else None
             ),
+            protectionZones=[
+                AnalysisProtectionZoneResponse(**item)
+                for item in result_payload.get("protectionZones", [])
+            ],
         )
 
     def _dispatch_analysis_task(self, task_id: str) -> None:

@@ -180,7 +180,10 @@ class AnalysisRuleResultResponse(BaseModel):
     raw_obstacle_type: str | None = Field(alias="rawObstacleType", default=None)
     global_obstacle_category: str = Field(alias="globalObstacleCategory")
     rule_name: str = Field(alias="ruleName")
+    zone_code: str = Field(alias="zoneCode")
     zone_name: str = Field(alias="zoneName")
+    region_code: str = Field(alias="regionCode")
+    region_name: str = Field(alias="regionName")
     zone_definition: dict[str, object] = Field(alias="zoneDefinition")
     is_applicable: bool = Field(alias="isApplicable")
     is_compliant: bool = Field(alias="isCompliant")
@@ -213,6 +216,99 @@ class AnalysisSpatialFactsResponse(BaseModel):
     airports: list[AnalysisSpatialAirportFactsResponse]
 
 
+class AnalysisProtectionZoneCircleGeometryResponse(BaseModel):
+    shape_type: str = Field(alias="shapeType")
+    center: AnalysisSpatialReferencePointResponse
+    radius_meters: float = Field(alias="radiusMeters")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisProtectionZoneSectorGeometryResponse(BaseModel):
+    shape_type: str = Field(alias="shapeType")
+    center: AnalysisSpatialReferencePointResponse
+    inner_radius_meters: float = Field(alias="innerRadiusMeters")
+    outer_radius_meters: float = Field(alias="outerRadiusMeters")
+    start_azimuth_degrees: float = Field(alias="startAzimuthDegrees")
+    end_azimuth_degrees: float = Field(alias="endAzimuthDegrees")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisProtectionZoneVerticalResponse(BaseModel):
+    mode: str
+
+
+class AnalysisProtectionZoneHeightFunctionResponse(BaseModel):
+    type: str
+    elevation_angle_degrees: float = Field(alias="elevationAngleDegrees")
+    distance_metric: str = Field(alias="distanceMetric")
+    start_distance_meters: float = Field(alias="startDistanceMeters")
+    end_distance_meters: float = Field(alias="endDistanceMeters")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisProtectionZoneAnalyticSurfaceVerticalResponse(BaseModel):
+    mode: str
+    base_reference: str = Field(alias="baseReference")
+    base_height_meters: float = Field(alias="baseHeightMeters")
+    height_function: AnalysisProtectionZoneHeightFunctionResponse = Field(
+        alias="heightFunction"
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisProtectionZonePropertiesResponse(BaseModel):
+    label: str
+
+
+class AnalysisProtectionZoneResponse(BaseModel):
+    id: str
+    airport_id: int = Field(alias="airportId")
+    airport_name: str = Field(alias="airportName")
+    station_id: int = Field(alias="stationId")
+    station_name: str = Field(alias="stationName")
+    station_type: str = Field(alias="stationType")
+    rule_code: str = Field(alias="ruleCode")
+    rule_name: str = Field(alias="ruleName")
+    zone_code: str = Field(alias="zoneCode")
+    zone_name: str = Field(alias="zoneName")
+    region_code: str = Field(alias="regionCode")
+    region_name: str = Field(alias="regionName")
+    geometry: (
+        AnalysisProtectionZoneCircleGeometryResponse
+        | AnalysisProtectionZoneSectorGeometryResponse
+    )
+    vertical: (
+        AnalysisProtectionZoneVerticalResponse
+        | AnalysisProtectionZoneAnalyticSurfaceVerticalResponse
+    )
+    properties: AnalysisProtectionZonePropertiesResponse
+    render_geometry: dict[str, object] | None = Field(
+        alias="renderGeometry",
+        default=None,
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
 class AnalysisTaskResultResponse(BaseModel):
     analysis_task_id: str = Field(alias="analysisTaskId")
     status: str
@@ -226,6 +322,10 @@ class AnalysisTaskResultResponse(BaseModel):
     spatial_facts: AnalysisSpatialFactsResponse | None = Field(
         alias="spatialFacts",
         default=None,
+    )
+    protection_zones: list[AnalysisProtectionZoneResponse] = Field(
+        alias="protectionZones",
+        default_factory=list,
     )
 
     model_config = ConfigDict(

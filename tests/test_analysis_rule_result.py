@@ -10,7 +10,10 @@ def test_analysis_rule_result_stores_common_rule_fields() -> None:
         raw_obstacle_type="建筑物/构建物",
         global_obstacle_category="building_general",
         rule_name="ndb_minimum_distance_50m",
+        zone_code="ndb_minimum_distance_50m",
         zone_name="NDB 50m minimum distance zone",
+        region_code="default",
+        region_name="default",
         zone_definition={"shape": "circle", "radius_m": 50.0},
         is_applicable=True,
         is_compliant=False,
@@ -19,5 +22,7 @@ def test_analysis_rule_result_stores_common_rule_fields() -> None:
     )
 
     assert result.rule_name == "ndb_minimum_distance_50m"
+    assert result.zone_code == "ndb_minimum_distance_50m"
+    assert result.region_code == "default"
     assert result.zone_definition["shape"] == "circle"
     assert result.metrics["requiredDistanceMeters"] == 50.0
