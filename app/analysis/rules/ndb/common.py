@@ -10,6 +10,11 @@ class NdbRule(ObstacleRule):
         raise NotImplementedError
 
 
+# 优先使用局部坐标障碍物几何，缺失时回退到原始几何。
+def resolve_ndb_obstacle_geometry(obstacle: dict[str, object]) -> dict[str, object]:
+    return obstacle.get("localGeometry") or obstacle["geometry"]
+
+
 # 计算障碍物到台站点位的平面距离。
 def projected_obstacle_distance_meters(
     *,

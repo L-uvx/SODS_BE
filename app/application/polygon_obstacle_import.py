@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 from app.analysis.context_builder import build_airport_analysis_context
 from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.spatial_facts import build_airport_spatial_facts
-from app.analysis.rules.ndb import NdbRuleProfile
-from app.analysis.rules.ndb.conical_clearance import NdbConicalClearance3DegRule
+from app.analysis.station_dispatcher import StationAnalysisDispatcher
 from app.analysis.standards import build_rule_standards
 from app.application.polygon_obstacle_excel_parser import (
     PolygonObstacleExcelParseError,
@@ -25,7 +24,7 @@ from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
     AnalysisProtectionZoneResponse,
     AnalysisResultTargetResponse,
-    AnalysisSpatialFactsResponse,
+    AnalysisRuleResultResponse,
     AnalysisTaskCreateRequest,
     AnalysisTaskResultResponse,
     AnalysisTaskStatusResponse,
@@ -349,7 +348,11 @@ class PolygonObstacleImportService:
                     "selectedTargets": selected_targets,
                     "obstacleCount": obstacle_count,
                     "summary": "已完成局部坐标系与最小空间事实计算。",
-                    "spatialFacts": {"airports": airport_facts},
+                    "ruleResults": [
+                        rule_result
+                        for airport_fact in airport_facts
+                        for rule_result in airport_fact.get("ruleResults", [])
+                    ],
                     "protectionZones": protection_zones,
                 },
             )
@@ -363,13 +366,14 @@ class PolygonObstacleImportService:
         projector = AirportLocalProjector(
             float(airport.longitude), float(airport.latitude)
         )
-        ndb_profile = NdbRuleProfile()
-        conical_rule = NdbConicalClearance3DegRule()
+        dispatcher = StationAnalysisDispatcher()
+        runway_contexts = self._build_runway_contexts(
+            projector=projector,
+            runways=context.runways,
+        )
         rule_results: list[dict[str, object]] = []
 
         for station in context.stations:
-            if station.station_type != "NDB":
-                continue
             if station.longitude is None or station.latitude is None:
                 continue
 
@@ -377,121 +381,113 @@ class PolygonObstacleImportService:
                 float(station.longitude),
                 float(station.latitude),
             )
-            for obstacle in airport_facts["obstacles"]:
-                result = ndb_profile.analyze(
-                    station=station,
-                    obstacle=obstacle,
-                    station_point=station_point,
-                )
-                if result is not None:
-                    standards = build_rule_standards(
-                        station_type=result.station_type,
-                        rule_name=result.rule_name,
-                        region_code=result.region_code,
+            station_results = dispatcher.analyze_station(
+                station=station,
+                obstacles=airport_facts["obstacles"],
+                station_point=station_point,
+                runways=runway_contexts,
+            )
+            rule_results.extend(
+                [
+                    self._build_rule_result_payload(
+                        result=result,
+                        station_name=station.name,
                     )
-                    rule_results.append(
-                        {
-                            "stationId": result.station_id,
-                            "stationName": station.name,
-                            "stationType": result.station_type,
-                            "obstacleId": result.obstacle_id,
-                            "obstacleName": result.obstacle_name,
-                            "rawObstacleType": result.raw_obstacle_type,
-                            "globalObstacleCategory": result.global_obstacle_category,
-                            "ruleName": result.rule_name,
-                            "zoneCode": result.zone_code,
-                            "zoneName": result.zone_name,
-                            "regionCode": result.region_code,
-                            "regionName": result.region_name,
-                            "zoneDefinition": result.zone_definition,
-                            "isApplicable": result.is_applicable,
-                            "isCompliant": result.is_compliant,
-                            "message": result.message,
-                            "metrics": result.metrics,
-                            "standards": {
-                                "gb": (
-                                    {
-                                        "code": standards.gb.code,
-                                        "text": standards.gb.text,
-                                        "isCompliant": result.is_compliant,
-                                    }
-                                    if standards.gb is not None
-                                    else None
-                                ),
-                                "mh": (
-                                    {
-                                        "code": standards.mh.code,
-                                        "text": standards.mh.text,
-                                        "isCompliant": result.is_compliant,
-                                    }
-                                    if standards.mh is not None
-                                    else None
-                                ),
-                            },
-                        }
-                    )
-                conical_result = conical_rule.analyze(
-                    station=station,
-                    obstacle=obstacle,
-                    station_point=station_point,
-                    station_altitude=(
-                        float(station.altitude)
-                        if station.altitude is not None
-                        else None
-                    ),
-                )
-                conical_standards = build_rule_standards(
-                    station_type=conical_result.station_type,
-                    rule_name=conical_result.rule_name,
-                    region_code=conical_result.region_code,
-                )
-                rule_results.append(
-                    {
-                        "stationId": conical_result.station_id,
-                        "stationName": station.name,
-                        "stationType": conical_result.station_type,
-                        "obstacleId": conical_result.obstacle_id,
-                        "obstacleName": conical_result.obstacle_name,
-                        "rawObstacleType": conical_result.raw_obstacle_type,
-                        "globalObstacleCategory": conical_result.global_obstacle_category,
-                        "ruleName": conical_result.rule_name,
-                        "zoneCode": conical_result.zone_code,
-                        "zoneName": conical_result.zone_name,
-                        "regionCode": conical_result.region_code,
-                        "regionName": conical_result.region_name,
-                        "zoneDefinition": conical_result.zone_definition,
-                        "isApplicable": conical_result.is_applicable,
-                        "isCompliant": conical_result.is_compliant,
-                        "message": conical_result.message,
-                        "metrics": conical_result.metrics,
-                        "standards": {
-                            "gb": (
-                                {
-                                    "code": conical_standards.gb.code,
-                                    "text": conical_standards.gb.text,
-                                    "isCompliant": conical_result.is_compliant,
-                                }
-                                if conical_standards.gb is not None
-                                else None
-                            ),
-                            "mh": (
-                                {
-                                    "code": conical_standards.mh.code,
-                                    "text": conical_standards.mh.text,
-                                    "isCompliant": conical_result.is_compliant,
-                                }
-                                if conical_standards.mh is not None
-                                else None
-                            ),
-                        },
-                    }
-                )
+                    for result in station_results
+                ]
+            )
 
         airport_facts["ruleResults"] = rule_results
-        airport_facts.pop("stations", None)
-        for obstacle in airport_facts["obstacles"]:
-            obstacle.pop("geometry", None)
         return airport_facts
+
+    # 构建机场下全部 LOC 规则所需的跑道上下文。
+    def _build_runway_contexts(
+        self,
+        *,
+        projector: AirportLocalProjector,
+        runways: list[object],
+    ) -> list[dict[str, object]]:
+        runway_contexts: list[dict[str, object]] = []
+        for runway in runways:
+            if (
+                runway.longitude is None
+                or runway.latitude is None
+                or runway.direction is None
+                or runway.length is None
+            ):
+                continue
+
+            runway_contexts.append(
+                {
+                    "runwayId": runway.id,
+                    "runNumber": runway.run_number,
+                    "localCenterPoint": projector.project_point(
+                        float(runway.longitude),
+                        float(runway.latitude),
+                    ),
+                    "directionDegrees": float(runway.direction),
+                    "lengthMeters": float(runway.length),
+                    "widthMeters": float(runway.width or 0.0),
+                }
+            )
+        return runway_contexts
+
+    # 将规则结果序列化为 analysis API 输出项。
+    def _build_rule_result_payload(
+        self,
+        *,
+        result: object,
+        station_name: str,
+    ) -> dict[str, object]:
+        standards = build_rule_standards(
+            station_type=result.station_type,
+            rule_name=(
+                "loc_site_protection_cable"
+                if result.station_type == "LOC"
+                and result.global_obstacle_category == "power_or_communication_cable"
+                else result.rule_name
+            ),
+            region_code=result.region_code,
+        )
+        return {
+            "stationId": result.station_id,
+            "stationName": station_name,
+            "stationType": result.station_type,
+            "obstacleId": result.obstacle_id,
+            "obstacleName": result.obstacle_name,
+            "rawObstacleType": result.raw_obstacle_type,
+            "globalObstacleCategory": result.global_obstacle_category,
+            "ruleName": result.rule_name,
+            "zoneCode": result.zone_code,
+            "zoneName": result.zone_name,
+            "regionCode": result.region_code,
+            "regionName": result.region_name,
+            "zoneDefinition": result.zone_definition,
+            "isApplicable": result.is_applicable,
+            "isCompliant": result.is_compliant,
+            "message": result.message,
+            "metrics": result.metrics,
+            "standards": {
+                "gb": (
+                    {
+                        "code": standards.gb.code,
+                        "text": standards.gb.text,
+                        "isCompliant": result.is_compliant,
+                    }
+                    if standards.gb is not None
+                    else None
+                ),
+                "mh": (
+                    {
+                        "code": standards.mh.code,
+                        "text": standards.mh.text,
+                        "isCompliant": result.is_compliant,
+                    }
+                    if standards.mh is not None
+                    else None
+                ),
+            },
+        }
 
     # 汇总机场下各台站的保护区要素。
     def _build_airport_protection_zones(
@@ -501,6 +497,10 @@ class PolygonObstacleImportService:
         airport_facts: dict[str, object],
     ) -> list[dict[str, object]]:
         airport = context.airport
+        projector = AirportLocalProjector(
+            float(airport.longitude),
+            float(airport.latitude),
+        )
         stations_by_id = {station.id: station for station in context.stations}
         protection_zones: list[dict[str, object]] = []
         seen_keys: set[tuple[object, ...]] = set()
@@ -525,6 +525,7 @@ class PolygonObstacleImportService:
             zone_definition = rule_result["zoneDefinition"]
             zone_feature = self._build_protection_zone_feature(
                 airport=airport,
+                projector=projector,
                 station=station,
                 rule_code=rule_code,
                 rule_result=rule_result,
@@ -542,6 +543,7 @@ class PolygonObstacleImportService:
         self,
         *,
         airport: object,
+        projector: AirportLocalProjector,
         station: object,
         rule_code: str,
         rule_result: dict[str, object],
@@ -654,6 +656,41 @@ class PolygonObstacleImportService:
                 },
             }
 
+        if shape == "multipolygon":
+            coordinates = zone_definition.get("coordinates")
+            if coordinates is None:
+                return None
+            return {
+                **base_feature,
+                "geometry": {
+                    "shapeType": "multipolygon",
+                    "coordinates": [
+                        [
+                            [
+                                [
+                                    float(longitude),
+                                    float(latitude),
+                                ]
+                                for longitude, latitude in (
+                                    projector.unproject_point(
+                                        float(point[0]),
+                                        float(point[1]),
+                                    )
+                                    for point in ring
+                                )
+                            ]
+                            for ring in polygon
+                        ]
+                        for polygon in coordinates
+                    ],
+                },
+                "vertical": {
+                    "mode": "flat",
+                    "baseReference": "station",
+                    "baseHeightMeters": float(station.altitude or 0.0),
+                },
+            }
+
         return None
 
     # 查询分析任务的当前状态。
@@ -682,7 +719,6 @@ class PolygonObstacleImportService:
             return None
 
         result_payload = analysis_task.result_payload or {}
-        spatial_facts_payload = result_payload.get("spatialFacts")
         return AnalysisTaskResultResponse(
             analysisTaskId=analysis_task.id,
             status=analysis_task.status,
@@ -694,11 +730,10 @@ class PolygonObstacleImportService:
             ],
             obstacleCount=result_payload.get("obstacleCount", 0),
             summary=result_payload.get("summary", ""),
-            spatialFacts=(
-                AnalysisSpatialFactsResponse(**spatial_facts_payload)
-                if spatial_facts_payload is not None
-                else None
-            ),
+            ruleResults=[
+                AnalysisRuleResultResponse(**item)
+                for item in result_payload.get("ruleResults", [])
+            ],
             protectionZones=[
                 AnalysisProtectionZoneResponse(**item)
                 for item in result_payload.get("protectionZones", [])

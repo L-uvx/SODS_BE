@@ -1,52 +1,42 @@
 from typing import Any
 
-from shapely.geometry import MultiPolygon, Point, shape
+from shapely.geometry import MultiPolygon, Polygon, shape
 
 from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.obstacle_categories import normalize_obstacle_type
 
 
-# 计算障碍物在机场局部坐标系下的包围盒。
-def _build_local_bounding_box(
+# 将经纬度障碍物几何投影到机场局部米制坐标系。
+def _project_geometry(
     projector: AirportLocalProjector, geometry: dict[str, Any]
-) -> dict[str, float]:
+) -> dict[str, Any]:
     multipolygon = shape(geometry)
-    projected_points: list[tuple[float, float]] = []
+    polygons: list[Polygon] = []
     for polygon in multipolygon.geoms:
-        for lon, lat in polygon.exterior.coords:
-            projected_points.append(projector.project_point(float(lon), float(lat)))
-
-    xs = [point[0] for point in projected_points]
-    ys = [point[1] for point in projected_points]
-    return {
-        "minX": min(xs),
-        "minY": min(ys),
-        "maxX": max(xs),
-        "maxY": max(ys),
-    }
-
-
-# 计算障碍物到机场参考点的最小平面距离。
-def _distance_to_airport(
-    projector: AirportLocalProjector, geometry: dict[str, Any]
-) -> float:
-    multipolygon = shape(geometry)
-    projected_polygons = []
-    for polygon in multipolygon.geoms:
-        projected_shell = [
+        shell = [
             projector.project_point(float(lon), float(lat))
             for lon, lat in polygon.exterior.coords
         ]
-        projected_holes = [
-            [
-                projector.project_point(float(lon), float(lat))
-                for lon, lat in ring.coords
-            ]
+        holes = [
+            [projector.project_point(float(lon), float(lat)) for lon, lat in ring.coords]
             for ring in polygon.interiors
         ]
-        projected_polygons.append((projected_shell, projected_holes))
+        polygons.append(Polygon(shell=shell, holes=holes))
 
-    return float(MultiPolygon(projected_polygons).distance(Point(0.0, 0.0)))
+    projected = MultiPolygon(polygons)
+    return {
+        "type": "MultiPolygon",
+        "coordinates": [
+            [
+                [[float(x), float(y)] for x, y in polygon.exterior.coords],
+                *[
+                    [[float(x), float(y)] for x, y in ring.coords]
+                    for ring in polygon.interiors
+                ],
+            ]
+            for polygon in projected.geoms
+        ],
+    }
 
 
 # 构建机场级最小空间事实结果。
@@ -78,39 +68,11 @@ def build_airport_spatial_facts(context: Any) -> dict[str, Any]:
                 "rawObstacleType": obstacle_type,
                 "globalObstacleCategory": normalize_obstacle_type(obstacle_type),
                 "geometry": geometry,
-                "distanceToAirportMeters": _distance_to_airport(projector, geometry),
-                "localBoundingBox": _build_local_bounding_box(projector, geometry),
-            }
-        )
-
-    station_items = []
-    for station in context.stations:
-        if station.longitude is None or station.latitude is None:
-            continue
-
-        local_x, local_y = projector.project_point(
-            float(station.longitude), float(station.latitude)
-        )
-        station_items.append(
-            {
-                "stationId": station.id,
-                "name": station.name,
-                "localX": local_x,
-                "localY": local_y,
-                "altitude": (
-                    float(station.altitude) if station.altitude is not None else None
-                ),
+                "localGeometry": _project_geometry(projector, geometry),
             }
         )
 
     return {
         "airportId": airport.id,
-        "referencePoint": {
-            "longitude": float(airport.longitude),
-            "latitude": float(airport.latitude),
-        },
-        "runwayCount": len(context.runways),
-        "stationCount": len(context.stations),
         "obstacles": obstacle_items,
-        "stations": station_items,
     }

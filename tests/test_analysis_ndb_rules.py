@@ -6,6 +6,7 @@ from app.analysis.rules.ndb import (
     NdbMinimumDistance300mRule,
     NdbMinimumDistance500mRule,
     NdbMinimumDistance50mRule,
+    NdbRuleProfile,
     is_ndb_supported_category,
 )
 
@@ -128,3 +129,141 @@ def test_ndb_conical_clearance_rule_returns_uniform_result() -> None:
     assert result.zone_definition["shape"] == "radial_band"
     assert result.metrics["baseHeightMeters"] == 500.0
     assert result.metrics["elevationAngleDegrees"] == 3.0
+
+
+def test_ndb_rule_profile_returns_minimum_distance_and_conical_results() -> None:
+    station = type(
+        "Station",
+        (),
+        {"id": 1, "station_type": "NDB", "altitude": 500.0},
+    )()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "Obstacle A",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [200.0, 0.0],
+                        [210.0, 0.0],
+                        [210.0, 10.0],
+                        [200.0, 10.0],
+                        [200.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+        "topElevation": 520.0,
+    }
+
+    results = NdbRuleProfile().analyze(
+        station=station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[],
+    )
+
+    assert {result.rule_name for result in results} == {
+        "ndb_minimum_distance_50m",
+        "ndb_conical_clearance_3deg",
+    }
+
+
+def test_ndb_minimum_distance_rule_prefers_local_geometry() -> None:
+    station = type("Station", (), {"id": 1, "station_type": "NDB"})()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "Obstacle A",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [1000.0, 0.0],
+                        [1010.0, 0.0],
+                        [1010.0, 10.0],
+                        [1000.0, 10.0],
+                        [1000.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+        "localGeometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [20.0, 0.0],
+                        [30.0, 0.0],
+                        [30.0, 10.0],
+                        [20.0, 10.0],
+                        [20.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = NdbMinimumDistance50mRule().analyze(
+        station=station,
+        obstacle=obstacle,
+        station_point=(0.0, 0.0),
+    )
+
+    assert result.metrics["actualDistanceMeters"] == 20.0
+    assert result.is_compliant is False
+
+
+def test_ndb_conical_clearance_rule_prefers_local_geometry() -> None:
+    station = type("Station", (), {"id": 1, "station_type": "NDB"})()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "Obstacle A",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [1000.0, 0.0],
+                        [1010.0, 0.0],
+                        [1010.0, 10.0],
+                        [1000.0, 10.0],
+                        [1000.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+        "localGeometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [20.0, 0.0],
+                        [30.0, 0.0],
+                        [30.0, 10.0],
+                        [20.0, 10.0],
+                        [20.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+        "topElevation": 501.0,
+    }
+
+    result = NdbConicalClearance3DegRule().analyze(
+        station=station,
+        obstacle=obstacle,
+        station_point=(0.0, 0.0),
+        station_altitude=500.0,
+    )
+
+    assert result.metrics["actualDistanceMeters"] == 20.0
+    assert result.metrics["allowedHeightMeters"] == 500.0
+    assert result.is_compliant is False

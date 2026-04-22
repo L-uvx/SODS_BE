@@ -1,4 +1,5 @@
 from app.analysis.rule_result import AnalysisRuleResult
+from app.analysis.rules.ndb.conical_clearance import NdbConicalClearance3DegRule
 from app.analysis.rules.ndb.minimum_distance_150m import NdbMinimumDistance150mRule
 from app.analysis.rules.ndb.minimum_distance_300m import NdbMinimumDistance300mRule
 from app.analysis.rules.ndb.minimum_distance_500m import NdbMinimumDistance500mRule
@@ -23,21 +24,38 @@ class NdbRuleProfile:
             "embankment": NdbMinimumDistance300mRule(),
             "power_line_high_voltage_overhead": NdbMinimumDistance500mRule(),
         }
+        self._conical_rule = NdbConicalClearance3DegRule()
 
-    # 按障碍物分类选择并执行对应的 NDB 规则。
+    # 按障碍物分类执行 NDB 规则集合。
     def analyze(
         self,
         *,
         station: object,
-        obstacle: dict[str, object],
+        obstacles: list[dict[str, object]],
         station_point: tuple[float, float],
-    ) -> AnalysisRuleResult | None:
-        category = str(obstacle["globalObstacleCategory"])
-        rule = self._rules.get(category)
-        if rule is None:
-            return None
-        return rule.analyze(
-            station=station,
-            obstacle=obstacle,
-            station_point=station_point,
-        )
+        runways: list[dict[str, object]],
+    ) -> list[AnalysisRuleResult]:
+        del runways
+        results: list[AnalysisRuleResult] = []
+        for obstacle in obstacles:
+            category = str(obstacle["globalObstacleCategory"])
+            rule = self._rules.get(category)
+            if rule is not None:
+                results.append(
+                    rule.analyze(
+                        station=station,
+                        obstacle=obstacle,
+                        station_point=station_point,
+                    )
+                )
+            results.append(
+                self._conical_rule.analyze(
+                    station=station,
+                    obstacle=obstacle,
+                    station_point=station_point,
+                    station_altitude=(
+                        float(station.altitude) if station.altitude is not None else None
+                    ),
+                )
+            )
+        return results

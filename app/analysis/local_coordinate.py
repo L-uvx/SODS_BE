@@ -10,9 +10,15 @@ class AirportLocalProjector:
 
     # 初始化机场局部坐标投影器。
     def __post_init__(self) -> None:
+        local_crs = self._build_aeqd_crs()
         self._to_local = Transformer.from_crs(
             "EPSG:4326",
-            self._build_aeqd_crs(),
+            local_crs,
+            always_xy=True,
+        )
+        self._to_wgs84 = Transformer.from_crs(
+            local_crs,
+            "EPSG:4326",
             always_xy=True,
         )
 
@@ -27,3 +33,8 @@ class AirportLocalProjector:
     def project_point(self, longitude: float, latitude: float) -> tuple[float, float]:
         x, y = self._to_local.transform(longitude, latitude)
         return float(x), float(y)
+
+    # 将机场局部米制坐标点反投影到经纬度。
+    def unproject_point(self, x: float, y: float) -> tuple[float, float]:
+        longitude, latitude = self._to_wgs84.transform(x, y)
+        return float(longitude), float(latitude)

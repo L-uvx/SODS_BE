@@ -1,4 +1,5 @@
 from app.analysis.standards import (
+    _STANDARD_KEYS_BY_STATION_TYPE,
     AnalysisStandardReference,
     AnalysisStandardSet,
     build_rule_standards,
@@ -51,3 +52,16 @@ def test_build_rule_standards_returns_none_for_missing_mapping() -> None:
 
     assert standards.gb is None
     assert standards.mh is None
+
+
+def test_standard_mappings_are_registered_by_station_type() -> None:
+    assert "NDB" in _STANDARD_KEYS_BY_STATION_TYPE
+    assert "LOC" in _STANDARD_KEYS_BY_STATION_TYPE
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["NDB"]["ndb_minimum_distance_50m"][0]
+        == "GB_NDB_50m最小间距区域_50"
+    )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_site_protection"][0]
+        == "GB_ILSLOC_场地保护区"
+    )

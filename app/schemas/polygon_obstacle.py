@@ -232,26 +232,6 @@ class AnalysisStandardSetResponse(BaseModel):
     mh: AnalysisStandardReferenceResponse | None = None
 
 
-class AnalysisSpatialAirportFactsResponse(BaseModel):
-    airport_id: int = Field(alias="airportId")
-    reference_point: AnalysisSpatialReferencePointResponse = Field(
-        alias="referencePoint"
-    )
-    runway_count: int = Field(alias="runwayCount")
-    station_count: int = Field(alias="stationCount")
-    obstacles: list[AnalysisSpatialObstacleResponse]
-    rule_results: list[AnalysisRuleResultResponse] = Field(alias="ruleResults")
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        serialize_by_alias=True,
-    )
-
-
-class AnalysisSpatialFactsResponse(BaseModel):
-    airports: list[AnalysisSpatialAirportFactsResponse]
-
-
 class AnalysisProtectionZoneCircleGeometryResponse(BaseModel):
     shape_type: str = Field(alias="shapeType")
     center: AnalysisSpatialReferencePointResponse
@@ -282,6 +262,16 @@ class AnalysisProtectionZoneSectorGeometryResponse(BaseModel):
     outer_radius_meters: float = Field(alias="outerRadiusMeters")
     start_azimuth_degrees: float = Field(alias="startAzimuthDegrees")
     end_azimuth_degrees: float = Field(alias="endAzimuthDegrees")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisProtectionZoneMultipolygonGeometryResponse(BaseModel):
+    shape_type: str = Field(alias="shapeType")
+    coordinates: list[list[list[list[float]]]]
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -348,6 +338,7 @@ class AnalysisProtectionZoneResponse(BaseModel):
         AnalysisProtectionZoneCircleGeometryResponse
         | AnalysisProtectionZoneRadialBandGeometryResponse
         | AnalysisProtectionZoneSectorGeometryResponse
+        | AnalysisProtectionZoneMultipolygonGeometryResponse
     )
     vertical: (
         AnalysisProtectionZoneVerticalResponse
@@ -375,9 +366,9 @@ class AnalysisTaskResultResponse(BaseModel):
     )
     obstacle_count: int = Field(alias="obstacleCount")
     summary: str
-    spatial_facts: AnalysisSpatialFactsResponse | None = Field(
-        alias="spatialFacts",
-        default=None,
+    rule_results: list[AnalysisRuleResultResponse] = Field(
+        alias="ruleResults",
+        default_factory=list,
     )
     protection_zones: list[AnalysisProtectionZoneResponse] = Field(
         alias="protectionZones",

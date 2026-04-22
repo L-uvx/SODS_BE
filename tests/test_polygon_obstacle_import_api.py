@@ -1046,10 +1046,8 @@ def test_get_analysis_task_result_returns_spatial_facts_after_worker_runs() -> N
     payload = response.json()
     assert payload["analysisTaskId"] == analysis_task_id
     assert payload["status"] == "succeeded"
-    assert payload["spatialFacts"]["airports"][0]["airportId"] == 1
-    assert "referencePoint" in payload["spatialFacts"]["airports"][0]
-    assert "obstacles" in payload["spatialFacts"]["airports"][0]
-    assert "stations" not in payload["spatialFacts"]["airports"][0]
+    assert "spatialFacts" not in payload
+    assert payload["ruleResults"] == []
 
 
 def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
@@ -1103,7 +1101,7 @@ def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    rule_results = payload["spatialFacts"]["airports"][0]["ruleResults"]
+    rule_results = payload["ruleResults"]
     assert rule_results[0]["stationType"] == "NDB"
     assert rule_results[0]["stationName"] == "NDB Station"
     assert rule_results[0]["ruleName"] == "ndb_minimum_distance_50m"
@@ -1317,7 +1315,7 @@ def test_get_analysis_task_result_returns_ndb_300m_rule_result_for_hill() -> Non
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
     assert response.status_code == 200
-    rule_results = response.json()["spatialFacts"]["airports"][0]["ruleResults"]
+    rule_results = response.json()["ruleResults"]
     assert rule_results[0]["ruleName"] == "ndb_minimum_distance_300m"
     assert rule_results[0]["metrics"]["requiredDistanceMeters"] == 300.0
 
@@ -1372,7 +1370,7 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_rule() -> 
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
     assert response.status_code == 200
-    rule_result = response.json()["spatialFacts"]["airports"][0]["ruleResults"][0]
+    rule_result = response.json()["ruleResults"][0]
     assert rule_result["isCompliant"] is True
     assert rule_result["standards"] == {
         "gb": {
@@ -1447,7 +1445,7 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_conical_ru
     assert response.status_code == 200
     radial_band_rule = next(
         item
-        for item in response.json()["spatialFacts"]["airports"][0]["ruleResults"]
+        for item in response.json()["ruleResults"]
         if item["ruleName"] == "ndb_conical_clearance_3deg"
     )
     assert radial_band_rule["isCompliant"] is True
@@ -1463,6 +1461,290 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_conical_ru
             "isCompliant": True,
         },
     }
+
+
+def test_get_analysis_task_result_returns_loc_site_protection_zone_as_multipolygon() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Runway(
+                    id=201,
+                    airport_id=1,
+                    run_number="18",
+                    name="Runway 18/36",
+                    longitude=103.975864,
+                    latitude=30.507381,
+                    direction=180.0,
+                    length=600.0,
+                    width=45.0,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="LOC Station",
+                    airport_id=1,
+                    station_type="LOC",
+                    runway_no="18",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    loc_rule = response.json()["ruleResults"][0]
+    assert loc_rule["stationType"] == "LOC"
+    assert loc_rule["ruleName"] == "loc_site_protection"
+    assert loc_rule["zoneDefinition"]["shape"] == "multipolygon"
+    assert loc_rule["standards"] == {
+        "gb": {
+            "code": "GB_ILSLOC_场地保护区",
+            "text": "在航向信标台场地保护区内不应有障碍物存在。",
+            "isCompliant": False,
+        },
+        "mh": {
+            "code": "MH_ILSLOC_场地保护区",
+            "text": "在航向信标台场地保护区内除必需的助航设施和滑行道外，不应有树木、建筑物（航向信标台机房除外）、道路、金属栅栏和架空线缆等障碍物。",
+            "isCompliant": False,
+        },
+    }
+
+    protection_zone = response.json()["protectionZones"][0]
+    assert protection_zone["stationType"] == "LOC"
+    assert protection_zone["ruleCode"] == "loc_site_protection"
+    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
+    assert len(protection_zone["geometry"]["coordinates"]) == 1
+    assert protection_zone["vertical"] == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 500.0,
+    }
+    assert protection_zone["renderGeometry"] is None
+
+
+def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_station_types() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Runway(
+                    id=201,
+                    airport_id=1,
+                    run_number="18",
+                    name="Runway 18/36",
+                    longitude=103.975864,
+                    latitude=30.507381,
+                    direction=180.0,
+                    length=600.0,
+                    width=45.0,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="NDB Station",
+                    airport_id=1,
+                    station_type="NDB",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=102,
+                    name="LOC Station",
+                    airport_id=1,
+                    station_type="LOC",
+                    runway_no="18",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    payload = response.json()
+    rule_names_by_station_type = {
+        (item["stationType"], item["ruleName"])
+        for item in payload["ruleResults"]
+    }
+    assert ("NDB", "ndb_minimum_distance_50m") in rule_names_by_station_type
+    assert ("NDB", "ndb_conical_clearance_3deg") in rule_names_by_station_type
+    assert ("LOC", "loc_site_protection") in rule_names_by_station_type
+
+    loc_rule = next(
+        item
+        for item in payload["ruleResults"]
+        if item["stationType"] == "LOC"
+    )
+    assert loc_rule["zoneDefinition"]["shape"] == "multipolygon"
+    assert loc_rule["standards"]["gb"]["code"] == "GB_ILSLOC_场地保护区"
+
+    ndb_rule = next(
+        item
+        for item in payload["ruleResults"]
+        if item["stationType"] == "NDB"
+        and item["ruleName"] == "ndb_minimum_distance_50m"
+    )
+    assert ndb_rule["standards"]["gb"]["code"] == "GB_NDB_50m最小间距区域_50"
+
+    protection_zone_shapes = {
+        (item["stationType"], item["geometry"]["shapeType"])
+        for item in payload["protectionZones"]
+    }
+    assert ("LOC", "multipolygon") in protection_zone_shapes
+    assert ("NDB", "circle") in protection_zone_shapes
+
+
+def test_build_airport_analysis_result_returns_only_internal_fields_still_in_use() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Runway(
+                    id=201,
+                    airport_id=1,
+                    run_number="18",
+                    name="Runway 18/36",
+                    longitude=103.975864,
+                    latitude=30.507381,
+                    direction=180.0,
+                    length=600.0,
+                    width=45.0,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="LOC Station",
+                    airport_id=1,
+                    station_type="LOC",
+                    runway_no="18",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+            from app.application.polygon_obstacle_import import PolygonObstacleImportService
+            from app.analysis.context_builder import build_airport_analysis_context
+
+            service = PolygonObstacleImportService(session)
+            context = build_airport_analysis_context(
+                repository=service._repository,
+                airport_ids=[1],
+                import_batch_id=import_task_id,
+            )[0]
+
+            airport_result = service._build_airport_analysis_result(context)
+
+    assert set(airport_result.keys()) == {"airportId", "obstacles", "ruleResults"}
+    assert airport_result["airportId"] == 1
+    assert airport_result["ruleResults"][0]["stationType"] == "LOC"
+    assert "localGeometry" in airport_result["obstacles"][0]
+    assert "geometry" in airport_result["obstacles"][0]
+    assert "distanceToAirportMeters" not in airport_result["obstacles"][0]
+    assert "localBoundingBox" not in airport_result["obstacles"][0]
 def test_run_analysis_task_skips_station_without_coordinates() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)

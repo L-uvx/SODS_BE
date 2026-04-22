@@ -1,7 +1,11 @@
 import math
 
 from app.analysis.rule_result import AnalysisRuleResult
-from app.analysis.rules.ndb.common import NdbRule, projected_obstacle_distance_meters
+from app.analysis.rules.ndb.common import (
+    NdbRule,
+    projected_obstacle_distance_meters,
+    resolve_ndb_obstacle_geometry,
+)
 
 
 class NdbConicalClearance3DegRule(NdbRule):
@@ -24,7 +28,7 @@ class NdbConicalClearance3DegRule(NdbRule):
         station_altitude: float | None,
     ) -> AnalysisRuleResult:
         actual_distance_meters = projected_obstacle_distance_meters(
-            obstacle_geometry=obstacle["geometry"],
+            obstacle_geometry=resolve_ndb_obstacle_geometry(obstacle),
             station_point=station_point,
         )
         inner_radius_m = float(self.zone_definition["min_radius_m"])

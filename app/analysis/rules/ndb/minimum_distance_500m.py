@@ -1,5 +1,9 @@
 from app.analysis.rule_result import AnalysisRuleResult
-from app.analysis.rules.ndb.common import NdbRule, projected_obstacle_distance_meters
+from app.analysis.rules.ndb.common import (
+    NdbRule,
+    projected_obstacle_distance_meters,
+    resolve_ndb_obstacle_geometry,
+)
 
 
 class NdbMinimumDistance500mRule(NdbRule):
@@ -16,7 +20,7 @@ class NdbMinimumDistance500mRule(NdbRule):
         station_point: tuple[float, float],
     ) -> AnalysisRuleResult:
         actual_distance_meters = projected_obstacle_distance_meters(
-            obstacle_geometry=obstacle["geometry"],
+            obstacle_geometry=resolve_ndb_obstacle_geometry(obstacle),
             station_point=station_point,
         )
         required_distance_meters = 500.0

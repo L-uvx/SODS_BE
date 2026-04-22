@@ -369,50 +369,40 @@ def test_build_export_payload_includes_rule_results_with_standards() -> None:
             "summary": "done",
             "obstacleCount": 1,
             "selectedTargets": [{"id": 1, "name": "Airport A", "category": "机场"}],
-            "spatialFacts": {
-                "airports": [
-                    {
-                        "airportId": 1,
-                        "referencePoint": {"longitude": 104.1, "latitude": 30.1},
-                        "runwayCount": 0,
-                        "stationCount": 1,
-                        "obstacles": [],
-                        "ruleResults": [
-                            {
-                                "stationId": 101,
-                                "stationName": "NDB Station",
-                                "stationType": "NDB",
-                                "obstacleId": 2,
-                                "obstacleName": "Obstacle A",
-                                "rawObstacleType": "建筑物/构建物",
-                                "globalObstacleCategory": "building_general",
-                                "ruleName": "ndb_minimum_distance_50m",
-                                "zoneCode": "ndb_minimum_distance_50m",
-                                "zoneName": "NDB 50m minimum distance zone",
-                                "regionCode": "default",
-                                "regionName": "default",
-                                "zoneDefinition": {"shape": "circle", "radius_m": 50.0},
-                                "isApplicable": True,
-                                "isCompliant": False,
-                                "message": "distance below minimum separation",
-                                "metrics": {"requiredDistanceMeters": 50.0},
-                                "standards": {
-                                    "gb": {
-                                        "code": "GB_NDB_50m最小间距区域_50",
-                                        "text": "GB text",
-                                        "isCompliant": False,
-                                    },
-                                    "mh": {
-                                        "code": "MH_NDB_50m最小间距区域_50",
-                                        "text": "MH text",
-                                        "isCompliant": False,
-                                    },
-                                },
-                            }
-                        ],
-                    }
-                ]
-            },
+            "ruleResults": [
+                {
+                    "airportId": 1,
+                    "stationId": 101,
+                    "stationName": "NDB Station",
+                    "stationType": "NDB",
+                    "obstacleId": 2,
+                    "obstacleName": "Obstacle A",
+                    "rawObstacleType": "建筑物/构建物",
+                    "globalObstacleCategory": "building_general",
+                    "ruleName": "ndb_minimum_distance_50m",
+                    "zoneCode": "ndb_minimum_distance_50m",
+                    "zoneName": "NDB 50m minimum distance zone",
+                    "regionCode": "default",
+                    "regionName": "default",
+                    "zoneDefinition": {"shape": "circle", "radius_m": 50.0},
+                    "isApplicable": True,
+                    "isCompliant": False,
+                    "message": "distance below minimum separation",
+                    "metrics": {"requiredDistanceMeters": 50.0},
+                    "standards": {
+                        "gb": {
+                            "code": "GB_NDB_50m最小间距区域_50",
+                            "text": "GB text",
+                            "isCompliant": False,
+                        },
+                        "mh": {
+                            "code": "MH_NDB_50m最小间距区域_50",
+                            "text": "MH text",
+                            "isCompliant": False,
+                        },
+                    },
+                }
+            ],
         },
     )
 
@@ -465,50 +455,40 @@ def test_run_export_task_writes_gb_and_mh_standards_into_report() -> None:
                 "selectedTargets": [
                     {"id": 1, "name": "Airport Near", "category": "机场"}
                 ],
-                "spatialFacts": {
-                    "airports": [
-                        {
-                            "airportId": 1,
-                            "referencePoint": {"longitude": 103.9, "latitude": 30.5},
-                            "runwayCount": 0,
-                            "stationCount": 1,
-                            "obstacles": [],
-                            "ruleResults": [
-                                {
-                                    "stationId": 101,
-                                    "stationName": "NDB Station",
-                                    "stationType": "NDB",
-                                    "obstacleId": 2,
-                                    "obstacleName": "Obstacle A",
-                                    "rawObstacleType": "建筑物/构建物",
-                                    "globalObstacleCategory": "building_general",
-                                    "ruleName": "ndb_minimum_distance_50m",
-                                    "zoneCode": "ndb_minimum_distance_50m",
-                                    "zoneName": "NDB 50m minimum distance zone",
-                                    "regionCode": "default",
-                                    "regionName": "default",
-                                    "zoneDefinition": {"shape": "circle", "radius_m": 50.0},
-                                    "isApplicable": True,
-                                    "isCompliant": False,
-                                    "message": "distance below minimum separation",
-                                    "metrics": {"requiredDistanceMeters": 50.0},
-                                    "standards": {
-                                        "gb": {
-                                            "code": "GB_NDB_50m最小间距区域_50",
-                                            "text": "GB text",
-                                            "isCompliant": False,
-                                        },
-                                        "mh": {
-                                            "code": "MH_NDB_50m最小间距区域_50",
-                                            "text": "MH text",
-                                            "isCompliant": False,
-                                        },
-                                    },
-                                }
-                            ],
-                        }
-                    ]
-                },
+                "ruleResults": [
+                    {
+                        "airportId": 1,
+                        "stationId": 101,
+                        "stationName": "NDB Station",
+                        "stationType": "NDB",
+                        "obstacleId": 2,
+                        "obstacleName": "Obstacle A",
+                        "rawObstacleType": "建筑物/构建物",
+                        "globalObstacleCategory": "building_general",
+                        "ruleName": "ndb_minimum_distance_50m",
+                        "zoneCode": "ndb_minimum_distance_50m",
+                        "zoneName": "NDB 50m minimum distance zone",
+                        "regionCode": "default",
+                        "regionName": "default",
+                        "zoneDefinition": {"shape": "circle", "radius_m": 50.0},
+                        "isApplicable": True,
+                        "isCompliant": False,
+                        "message": "distance below minimum separation",
+                        "metrics": {"requiredDistanceMeters": 50.0},
+                        "standards": {
+                            "gb": {
+                                "code": "GB_NDB_50m最小间距区域_50",
+                                "text": "GB text",
+                                "isCompliant": False,
+                            },
+                            "mh": {
+                                "code": "MH_NDB_50m最小间距区域_50",
+                                "text": "MH text",
+                                "isCompliant": False,
+                            },
+                        },
+                    }
+                ],
             }
             session.commit()
 

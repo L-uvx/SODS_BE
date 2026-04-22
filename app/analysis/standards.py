@@ -42,6 +42,24 @@ _NDB_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
     ),
 }
 
+_LOC_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
+    "loc_site_protection": (
+        "GB_ILSLOC_场地保护区",
+        "MH_ILSLOC_场地保护区",
+    ),
+    "loc_site_protection_cable": (
+        "GB_ILSLOC_场地保护区_线缆",
+        "MH_ILSLOC_场地保护区_线缆",
+    ),
+}
+
+_STANDARD_KEYS_BY_STATION_TYPE: dict[
+    str, dict[str, tuple[str | None, str | None]]
+] = {
+    "NDB": _NDB_STANDARD_KEYS,
+    "LOC": _LOC_STANDARD_KEYS,
+}
+
 
 # 读取 Standard.config 中的标准条文键值对。
 @lru_cache(maxsize=1)
@@ -78,11 +96,8 @@ def build_rule_standards(
 ) -> AnalysisStandardSet:
     del region_code
     entries = load_standard_config_entries()
-    gb_code: str | None = None
-    mh_code: str | None = None
-
-    if station_type == "NDB":
-        gb_code, mh_code = _NDB_STANDARD_KEYS.get(rule_name, (None, None))
+    mapping = _STANDARD_KEYS_BY_STATION_TYPE.get(station_type, {})
+    gb_code, mh_code = mapping.get(rule_name, (None, None))
 
     return AnalysisStandardSet(
         gb=_build_standard_reference(entries, gb_code),
