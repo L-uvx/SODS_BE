@@ -203,7 +203,6 @@ class AnalysisRuleResultResponse(BaseModel):
     zone_name: str = Field(alias="zoneName")
     region_code: str = Field(alias="regionCode")
     region_name: str = Field(alias="regionName")
-    zone_definition: dict[str, object] = Field(alias="zoneDefinition")
     is_applicable: bool = Field(alias="isApplicable")
     is_compliant: bool = Field(alias="isCompliant")
     message: str

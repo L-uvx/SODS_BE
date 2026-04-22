@@ -349,7 +349,7 @@ class PolygonObstacleImportService:
                     "obstacleCount": obstacle_count,
                     "summary": "已完成局部坐标系与最小空间事实计算。",
                     "ruleResults": [
-                        rule_result
+                        self._build_rule_result_payload(rule_result)
                         for airport_fact in airport_facts
                         for rule_result in airport_fact.get("ruleResults", [])
                     ],
@@ -389,7 +389,7 @@ class PolygonObstacleImportService:
             )
             rule_results.extend(
                 [
-                    self._build_rule_result_payload(
+                    self._build_internal_rule_result_payload(
                         result=result,
                         station_name=station.name,
                     )
@@ -433,7 +433,7 @@ class PolygonObstacleImportService:
         return runway_contexts
 
     # 将规则结果序列化为 analysis API 输出项。
-    def _build_rule_result_payload(
+    def _build_internal_rule_result_payload(
         self,
         *,
         result: object,
@@ -487,6 +487,14 @@ class PolygonObstacleImportService:
                     else None
                 ),
             },
+        }
+
+    # 将内部规则结果裁剪为对外 analysis API 输出项。
+    def _build_rule_result_payload(self, rule_result: dict[str, object]) -> dict[str, object]:
+        return {
+            key: value
+            for key, value in rule_result.items()
+            if key != "zoneDefinition"
         }
 
     # 汇总机场下各台站的保护区要素。

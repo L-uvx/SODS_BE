@@ -1106,6 +1106,7 @@ def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
     assert rule_results[0]["stationName"] == "NDB Station"
     assert rule_results[0]["ruleName"] == "ndb_minimum_distance_50m"
     assert rule_results[0]["globalObstacleCategory"] == "building_general"
+    assert "zoneDefinition" not in rule_results[0]
 
 
 def test_get_analysis_task_result_returns_protection_zones() -> None:
@@ -1531,7 +1532,9 @@ def test_get_analysis_task_result_returns_loc_site_protection_zone_as_multipolyg
     loc_rule = response.json()["ruleResults"][0]
     assert loc_rule["stationType"] == "LOC"
     assert loc_rule["ruleName"] == "loc_site_protection"
-    assert loc_rule["zoneDefinition"]["shape"] == "multipolygon"
+    assert loc_rule["zoneCode"] == "loc_site_protection"
+    assert loc_rule["regionCode"] == "default"
+    assert "zoneDefinition" not in loc_rule
     assert loc_rule["standards"] == {
         "gb": {
             "code": "GB_ILSLOC_场地保护区",
@@ -1648,7 +1651,7 @@ def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_st
         for item in payload["ruleResults"]
         if item["stationType"] == "LOC"
     )
-    assert loc_rule["zoneDefinition"]["shape"] == "multipolygon"
+    assert loc_rule["zoneCode"] == "loc_site_protection"
     assert loc_rule["standards"]["gb"]["code"] == "GB_ILSLOC_场地保护区"
 
     ndb_rule = next(
