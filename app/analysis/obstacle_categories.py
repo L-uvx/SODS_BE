@@ -31,6 +31,7 @@ GLOBAL_OBSTACLE_CATEGORY_MAPPING = {
 }
 
 
+# 将原始障碍物类型归一化为全局分类编码。
 def normalize_obstacle_type(raw_type: str | None) -> str:
     if raw_type is None:
         return "unclassified"

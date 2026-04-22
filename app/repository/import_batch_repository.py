@@ -18,15 +18,18 @@ from app.models.station import Station
 
 
 class ImportBatchRepository:
+    # 初始化导入批次仓储。
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    # 创建项目记录。
     def create_project(self, project_name: str) -> Project:
         project = Project(name=project_name)
         self._session.add(project)
         self._session.flush()
         return project
 
+    # 创建导入批次记录。
     def create_import_batch(
         self,
         *,
@@ -51,6 +54,7 @@ class ImportBatchRepository:
         self._session.refresh(import_batch)
         return import_batch
 
+    # 将导入批次标记为运行中。
     def mark_import_batch_running(self, task_id: str) -> ImportBatch | None:
         import_batch = self.get_import_batch(task_id)
         if import_batch is None:
@@ -65,6 +69,7 @@ class ImportBatchRepository:
         self._session.refresh(import_batch)
         return import_batch
 
+    # 将导入批次标记为成功完成。
     def mark_import_batch_succeeded(self, task_id: str) -> ImportBatch | None:
         import_batch = self.get_import_batch(task_id)
         if import_batch is None:
@@ -78,6 +83,7 @@ class ImportBatchRepository:
         self._session.refresh(import_batch)
         return import_batch
 
+    # 将导入批次标记为失败。
     def mark_import_batch_failed(
         self, task_id: str, error_message: str
     ) -> ImportBatch | None:
@@ -94,9 +100,11 @@ class ImportBatchRepository:
         self._session.refresh(import_batch)
         return import_batch
 
+    # 根据任务编号获取导入批次。
     def get_import_batch(self, task_id: str) -> ImportBatch | None:
         return self._session.get(ImportBatch, task_id)
 
+    # 创建分析任务记录。
     def create_analysis_task(
         self,
         *,
@@ -118,9 +126,11 @@ class ImportBatchRepository:
         self._session.refresh(analysis_task)
         return analysis_task
 
+    # 根据任务编号获取分析任务。
     def get_analysis_task(self, task_id: str) -> AnalysisTask | None:
         return self._session.get(AnalysisTask, task_id)
 
+    # 将分析任务标记为运行中。
     def mark_analysis_task_running(self, task_id: str) -> AnalysisTask | None:
         analysis_task = self.get_analysis_task(task_id)
         if analysis_task is None:
@@ -134,6 +144,7 @@ class ImportBatchRepository:
         self._session.refresh(analysis_task)
         return analysis_task
 
+    # 将分析任务标记为成功完成。
     def mark_analysis_task_succeeded(
         self, task_id: str, result_payload: dict[str, Any]
     ) -> AnalysisTask | None:
@@ -150,6 +161,7 @@ class ImportBatchRepository:
         self._session.refresh(analysis_task)
         return analysis_task
 
+    # 将分析任务标记为失败。
     def mark_analysis_task_failed(
         self, task_id: str, error_message: str
     ) -> AnalysisTask | None:
@@ -165,6 +177,7 @@ class ImportBatchRepository:
         self._session.refresh(analysis_task)
         return analysis_task
 
+    # 创建报告导出任务记录。
     def create_report_export(
         self, *, task_id: str, analysis_task_id: str
     ) -> ReportExport:
@@ -182,9 +195,11 @@ class ImportBatchRepository:
         self._session.refresh(report_export)
         return report_export
 
+    # 根据任务编号获取报告导出记录。
     def get_report_export(self, task_id: str) -> ReportExport | None:
         return self._session.get(ReportExport, task_id)
 
+    # 将报告导出任务标记为运行中。
     def mark_report_export_running(self, task_id: str) -> ReportExport | None:
         report_export = self.get_report_export(task_id)
         if report_export is None:
@@ -198,6 +213,7 @@ class ImportBatchRepository:
         self._session.refresh(report_export)
         return report_export
 
+    # 将报告导出任务标记为成功完成。
     def mark_report_export_succeeded(
         self,
         task_id: str,
@@ -220,6 +236,7 @@ class ImportBatchRepository:
         self._session.refresh(report_export)
         return report_export
 
+    # 将报告导出任务标记为失败。
     def mark_report_export_failed(
         self, task_id: str, error_message: str
     ) -> ReportExport | None:
@@ -236,6 +253,7 @@ class ImportBatchRepository:
         self._session.refresh(report_export)
         return report_export
 
+    # 批量创建导入后的障碍物记录。
     def create_obstacles(
         self,
         *,
@@ -279,6 +297,7 @@ class ImportBatchRepository:
 
         return created_obstacles
 
+    # 在 SQLite 测试环境下写入障碍物记录。
     def _create_obstacles_for_sqlite(
         self,
         *,
@@ -328,6 +347,7 @@ class ImportBatchRepository:
             )
         self._session.commit()
 
+    # 查询指定导入批次下的障碍物列表。
     def list_obstacles_by_batch_id(
         self, source_batch_id: str
     ) -> list[Obstacle] | list[dict[str, Any]]:
@@ -368,10 +388,12 @@ class ImportBatchRepository:
         )
         return list(self._session.scalars(statement))
 
+    # 查询全部机场记录。
     def list_airports(self) -> list[Airport]:
         statement = select(Airport).order_by(Airport.id)
         return list(self._session.scalars(statement))
 
+    # 查询带坐标的机场记录。
     def list_airports_with_coordinates(self) -> list[Airport]:
         statement = (
             select(Airport)
@@ -380,6 +402,7 @@ class ImportBatchRepository:
         )
         return list(self._session.scalars(statement))
 
+    # 按编号列表查询机场记录。
     def list_airports_by_ids(self, airport_ids: list[int]) -> list[Airport]:
         if not airport_ids:
             return []
@@ -389,18 +412,21 @@ class ImportBatchRepository:
         )
         return list(self._session.scalars(statement))
 
+    # 查询机场下的跑道列表。
     def list_runways_by_airport_id(self, airport_id: int) -> list[Runway]:
         statement = (
             select(Runway).where(Runway.airport_id == airport_id).order_by(Runway.id)
         )
         return list(self._session.scalars(statement))
 
+    # 查询机场下的台站列表。
     def list_stations_by_airport_id(self, airport_id: int) -> list[Station]:
         statement = (
             select(Station).where(Station.airport_id == airport_id).order_by(Station.id)
         )
         return list(self._session.scalars(statement))
 
+    # 查询全部历史障碍物记录。
     def list_all_obstacles(self) -> list[Obstacle] | list[dict[str, Any]]:
         if (
             self._session.bind is not None

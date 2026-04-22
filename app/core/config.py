@@ -18,6 +18,7 @@ class Settings:
     export_failed_retention_minutes: int = 30
     export_stale_retention_minutes: int = 30
 
+    # 从环境变量加载应用配置。
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(

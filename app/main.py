@@ -14,6 +14,7 @@ from app.tasks.polygon_obstacle_export import run_export_task
 from app.tasks.polygon_obstacle_import import run_import_task
 
 
+# 启动时清理过期的导入和导出目录。
 def cleanup_stale_import_storage() -> None:
     session = SessionLocal()
     try:
@@ -26,6 +27,7 @@ def cleanup_stale_import_storage() -> None:
         session.close()
 
 
+# 管理应用启动和关闭阶段的生命周期。
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     cleanup_stale_import_storage()
@@ -44,6 +46,7 @@ runtime.dispatch_export_task = app.state.dispatch_export_task
 app.include_router(polygon_obstacle_router)
 
 
+# 返回服务健康状态。
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}

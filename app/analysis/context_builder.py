@@ -10,6 +10,7 @@ class AirportAnalysisContext:
     obstacles: list[Any]
 
 
+# 构建机场级分析所需的上下文集合。
 def build_airport_analysis_context(
     *,
     repository: Any,

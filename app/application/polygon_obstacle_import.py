@@ -43,9 +43,11 @@ from app.schemas.polygon_obstacle import (
 
 
 class PolygonObstacleImportService:
+    # 初始化多边形障碍物导入服务。
     def __init__(self, session: Session) -> None:
         self._repository = ImportBatchRepository(session)
 
+    # 创建新的障碍物导入任务。
     def create_import_task(
         self, payload: ImportTaskCreateRequest
     ) -> ImportTaskStatusResponse:
@@ -74,6 +76,7 @@ class PolygonObstacleImportService:
             obstacleBatchId=import_batch.id,
         )
 
+    # 执行导入任务并写入障碍物数据。
     def run_import_task(self, task_id: str) -> None:
         import_batch = self._repository.mark_import_batch_running(task_id)
         if import_batch is None:
@@ -130,6 +133,7 @@ class PolygonObstacleImportService:
         except PolygonObstacleExcelParseError as exc:
             self._repository.mark_import_batch_failed(task_id, str(exc))
 
+    # 查询导入任务的当前状态。
     def get_import_task_status(self, task_id: str) -> ImportTaskStatusResponse | None:
         import_batch = self._repository.get_import_batch(task_id)
         if import_batch is None:
@@ -144,6 +148,7 @@ class PolygonObstacleImportService:
             obstacleBatchId=import_batch.id,
         )
 
+    # 查询导入任务的结果详情。
     def get_import_task_result(self, task_id: str) -> ImportTaskResultResponse | None:
         import_batch = self._repository.get_import_batch(task_id)
         if import_batch is None:
@@ -165,6 +170,7 @@ class PolygonObstacleImportService:
             ],
         )
 
+    # 返回初始化页面所需的机场和历史障碍物数据。
     def get_bootstrap(self) -> BootstrapResponse:
         airports = self._repository.list_airports_with_coordinates()
         obstacles = self._repository.list_all_obstacles()
@@ -204,6 +210,7 @@ class PolygonObstacleImportService:
             ],
         )
 
+    # 查询导入任务关联的候选机场列表。
     def get_import_targets(self, task_id: str) -> list[ImportTargetResponse] | None:
         import_batch = self._repository.get_import_batch(task_id)
         if import_batch is None:
@@ -246,10 +253,12 @@ class PolygonObstacleImportService:
 
         return sorted(targets, key=lambda target: (target.distance, target.id))
 
+    # 投递导入异步任务到运行时调度器。
     def _dispatch_import_task(self, task_id: str) -> None:
         if runtime.dispatch_import_task is not None:
             runtime.dispatch_import_task(task_id)
 
+    # 将上传的导入文件保存到任务目录。
     def _store_import_file(
         self,
         *,
@@ -268,10 +277,12 @@ class PolygonObstacleImportService:
         file_path.write_bytes(file_bytes)
         return str(file_path.resolve())
 
+    # 清洗上传文件名以避免非法路径字符。
     def _sanitize_file_name(self, file_name: str) -> str:
         sanitized = re.sub(r"[^A-Za-z0-9._-]", "_", file_name).strip("._")
         return sanitized or "import.xlsx"
 
+    # 创建新的障碍物分析任务。
     def create_analysis_task(
         self, payload: AnalysisTaskCreateRequest
     ) -> AnalysisTaskStatusResponse | None:
@@ -296,6 +307,7 @@ class PolygonObstacleImportService:
             targetIds=payload.target_ids,
         )
 
+    # 执行分析任务并生成最小分析结果。
     def run_analysis_task(self, task_id: str) -> None:
         analysis_task = self._repository.mark_analysis_task_running(task_id)
         if analysis_task is None:
@@ -343,6 +355,7 @@ class PolygonObstacleImportService:
         except Exception as exc:
             self._repository.mark_analysis_task_failed(task_id, str(exc))
 
+    # 构建单个机场的分析结果载荷。
     def _build_airport_analysis_result(self, context: object) -> dict[str, object]:
         airport_facts = build_airport_spatial_facts(context)
         airport = context.airport
@@ -429,6 +442,7 @@ class PolygonObstacleImportService:
             obstacle.pop("geometry", None)
         return airport_facts
 
+    # 汇总机场下各台站的保护区要素。
     def _build_airport_protection_zones(
         self,
         *,
@@ -472,6 +486,7 @@ class PolygonObstacleImportService:
 
         return protection_zones
 
+    # 将规则结果转换为保护区响应结构。
     def _build_protection_zone_feature(
         self,
         *,
@@ -590,6 +605,7 @@ class PolygonObstacleImportService:
 
         return None
 
+    # 查询分析任务的当前状态。
     def get_analysis_task_status(
         self, task_id: str
     ) -> AnalysisTaskStatusResponse | None:
@@ -606,6 +622,7 @@ class PolygonObstacleImportService:
             targetIds=analysis_task.selected_target_ids,
         )
 
+    # 查询分析任务的结果详情。
     def get_analysis_task_result(
         self, task_id: str
     ) -> AnalysisTaskResultResponse | None:
@@ -637,10 +654,12 @@ class PolygonObstacleImportService:
             ],
         )
 
+    # 投递分析异步任务到运行时调度器。
     def _dispatch_analysis_task(self, task_id: str) -> None:
         if runtime.dispatch_analysis_task is not None:
             runtime.dispatch_analysis_task(task_id)
 
+    # 创建新的分析报告导出任务。
     def create_export_task(
         self, analysis_task_id: str
     ) -> ExportTaskStatusResponse | None:
@@ -664,6 +683,7 @@ class PolygonObstacleImportService:
             progressPercent=report_export.progress_percent,
         )
 
+    # 执行导出任务并生成报告文件。
     def run_export_task(self, task_id: str) -> None:
         report_export = self._repository.mark_report_export_running(task_id)
         if report_export is None:
@@ -690,6 +710,7 @@ class PolygonObstacleImportService:
         except Exception as exc:
             self._repository.mark_report_export_failed(task_id, str(exc))
 
+    # 查询导出任务的当前状态。
     def get_export_task_status(
         self, analysis_task_id: str, export_task_id: str
     ) -> ExportTaskStatusResponse | None:
@@ -705,6 +726,7 @@ class PolygonObstacleImportService:
             progressPercent=report_export.progress_percent,
         )
 
+    # 查询导出任务的结果详情。
     def get_export_task_result(
         self, analysis_task_id: str, export_task_id: str
     ) -> ExportTaskResultResponse | None:
@@ -725,6 +747,7 @@ class PolygonObstacleImportService:
             errorMessage=report_export.error_message,
         )
 
+    # 返回可下载导出文件的路径和文件名。
     def get_export_download(self, export_task_id: str) -> tuple[str, str] | None:
         report_export = self._repository.get_report_export(export_task_id)
         if (
@@ -740,6 +763,7 @@ class PolygonObstacleImportService:
             return None
         return str(file_path), report_export.file_name
 
+    # 生成新的分析任务编号。
     def _build_analysis_task_id(self) -> str:
         existing_task = self._repository.get_analysis_task("analysis-task-1")
         if existing_task is None:
@@ -753,10 +777,12 @@ class PolygonObstacleImportService:
             next_suffix += 1
         return f"analysis-task-{next_suffix}"
 
+    # 投递导出异步任务到运行时调度器。
     def _dispatch_export_task(self, task_id: str) -> None:
         if runtime.dispatch_export_task is not None:
             runtime.dispatch_export_task(task_id)
 
+    # 生成新的导出任务编号。
     def _build_export_task_id(self) -> str:
         existing_task = self._repository.get_report_export("export-task-1")
         if existing_task is None:
@@ -769,6 +795,7 @@ class PolygonObstacleImportService:
             next_suffix += 1
         return f"export-task-{next_suffix}"
 
+    # 生成导出报告文件的输出路径。
     def _build_export_output_path(
         self, *, task_id: str, analysis_task_id: str
     ) -> tuple[Path, str]:
@@ -779,6 +806,7 @@ class PolygonObstacleImportService:
         file_name = f"polygon-obstacle-analysis-{analysis_task_id}.docx"
         return export_directory / file_name, file_name
 
+    # 将障碍物记录转换为统一响应对象。
     def _build_imported_obstacle_response(
         self,
         obstacle: object,

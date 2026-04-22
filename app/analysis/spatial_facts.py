@@ -6,6 +6,7 @@ from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.obstacle_categories import normalize_obstacle_type
 
 
+# 计算障碍物在机场局部坐标系下的包围盒。
 def _build_local_bounding_box(
     projector: AirportLocalProjector, geometry: dict[str, Any]
 ) -> dict[str, float]:
@@ -25,6 +26,7 @@ def _build_local_bounding_box(
     }
 
 
+# 计算障碍物到机场参考点的最小平面距离。
 def _distance_to_airport(
     projector: AirportLocalProjector, geometry: dict[str, Any]
 ) -> float:
@@ -47,6 +49,7 @@ def _distance_to_airport(
     return float(MultiPolygon(projected_polygons).distance(Point(0.0, 0.0)))
 
 
+# 构建机场级最小空间事实结果。
 def build_airport_spatial_facts(context: Any) -> dict[str, Any]:
     airport = context.airport
     if airport.longitude is None or airport.latitude is None:

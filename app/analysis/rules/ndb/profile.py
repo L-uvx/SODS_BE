@@ -6,6 +6,7 @@ from app.analysis.rules.ndb.minimum_distance_50m import NdbMinimumDistance50mRul
 
 
 class NdbRuleProfile:
+    # 初始化 NDB 分类到规则实例的映射。
     def __init__(self) -> None:
         self._rules = {
             "building_general": NdbMinimumDistance50mRule(),
@@ -23,6 +24,7 @@ class NdbRuleProfile:
             "power_line_high_voltage_overhead": NdbMinimumDistance500mRule(),
         }
 
+    # 按障碍物分类选择并执行对应的 NDB 规则。
     def analyze(
         self,
         *,

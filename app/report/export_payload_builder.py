@@ -4,6 +4,7 @@ from typing import Any
 from app.models.analysis_task import AnalysisTask
 
 
+# 构建导出报告所需的最小载荷。
 def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     result_payload = analysis_task.result_payload or {}
     return {

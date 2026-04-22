@@ -4,6 +4,7 @@ from typing import Any
 from docx import Document
 
 
+# 生成分析结果的 Word 报告文件。
 def build_analysis_report_docx(payload: dict[str, Any], output_path: Path) -> None:
     document = Document()
     document.add_heading("多边形障碍物分析报告", level=1)

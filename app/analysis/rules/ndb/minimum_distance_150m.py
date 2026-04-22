@@ -7,6 +7,7 @@ class NdbMinimumDistance150mRule(NdbRule):
     zone_name = "NDB 150m minimum distance zone"
     zone_definition = {"shape": "circle", "radius_m": 150.0}
 
+    # 校验障碍物是否满足 NDB 150 米最小间距要求。
     def analyze(
         self,
         *,

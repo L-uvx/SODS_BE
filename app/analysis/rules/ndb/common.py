@@ -5,10 +5,12 @@ from app.analysis.rules.base import ObstacleRule
 
 
 class NdbRule(ObstacleRule):
+    # 执行单条 NDB 规则的分析判定。
     def analyze(self, *args, **kwargs) -> AnalysisRuleResult:  # pragma: no cover
         raise NotImplementedError
 
 
+# 计算障碍物到台站点位的平面距离。
 def projected_obstacle_distance_meters(
     *,
     obstacle_geometry: dict[str, object],

@@ -32,6 +32,7 @@ class PolygonObstacle:
     points: list[PolygonObstaclePoint] = field(default_factory=list)
 
 
+# 解析单个经纬度 DMS 文本为十进制度数。
 def _parse_dms(value: str, *, field_name: str, row_number: int) -> float:
     match = _DMS_PATTERN.match(value)
     if match is None:
@@ -45,6 +46,7 @@ def _parse_dms(value: str, *, field_name: str, row_number: int) -> float:
     return degrees + minutes / 60 + seconds / 3600
 
 
+# 解析固定模板的障碍物 Excel 文件。
 def parse_polygon_obstacle_excel(excel_bytes: bytes) -> list[PolygonObstacle]:
     try:
         workbook = load_workbook(filename=BytesIO(excel_bytes), data_only=True)

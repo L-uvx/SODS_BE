@@ -12,6 +12,7 @@ class ImportTaskCreateRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    # 将 multipart 表单数据转换为导入请求对象。
     @classmethod
     async def as_form(
         cls,

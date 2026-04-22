@@ -13,12 +13,14 @@ class BuiltPolygonObstacleGeometry:
     wkt: str
 
 
+# 确保多边形点环首尾闭合。
 def _close_ring(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
     if points[0] == points[-1]:
         return points
     return [*points, points[0]]
 
 
+# 根据障碍物点集构建 MultiPolygon 几何数据。
 def build_multipolygon_geometry(
     obstacle: PolygonObstacle,
 ) -> BuiltPolygonObstacleGeometry:

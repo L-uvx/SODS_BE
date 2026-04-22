@@ -37,5 +37,6 @@ NDB_CONICAL_CLEARANCE = {
 }
 
 
+# 判断障碍物分类是否受 NDB 规则支持。
 def is_ndb_supported_category(category: str) -> bool:
     return category in NDB_SUPPORTED_CATEGORIES

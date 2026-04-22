@@ -14,6 +14,7 @@ class NdbConicalClearance3DegRule(NdbRule):
         "vertical_angle_deg": 3.0,
     }
 
+    # 校验障碍物是否满足 NDB 3 度锥形净空要求。
     def analyze(
         self,
         *,

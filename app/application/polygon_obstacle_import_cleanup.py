@@ -9,6 +9,7 @@ from app.models.import_batch import ImportBatch
 from app.models.report_export import ReportExport
 
 
+# 清理过期或失效的导入任务目录。
 def cleanup_import_storage(settings: Settings, session: Session) -> None:
     storage_dir = settings.import_storage_dir
     storage_dir.mkdir(parents=True, exist_ok=True)
@@ -29,6 +30,7 @@ def cleanup_import_storage(settings: Settings, session: Session) -> None:
             shutil.rmtree(task_directory, ignore_errors=True)
 
 
+# 清理过期或失效的导出任务目录。
 def cleanup_export_storage(settings: Settings, session: Session) -> None:
     storage_dir = settings.export_storage_dir
     storage_dir.mkdir(parents=True, exist_ok=True)
@@ -49,6 +51,7 @@ def cleanup_export_storage(settings: Settings, session: Session) -> None:
             shutil.rmtree(task_directory, ignore_errors=True)
 
 
+# 判断导入任务目录是否已达到删除条件。
 def _should_delete_import_directory(
     import_batch: ImportBatch,
     settings: Settings,
@@ -70,6 +73,7 @@ def _should_delete_import_directory(
     return False
 
 
+# 判断导出任务目录是否已达到删除条件。
 def _should_delete_export_directory(
     report_export: ReportExport,
     settings: Settings,
@@ -92,6 +96,7 @@ def _should_delete_export_directory(
     return False
 
 
+# 判断给定时间是否已经超过保留时长。
 def _is_expired(reference_time: datetime | None, retention_minutes: int) -> bool:
     if reference_time is None:
         return False
@@ -100,12 +105,14 @@ def _is_expired(reference_time: datetime | None, retention_minutes: int) -> bool
     return datetime.now(UTC) - reference_time_utc > timedelta(minutes=retention_minutes)
 
 
+# 将时间统一转换为 UTC 时区。
 def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
 
 
+# 判断目录最后修改时间是否早于指定分钟数。
 def _is_older_than_minutes(path: Path, retention_minutes: int) -> bool:
     modified_time = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
     return datetime.now(UTC) - modified_time > timedelta(minutes=retention_minutes)

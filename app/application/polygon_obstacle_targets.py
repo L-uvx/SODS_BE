@@ -10,6 +10,7 @@ _PROJECT_TO_METERS = Transformer.from_crs(
 ).transform
 
 
+# 计算机场台站到障碍物集合的最小距离并转换为公里。
 def calculate_minimum_target_distance_km(
     *,
     station_points: list[tuple[float, float]],
