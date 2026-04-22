@@ -139,7 +139,7 @@ class LocSiteProtectionRule(ObstacleRule):
                 center_y + reverse_unit[1] * (runway_length_meters / 2.0),
             ),
         ]
-        far_distance = max(
+        nearest_distance = min(
             max(
                 0.0,
                 (endpoint[0] - station_point[0]) * axis_unit[0]
@@ -149,7 +149,7 @@ class LocSiteProtectionRule(ObstacleRule):
         )
         rectangle_length_meters = max(
             float(LOC_SITE_PROTECTION["minimum_rectangle_length_m"]),
-            far_distance,
+            nearest_distance,
         )
         normal_unit = (-axis_unit[1], axis_unit[0])
         return rectangle_length_meters, axis_unit, normal_unit
