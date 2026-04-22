@@ -413,6 +413,7 @@ class PolygonObstacleImportService:
                                     {
                                         "code": standards.gb.code,
                                         "text": standards.gb.text,
+                                        "isCompliant": result.is_compliant,
                                     }
                                     if standards.gb is not None
                                     else None
@@ -421,6 +422,7 @@ class PolygonObstacleImportService:
                                     {
                                         "code": standards.mh.code,
                                         "text": standards.mh.text,
+                                        "isCompliant": result.is_compliant,
                                     }
                                     if standards.mh is not None
                                     else None
@@ -467,6 +469,7 @@ class PolygonObstacleImportService:
                                 {
                                     "code": conical_standards.gb.code,
                                     "text": conical_standards.gb.text,
+                                    "isCompliant": conical_result.is_compliant,
                                 }
                                 if conical_standards.gb is not None
                                 else None
@@ -475,6 +478,7 @@ class PolygonObstacleImportService:
                                 {
                                     "code": conical_standards.mh.code,
                                     "text": conical_standards.mh.text,
+                                    "isCompliant": conical_result.is_compliant,
                                 }
                                 if conical_standards.mh is not None
                                 else None

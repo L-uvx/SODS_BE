@@ -400,10 +400,12 @@ def test_build_export_payload_includes_rule_results_with_standards() -> None:
                                     "gb": {
                                         "code": "GB_NDB_50m最小间距区域_50",
                                         "text": "GB text",
+                                        "isCompliant": False,
                                     },
                                     "mh": {
                                         "code": "MH_NDB_50m最小间距区域_50",
                                         "text": "MH text",
+                                        "isCompliant": False,
                                     },
                                 },
                             }
@@ -417,7 +419,9 @@ def test_build_export_payload_includes_rule_results_with_standards() -> None:
     payload = build_export_payload(analysis_task)
 
     assert payload["ruleResults"][0]["standards"]["gb"]["code"] == "GB_NDB_50m最小间距区域_50"
+    assert payload["ruleResults"][0]["standards"]["gb"]["isCompliant"] is False
     assert payload["ruleResults"][0]["standards"]["mh"]["code"] == "MH_NDB_50m最小间距区域_50"
+    assert payload["ruleResults"][0]["standards"]["mh"]["isCompliant"] is False
 
 
 def test_download_export_file_returns_docx_after_generation() -> None:
@@ -492,10 +496,12 @@ def test_run_export_task_writes_gb_and_mh_standards_into_report() -> None:
                                         "gb": {
                                             "code": "GB_NDB_50m最小间距区域_50",
                                             "text": "GB text",
+                                            "isCompliant": False,
                                         },
                                         "mh": {
                                             "code": "MH_NDB_50m最小间距区域_50",
                                             "text": "MH text",
+                                            "isCompliant": False,
                                         },
                                     },
                                 }
@@ -522,8 +528,10 @@ def test_run_export_task_writes_gb_and_mh_standards_into_report() -> None:
     full_text = "\n".join(paragraph.text for paragraph in document.paragraphs)
     assert "GB_NDB_50m最小间距区域_50" in full_text
     assert "GB text" in full_text
+    assert "国标条文是否满足: 不满足" in full_text
     assert "MH_NDB_50m最小间距区域_50" in full_text
     assert "MH text" in full_text
+    assert "行标条文是否满足: 不满足" in full_text
 
 
 def test_run_export_task_succeeds_when_runtime_settings_are_uninitialized() -> None:

@@ -219,6 +219,12 @@ class AnalysisRuleResultResponse(BaseModel):
 class AnalysisStandardReferenceResponse(BaseModel):
     code: str
     text: str
+    is_compliant: bool | None = Field(alias="isCompliant", default=None)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
 
 
 class AnalysisStandardSetResponse(BaseModel):

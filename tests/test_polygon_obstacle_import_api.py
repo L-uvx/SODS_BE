@@ -1373,6 +1373,7 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_rule() -> 
 
     assert response.status_code == 200
     rule_result = response.json()["spatialFacts"]["airports"][0]["ruleResults"][0]
+    assert rule_result["isCompliant"] is True
     assert rule_result["standards"] == {
         "gb": {
             "code": "GB_NDB_50m最小间距区域_50",
@@ -1380,6 +1381,7 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_rule() -> 
                 "无方向信标天线与地形地物之间的最小间距：高于3m的树木、建筑物"
                 "（机房除外）以及公路与台站最小允许间距50m。"
             ),
+            "isCompliant": True,
         },
         "mh": {
             "code": "MH_NDB_50m最小间距区域_50",
@@ -1387,6 +1389,7 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_rule() -> 
                 "无方向信标天线与地形地物之间的最小间距：建筑物（机房除外）、"
                 "公路以及高于3m的树木与台站最小允许间距50m。"
             ),
+            "isCompliant": True,
         },
     }
 
@@ -1447,14 +1450,17 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_conical_ru
         for item in response.json()["spatialFacts"]["airports"][0]["ruleResults"]
         if item["ruleName"] == "ndb_conical_clearance_3deg"
     )
+    assert radial_band_rule["isCompliant"] is True
     assert radial_band_rule["standards"] == {
         "gb": {
             "code": "GB_NDB_50米以外仰角区域",
             "text": "在无方向信标天线50m以外，不应有超出无方向信标天线中心底部为基准垂直张角3°的障碍物。",
+            "isCompliant": True,
         },
         "mh": {
             "code": "MH_NDB_50米以外仰角区域",
             "text": "在无方向信标天线50m以外，不应有超出无方向信标天线中心底部基准垂直张角为3°的障碍物。",
+            "isCompliant": True,
         },
     }
 def test_run_analysis_task_skips_station_without_coordinates() -> None:

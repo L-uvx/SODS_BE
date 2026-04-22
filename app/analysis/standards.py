@@ -8,6 +8,7 @@ from xml.etree import ElementTree
 class AnalysisStandardReference:
     code: str
     text: str
+    is_compliant: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)

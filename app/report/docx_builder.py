@@ -15,6 +15,13 @@ def _append_standard_block(
         return
     document.add_paragraph(f"{label}: {standard['code']}")
     document.add_paragraph(str(standard["text"]))
+    is_compliant = standard.get("isCompliant")
+    if is_compliant is None:
+        document.add_paragraph(f"{label}是否满足: 未知")
+        return
+    document.add_paragraph(
+        f"{label}是否满足: {'满足' if is_compliant else '不满足'}"
+    )
 
 
 # 生成分析结果的 Word 报告文件。
