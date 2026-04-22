@@ -2,6 +2,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
+from docx import Document
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy import text
@@ -17,6 +18,9 @@ from app.models.analysis_task import AnalysisTask
 from app.models.import_batch import ImportBatch
 from app.models.project import Project
 from app.models.report_export import ReportExport
+from app.models.runway import Runway
+from app.models.station import Station
+from app.report.export_payload_builder import build_export_payload
 
 
 def _read_valid_excel_bytes() -> bytes:
@@ -70,6 +74,8 @@ def _create_test_client() -> Generator[TestClient, None, None]:
             ImportBatch.__table__,
             AnalysisTask.__table__,
             Airport.__table__,
+            Runway.__table__,
+            Station.__table__,
             ReportExport.__table__,
         ],
     )
@@ -109,6 +115,8 @@ def _create_test_client() -> Generator[TestClient, None, None]:
     Base.metadata.drop_all(
         bind=engine,
         tables=[
+            Station.__table__,
+            Runway.__table__,
             Airport.__table__,
             ReportExport.__table__,
             AnalysisTask.__table__,
@@ -351,6 +359,67 @@ def test_run_export_task_marks_status_succeeded_and_returns_download_url() -> No
     }
 
 
+def test_build_export_payload_includes_rule_results_with_standards() -> None:
+    analysis_task = AnalysisTask(
+        id="analysis-task-1",
+        import_batch_id="import-batch-1",
+        selected_target_ids=[1],
+        status="succeeded",
+        result_payload={
+            "summary": "done",
+            "obstacleCount": 1,
+            "selectedTargets": [{"id": 1, "name": "Airport A", "category": "机场"}],
+            "spatialFacts": {
+                "airports": [
+                    {
+                        "airportId": 1,
+                        "referencePoint": {"longitude": 104.1, "latitude": 30.1},
+                        "runwayCount": 0,
+                        "stationCount": 1,
+                        "obstacles": [],
+                        "ruleResults": [
+                            {
+                                "stationId": 101,
+                                "stationName": "NDB Station",
+                                "stationType": "NDB",
+                                "obstacleId": 2,
+                                "obstacleName": "Obstacle A",
+                                "rawObstacleType": "建筑物/构建物",
+                                "globalObstacleCategory": "building_general",
+                                "ruleName": "ndb_minimum_distance_50m",
+                                "zoneCode": "ndb_minimum_distance_50m",
+                                "zoneName": "NDB 50m minimum distance zone",
+                                "regionCode": "default",
+                                "regionName": "default",
+                                "zoneDefinition": {"shape": "circle", "radius_m": 50.0},
+                                "isApplicable": True,
+                                "isCompliant": False,
+                                "message": "distance below minimum separation",
+                                "metrics": {"requiredDistanceMeters": 50.0},
+                                "standards": {
+                                    "gb": {
+                                        "code": "GB_NDB_50m最小间距区域_50",
+                                        "text": "GB text",
+                                    },
+                                    "mh": {
+                                        "code": "MH_NDB_50m最小间距区域_50",
+                                        "text": "MH text",
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ]
+            },
+        },
+    )
+
+    payload = build_export_payload(analysis_task)
+
+    assert payload["ruleResults"][0]["standards"]["gb"]["code"] == "GB_NDB_50m最小间距区域_50"
+    assert payload["ruleResults"][0]["standards"]["mh"]["code"] == "MH_NDB_50m最小间距区域_50"
+
+
 def test_download_export_file_returns_docx_after_generation() -> None:
     with _create_test_client() as client:
         analysis_task_id = _create_succeeded_analysis_task(client)
@@ -374,6 +443,87 @@ def test_download_export_file_returns_docx_after_generation() -> None:
         in response.headers["content-disposition"]
     )
     assert len(response.content) > 0
+
+
+def test_run_export_task_writes_gb_and_mh_standards_into_report() -> None:
+    with _create_test_client() as client:
+        analysis_task_id = _create_succeeded_analysis_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            task = session.get(AnalysisTask, analysis_task_id)
+            assert task is not None
+            task.status = "succeeded"
+            task.status_message = "analysis task succeeded"
+            task.error_message = None
+            task.result_payload = {
+                "summary": "已完成测试分析",
+                "obstacleCount": 1,
+                "selectedTargets": [
+                    {"id": 1, "name": "Airport Near", "category": "机场"}
+                ],
+                "spatialFacts": {
+                    "airports": [
+                        {
+                            "airportId": 1,
+                            "referencePoint": {"longitude": 103.9, "latitude": 30.5},
+                            "runwayCount": 0,
+                            "stationCount": 1,
+                            "obstacles": [],
+                            "ruleResults": [
+                                {
+                                    "stationId": 101,
+                                    "stationName": "NDB Station",
+                                    "stationType": "NDB",
+                                    "obstacleId": 2,
+                                    "obstacleName": "Obstacle A",
+                                    "rawObstacleType": "建筑物/构建物",
+                                    "globalObstacleCategory": "building_general",
+                                    "ruleName": "ndb_minimum_distance_50m",
+                                    "zoneCode": "ndb_minimum_distance_50m",
+                                    "zoneName": "NDB 50m minimum distance zone",
+                                    "regionCode": "default",
+                                    "regionName": "default",
+                                    "zoneDefinition": {"shape": "circle", "radius_m": 50.0},
+                                    "isApplicable": True,
+                                    "isCompliant": False,
+                                    "message": "distance below minimum separation",
+                                    "metrics": {"requiredDistanceMeters": 50.0},
+                                    "standards": {
+                                        "gb": {
+                                            "code": "GB_NDB_50m最小间距区域_50",
+                                            "text": "GB text",
+                                        },
+                                        "mh": {
+                                            "code": "MH_NDB_50m最小间距区域_50",
+                                            "text": "MH text",
+                                        },
+                                    },
+                                }
+                            ],
+                        }
+                    ]
+                },
+            }
+            session.commit()
+
+        app.state.dispatch_export_task = _DispatchRecorder().delay
+        runtime.dispatch_export_task = app.state.dispatch_export_task
+        create_response = client.post(
+            f"/polygon-obstacle/analysis/{analysis_task_id}/export"
+        )
+        export_task_id = create_response.json()["exportTaskId"]
+        _run_export_task(export_task_id)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            report_export = session.get(ReportExport, export_task_id)
+            assert report_export is not None
+            document = Document(report_export.file_path)
+
+    full_text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+    assert "GB_NDB_50m最小间距区域_50" in full_text
+    assert "GB text" in full_text
+    assert "MH_NDB_50m最小间距区域_50" in full_text
+    assert "MH text" in full_text
 
 
 def test_run_export_task_succeeds_when_runtime_settings_are_uninitialized() -> None:

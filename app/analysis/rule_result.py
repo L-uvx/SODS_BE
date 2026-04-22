@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from app.analysis.standards import AnalysisStandardSet
+
 
 @dataclass(slots=True)
 class AnalysisRuleResult:
@@ -19,3 +21,4 @@ class AnalysisRuleResult:
     is_compliant: bool
     message: str
     metrics: dict[str, float | str | bool | None]
+    standards: AnalysisStandardSet | None = None

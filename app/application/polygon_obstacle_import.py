@@ -8,6 +8,7 @@ from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.spatial_facts import build_airport_spatial_facts
 from app.analysis.rules.ndb import NdbRuleProfile
 from app.analysis.rules.ndb.conical_clearance import NdbConicalClearance3DegRule
+from app.analysis.standards import build_rule_standards
 from app.application.polygon_obstacle_excel_parser import (
     PolygonObstacleExcelParseError,
     parse_polygon_obstacle_excel,
@@ -383,6 +384,11 @@ class PolygonObstacleImportService:
                     station_point=station_point,
                 )
                 if result is not None:
+                    standards = build_rule_standards(
+                        station_type=result.station_type,
+                        rule_name=result.rule_name,
+                        region_code=result.region_code,
+                    )
                     rule_results.append(
                         {
                             "stationId": result.station_id,
@@ -402,6 +408,24 @@ class PolygonObstacleImportService:
                             "isCompliant": result.is_compliant,
                             "message": result.message,
                             "metrics": result.metrics,
+                            "standards": {
+                                "gb": (
+                                    {
+                                        "code": standards.gb.code,
+                                        "text": standards.gb.text,
+                                    }
+                                    if standards.gb is not None
+                                    else None
+                                ),
+                                "mh": (
+                                    {
+                                        "code": standards.mh.code,
+                                        "text": standards.mh.text,
+                                    }
+                                    if standards.mh is not None
+                                    else None
+                                ),
+                            },
                         }
                     )
                 conical_result = conical_rule.analyze(
@@ -413,6 +437,11 @@ class PolygonObstacleImportService:
                         if station.altitude is not None
                         else None
                     ),
+                )
+                conical_standards = build_rule_standards(
+                    station_type=conical_result.station_type,
+                    rule_name=conical_result.rule_name,
+                    region_code=conical_result.region_code,
                 )
                 rule_results.append(
                     {
@@ -433,6 +462,24 @@ class PolygonObstacleImportService:
                         "isCompliant": conical_result.is_compliant,
                         "message": conical_result.message,
                         "metrics": conical_result.metrics,
+                        "standards": {
+                            "gb": (
+                                {
+                                    "code": conical_standards.gb.code,
+                                    "text": conical_standards.gb.text,
+                                }
+                                if conical_standards.gb is not None
+                                else None
+                            ),
+                            "mh": (
+                                {
+                                    "code": conical_standards.mh.code,
+                                    "text": conical_standards.mh.text,
+                                }
+                                if conical_standards.mh is not None
+                                else None
+                            ),
+                        },
                     }
                 )
 

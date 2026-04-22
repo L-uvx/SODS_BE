@@ -208,11 +208,22 @@ class AnalysisRuleResultResponse(BaseModel):
     is_compliant: bool = Field(alias="isCompliant")
     message: str
     metrics: dict[str, float | str | bool | None]
+    standards: "AnalysisStandardSetResponse"
 
     model_config = ConfigDict(
         populate_by_name=True,
         serialize_by_alias=True,
     )
+
+
+class AnalysisStandardReferenceResponse(BaseModel):
+    code: str
+    text: str
+
+
+class AnalysisStandardSetResponse(BaseModel):
+    gb: AnalysisStandardReferenceResponse | None = None
+    mh: AnalysisStandardReferenceResponse | None = None
 
 
 class AnalysisSpatialAirportFactsResponse(BaseModel):
