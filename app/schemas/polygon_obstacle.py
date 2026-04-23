@@ -231,43 +231,6 @@ class AnalysisStandardSetResponse(BaseModel):
     mh: AnalysisStandardReferenceResponse | None = None
 
 
-class AnalysisProtectionZoneCircleGeometryResponse(BaseModel):
-    shape_type: str = Field(alias="shapeType")
-    center: AnalysisSpatialReferencePointResponse
-    radius_meters: float = Field(alias="radiusMeters")
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        serialize_by_alias=True,
-    )
-
-
-class AnalysisProtectionZoneRadialBandGeometryResponse(BaseModel):
-    shape_type: str = Field(alias="shapeType")
-    center: AnalysisSpatialReferencePointResponse
-    inner_radius_meters: float = Field(alias="innerRadiusMeters")
-    outer_radius_meters: float = Field(alias="outerRadiusMeters")
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        serialize_by_alias=True,
-    )
-
-
-class AnalysisProtectionZoneSectorGeometryResponse(BaseModel):
-    shape_type: str = Field(alias="shapeType")
-    center: AnalysisSpatialReferencePointResponse
-    inner_radius_meters: float = Field(alias="innerRadiusMeters")
-    outer_radius_meters: float = Field(alias="outerRadiusMeters")
-    start_azimuth_degrees: float = Field(alias="startAzimuthDegrees")
-    end_azimuth_degrees: float = Field(alias="endAzimuthDegrees")
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        serialize_by_alias=True,
-    )
-
-
 class AnalysisProtectionZoneMultipolygonGeometryResponse(BaseModel):
     shape_type: str = Field(alias="shapeType")
     coordinates: list[list[list[list[float]]]]
@@ -302,13 +265,66 @@ class AnalysisProtectionZoneHeightFunctionResponse(BaseModel):
     )
 
 
+class AnalysisProtectionZoneDistanceSourceResponse(BaseModel):
+    kind: str
+    point: list[float]
+
+
+class AnalysisProtectionZoneClampRangeResponse(BaseModel):
+    start_meters: float = Field(alias="startMeters")
+    end_meters: float = Field(alias="endMeters")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisProtectionZoneHeightModelResponse(BaseModel):
+    type: str
+    angle_degrees: float = Field(alias="angleDegrees")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisProtectionZoneSurfaceResponse(BaseModel):
+    type: str
+    distance_source: AnalysisProtectionZoneDistanceSourceResponse = Field(
+        alias="distanceSource"
+    )
+    distance_metric: str = Field(alias="distanceMetric")
+    clamp_range: AnalysisProtectionZoneClampRangeResponse = Field(alias="clampRange")
+    height_model: AnalysisProtectionZoneHeightModelResponse = Field(alias="heightModel")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
 class AnalysisProtectionZoneAnalyticSurfaceVerticalResponse(BaseModel):
     mode: str
     base_reference: str = Field(alias="baseReference")
     base_height_meters: float = Field(alias="baseHeightMeters")
     height_function: AnalysisProtectionZoneHeightFunctionResponse = Field(
-        alias="heightFunction"
+        alias="heightFunction",
     )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisProtectionZoneSurfaceAnalyticVerticalResponse(BaseModel):
+    mode: str
+    coordinate_system: str = Field(alias="coordinateSystem")
+    base_reference: str = Field(alias="baseReference")
+    base_height_meters: float = Field(alias="baseHeightMeters")
+    surface: AnalysisProtectionZoneSurfaceResponse
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -333,15 +349,11 @@ class AnalysisProtectionZoneResponse(BaseModel):
     zone_name: str = Field(alias="zoneName")
     region_code: str = Field(alias="regionCode")
     region_name: str = Field(alias="regionName")
-    geometry: (
-        AnalysisProtectionZoneCircleGeometryResponse
-        | AnalysisProtectionZoneRadialBandGeometryResponse
-        | AnalysisProtectionZoneSectorGeometryResponse
-        | AnalysisProtectionZoneMultipolygonGeometryResponse
-    )
+    geometry: AnalysisProtectionZoneMultipolygonGeometryResponse
     vertical: (
         AnalysisProtectionZoneVerticalResponse
         | AnalysisProtectionZoneAnalyticSurfaceVerticalResponse
+        | AnalysisProtectionZoneSurfaceAnalyticVerticalResponse
     )
     properties: AnalysisProtectionZonePropertiesResponse
     render_geometry: dict[str, object] | None = Field(

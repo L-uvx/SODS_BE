@@ -3,19 +3,37 @@ import math
 from shapely.geometry import MultiPolygon, Point, Polygon, shape
 from shapely.ops import unary_union
 
+from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.rule_result import AnalysisRuleResult
-from app.analysis.rules.loc.config import LOC_SITE_PROTECTION
 from app.analysis.rules.base import ObstacleRule
+from app.analysis.rules.loc.config import LOC_SITE_PROTECTION
 
 
 class LocSiteProtectionRule(ObstacleRule):
     rule_name = "loc_site_protection"
     zone_name = "LOC site protection zone"
 
-    def __init__(self, *, circle_step_degrees: float = 2.5) -> None:
-        self._circle_step_degrees = float(
-            circle_step_degrees or LOC_SITE_PROTECTION["circle_step_degrees"]
+    def __init__(self, *, circle_step_degrees: float | None = None) -> None:
+        resolved_circle_step_degrees = float(
+            circle_step_degrees
+            if circle_step_degrees is not None
+            else PROTECTION_ZONE_BUILDER_DISCRETIZATION["circle_step_degrees"]
         )
+        minimum_step_degrees = float(
+            PROTECTION_ZONE_BUILDER_DISCRETIZATION["minimum_step_degrees"]
+        )
+        maximum_step_degrees = float(
+            PROTECTION_ZONE_BUILDER_DISCRETIZATION["maximum_step_degrees"]
+        )
+        if not (
+            minimum_step_degrees
+            <= resolved_circle_step_degrees
+            < maximum_step_degrees
+        ):
+            raise ValueError(
+                "circle_step_degrees must be within shared discretization bounds"
+            )
+        self._circle_step_degrees = resolved_circle_step_degrees
 
     # 校验障碍物是否满足 LOC 场地保护区要求。
     def analyze(

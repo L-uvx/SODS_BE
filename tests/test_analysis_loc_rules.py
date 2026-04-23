@@ -1,3 +1,6 @@
+import pytest
+
+from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.rules.loc import LOC_SITE_PROTECTION, LocSiteProtectionRule
 
 
@@ -215,6 +218,7 @@ def test_loc_site_protection_uses_config_defined_defaults() -> None:
     assert LOC_SITE_PROTECTION["circle_radius_m"] == 75.0
     assert LOC_SITE_PROTECTION["rectangle_width_m"] == 120.0
     assert LOC_SITE_PROTECTION["minimum_rectangle_length_m"] == 300.0
+    assert "circle_step_degrees" not in LOC_SITE_PROTECTION
     assert (
         result.zone_definition["circle_radius_m"]
         == LOC_SITE_PROTECTION["circle_radius_m"]
@@ -227,3 +231,73 @@ def test_loc_site_protection_uses_config_defined_defaults() -> None:
         result.metrics["rectangleLengthMeters"]
         >= LOC_SITE_PROTECTION["minimum_rectangle_length_m"]
     )
+    assert (
+        result.zone_definition["circle_step_degrees"]
+        == PROTECTION_ZONE_BUILDER_DISCRETIZATION["circle_step_degrees"]
+    )
+
+
+def test_loc_site_protection_rule_allows_explicit_circle_step_override() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, 0.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 400.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 4,
+        "name": "Obstacle C",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [10.0, -10.0],
+                        [20.0, -10.0],
+                        [20.0, 10.0],
+                        [10.0, 10.0],
+                        [10.0, -10.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = LocSiteProtectionRule(circle_step_degrees=5.0).analyze(
+        station=station,
+        obstacle=obstacle,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    )
+
+    assert result.zone_definition["circle_step_degrees"] == 5.0
+
+
+def test_loc_site_protection_rule_rejects_zero_circle_step_override() -> None:
+    with pytest.raises(ValueError, match="circle_step_degrees"):
+        LocSiteProtectionRule(circle_step_degrees=0)
+
+
+def test_loc_site_protection_rule_rejects_negative_circle_step_override() -> None:
+    with pytest.raises(ValueError, match="circle_step_degrees"):
+        LocSiteProtectionRule(circle_step_degrees=-1.0)
+
+
+def test_loc_site_protection_rule_rejects_maximum_circle_step_override() -> None:
+    with pytest.raises(ValueError, match="circle_step_degrees"):
+        LocSiteProtectionRule(circle_step_degrees=180.0)

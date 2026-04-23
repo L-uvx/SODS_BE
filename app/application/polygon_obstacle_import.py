@@ -5,6 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.analysis.context_builder import build_airport_analysis_context
 from app.analysis.local_coordinate import AirportLocalProjector
+from app.analysis.protection_zone_builder import (
+    build_protection_zone_geometry,
+    build_protection_zone_vertical,
+)
 from app.analysis.spatial_facts import build_airport_spatial_facts
 from app.analysis.station_dispatcher import StationAnalysisDispatcher
 from app.analysis.standards import build_rule_standards
@@ -582,124 +586,58 @@ class PolygonObstacleImportService:
             "renderGeometry": None,
         }
 
+        station_local_point = projector.project_point(
+            float(station.longitude),
+            float(station.latitude),
+        )
+        geometry = build_protection_zone_geometry(
+            projector=projector,
+            center_point=station_local_point,
+            zone_definition=zone_definition,
+        )
+        if geometry is None:
+            return None
+
+        metrics = rule_result["metrics"]
         shape = zone_definition.get("shape")
-        if shape == "circle":
-            radius_meters = zone_definition.get("radius_m")
-            if radius_meters is None:
-                return None
-            return {
-                **base_feature,
-                "geometry": {
-                    "shapeType": "circle",
-                    "center": {
-                        "longitude": float(station.longitude),
-                        "latitude": float(station.latitude),
-                    },
-                    "radiusMeters": float(radius_meters),
-                },
-                "vertical": {
-                    "mode": "flat",
-                    "baseReference": "station",
-                    "baseHeightMeters": float(station.altitude or 0.0),
-                },
-            }
-
-        if shape == "radial_band":
-            metrics = rule_result["metrics"]
-            return {
-                **base_feature,
-                "geometry": {
-                    "shapeType": "radial_band",
-                    "center": {
-                        "longitude": float(station.longitude),
-                        "latitude": float(station.latitude),
-                    },
-                    "innerRadiusMeters": float(zone_definition["min_radius_m"]),
-                    "outerRadiusMeters": float(zone_definition["max_radius_m"]),
-                },
-                "vertical": {
-                    "mode": "analytic_surface",
-                    "baseReference": "station",
-                    "baseHeightMeters": float(metrics["baseHeightMeters"]),
-                    "heightFunction": {
-                        "type": "elevation_angle",
-                        "elevationAngleDegrees": float(
-                            metrics["elevationAngleDegrees"]
-                        ),
-                        "distanceMetric": "radial",
-                        "startDistanceMeters": float(zone_definition["min_radius_m"]),
-                        "endDistanceMeters": float(zone_definition["max_radius_m"]),
-                    },
+        if rule_code == "ndb_conical_clearance_3deg" and shape == "radial_band":
+            vertical = build_protection_zone_vertical(
+                shape="radial_band",
+                zone_definition=zone_definition,
+                distance_source_point=station_local_point,
+                base_height_meters=float(metrics["baseHeightMeters"]),
+                elevation_angle_degrees=float(metrics["elevationAngleDegrees"]),
+            )
+        elif shape == "sector":
+            vertical = {
+                "mode": "analytic_surface",
+                "baseReference": "station",
+                "baseHeightMeters": float(metrics["baseHeightMeters"]),
+                "heightFunction": {
+                    "type": "elevation_angle",
+                    "elevationAngleDegrees": float(metrics["elevationAngleDegrees"]),
+                    "distanceMetric": "radial",
+                    "startDistanceMeters": float(zone_definition["min_radius_m"]),
+                    "endDistanceMeters": float(zone_definition["max_radius_m"]),
                 },
             }
+        elif shape in {"circle", "multipolygon", "radial_band"}:
+            vertical = build_protection_zone_vertical(
+                shape=shape,
+                zone_definition=zone_definition,
+                base_height_meters=float(station.altitude or 0.0),
+            )
+        else:
+            return None
 
-        if shape == "sector":
-            metrics = rule_result["metrics"]
-            return {
-                **base_feature,
-                "geometry": {
-                    "shapeType": "sector",
-                    "center": {
-                        "longitude": float(station.longitude),
-                        "latitude": float(station.latitude),
-                    },
-                    "innerRadiusMeters": float(zone_definition["min_radius_m"]),
-                    "outerRadiusMeters": float(zone_definition["max_radius_m"]),
-                    "startAzimuthDegrees": float(zone_definition["start_azimuth_deg"]),
-                    "endAzimuthDegrees": float(zone_definition["end_azimuth_deg"]),
-                },
-                "vertical": {
-                    "mode": "analytic_surface",
-                    "baseReference": "station",
-                    "baseHeightMeters": float(metrics["baseHeightMeters"]),
-                    "heightFunction": {
-                        "type": "elevation_angle",
-                        "elevationAngleDegrees": float(
-                            metrics["elevationAngleDegrees"]
-                        ),
-                        "distanceMetric": "radial",
-                        "startDistanceMeters": float(zone_definition["min_radius_m"]),
-                        "endDistanceMeters": float(zone_definition["max_radius_m"]),
-                    },
-                },
-            }
+        if vertical is None:
+            return None
 
-        if shape == "multipolygon":
-            coordinates = zone_definition.get("coordinates")
-            if coordinates is None:
-                return None
-            return {
-                **base_feature,
-                "geometry": {
-                    "shapeType": "multipolygon",
-                    "coordinates": [
-                        [
-                            [
-                                [
-                                    float(longitude),
-                                    float(latitude),
-                                ]
-                                for longitude, latitude in (
-                                    projector.unproject_point(
-                                        float(point[0]),
-                                        float(point[1]),
-                                    )
-                                    for point in ring
-                                )
-                            ]
-                            for ring in polygon
-                        ]
-                        for polygon in coordinates
-                    ],
-                },
-                "vertical": {
-                    "mode": "flat",
-                    "baseReference": "station",
-                    "baseHeightMeters": float(station.altitude or 0.0),
-                },
-            }
-
-        return None
+        return {
+            **base_feature,
+            "geometry": geometry,
+            "vertical": vertical,
+        }
 
     # 查询分析任务的当前状态。
     def get_analysis_task_status(

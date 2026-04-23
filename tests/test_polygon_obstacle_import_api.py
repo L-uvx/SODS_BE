@@ -7,15 +7,18 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_db_session
+from app.analysis.local_coordinate import AirportLocalProjector
 from app.core import runtime
 from app.db.base import Base
 from app.main import app
+from app.schemas.polygon_obstacle import AnalysisProtectionZoneResponse
 from app.models.airport import Airport
 from app.models.analysis_task import AnalysisTask
 from app.models.import_batch import ImportBatch
@@ -1171,11 +1174,10 @@ def test_get_analysis_task_result_returns_protection_zones() -> None:
     assert protection_zone["zoneName"] == "NDB 50m minimum distance zone"
     assert protection_zone["regionCode"] == "default"
     assert protection_zone["regionName"] == "default"
-    assert protection_zone["geometry"] == {
-        "shapeType": "circle",
-        "center": {"longitude": 104.123456, "latitude": 30.123456},
-        "radiusMeters": 50.0,
-    }
+    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
+    assert "center" not in protection_zone["geometry"]
+    assert len(protection_zone["geometry"]["coordinates"]) == 1
+    assert len(protection_zone["geometry"]["coordinates"][0][0]) > 8
     assert protection_zone["vertical"] == {
         "mode": "flat",
         "baseReference": "station",
@@ -1185,6 +1187,45 @@ def test_get_analysis_task_result_returns_protection_zones() -> None:
         "label": "NDB Station NDB 50m minimum distance zone default"
     }
     assert protection_zone["renderGeometry"] is None
+
+
+def test_analysis_protection_zone_response_rejects_legacy_circle_geometry() -> None:
+    try:
+        AnalysisProtectionZoneResponse(
+            id="airport-1-station-101-zone-ndb_minimum_distance_50m-region-default",
+            airportId=1,
+            airportName="Airport A",
+            stationId=101,
+            stationName="NDB Station",
+            stationType="NDB",
+            ruleCode="ndb_minimum_distance_50m",
+            ruleName="ndb_minimum_distance_50m",
+            zoneCode="ndb_minimum_distance_50m",
+            zoneName="NDB 50m minimum distance zone",
+            regionCode="default",
+            regionName="default",
+            geometry={
+                "shapeType": "circle",
+                "center": {
+                    "longitude": 104.123456,
+                    "latitude": 30.123456,
+                },
+                "radiusMeters": 50.0,
+            },
+            vertical={
+                "mode": "flat",
+                "baseReference": "station",
+                "baseHeightMeters": 500.0,
+            },
+            properties={
+                "label": "NDB Station NDB 50m minimum distance zone default"
+            },
+            renderGeometry=None,
+        )
+    except ValidationError as exc:
+        assert "coordinates" in str(exc)
+    else:
+        raise AssertionError("legacy circle geometry should be rejected")
 
 
 def test_get_analysis_task_result_returns_radial_band_analytic_surface_protection_zone() -> (
@@ -1245,25 +1286,166 @@ def test_get_analysis_task_result_returns_radial_band_analytic_surface_protectio
         for item in response.json()["protectionZones"]
         if item["ruleCode"] == "ndb_conical_clearance_3deg"
     )
-    assert radial_band_zone["geometry"] == {
-        "shapeType": "radial_band",
-        "center": {"longitude": 104.123456, "latitude": 30.123456},
-        "innerRadiusMeters": 50.0,
-        "outerRadiusMeters": 37040.0,
-    }
+    assert radial_band_zone["geometry"]["shapeType"] == "multipolygon"
+    assert "center" not in radial_band_zone["geometry"]
+    assert len(radial_band_zone["geometry"]["coordinates"]) == 1
+    assert len(radial_band_zone["geometry"]["coordinates"][0]) == 2
     assert radial_band_zone["vertical"] == {
         "mode": "analytic_surface",
+        "coordinateSystem": "airport_local",
         "baseReference": "station",
         "baseHeightMeters": 500.0,
-        "heightFunction": {
-            "type": "elevation_angle",
-            "elevationAngleDegrees": 3.0,
+        "surface": {
+            "type": "distance_parameterized",
+            "distanceSource": {
+                "kind": "point",
+                "point": [0.0, 0.0],
+            },
             "distanceMetric": "radial",
-            "startDistanceMeters": 50.0,
-            "endDistanceMeters": 37040.0,
+            "clampRange": {
+                "startMeters": 50.0,
+                "endMeters": 37040.0,
+            },
+            "heightModel": {
+                "type": "angle_linear_rise",
+                "angleDegrees": 3.0,
+            },
         },
     }
     assert radial_band_zone["renderGeometry"] is None
+
+
+def test_get_analysis_task_result_returns_offset_ndb_distance_source_point() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        airport_longitude = 104.123456
+        airport_latitude = 30.123456
+        station_longitude = 104.124456
+        station_latitude = 30.123456
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=airport_longitude,
+                    latitude=airport_latitude,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="NDB Station",
+                    airport_id=1,
+                    station_type="NDB",
+                    longitude=station_longitude,
+                    latitude=station_latitude,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "top_elevation": 520.0,
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    radial_band_zone = next(
+        item
+        for item in response.json()["protectionZones"]
+        if item["ruleCode"] == "ndb_conical_clearance_3deg"
+    )
+    projector = AirportLocalProjector(airport_longitude, airport_latitude)
+    station_local_point = projector.project_point(station_longitude, station_latitude)
+    distance_source_point = radial_band_zone["vertical"]["surface"]["distanceSource"][
+        "point"
+    ]
+
+    assert abs(distance_source_point[0] - station_local_point[0]) < 0.01
+    assert abs(distance_source_point[1] - station_local_point[1]) < 0.01
+    assert abs(distance_source_point[0]) > 1.0
+    assert abs(distance_source_point[1] - 0.0) < 0.01
+
+
+def test_get_analysis_task_result_centers_ndb_protection_zone_on_station_point() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=104.123456,
+                    latitude=30.123456,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="NDB Station",
+                    airport_id=1,
+                    station_type="NDB",
+                    longitude=104.124456,
+                    latitude=30.123456,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    protection_zone = next(
+        item
+        for item in response.json()["protectionZones"]
+        if item["ruleCode"] == "ndb_minimum_distance_50m"
+    )
+    first_point = protection_zone["geometry"]["coordinates"][0][0][0]
+    assert first_point[0] > 104.1248
+    assert abs(first_point[1] - 30.123456) < 0.001
 
 
 def test_get_analysis_task_result_returns_ndb_300m_rule_result_for_hill() -> None:
@@ -1667,7 +1849,7 @@ def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_st
         for item in payload["protectionZones"]
     }
     assert ("LOC", "multipolygon") in protection_zone_shapes
-    assert ("NDB", "circle") in protection_zone_shapes
+    assert ("NDB", "multipolygon") in protection_zone_shapes
 
 
 def test_build_airport_analysis_result_returns_only_internal_fields_still_in_use() -> None:
