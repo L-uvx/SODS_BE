@@ -127,21 +127,20 @@ def test_build_protection_zone_vertical_builds_radial_band_analytic_surface() ->
             "min_radius_m": 50.0,
             "max_radius_m": 37040.0,
         },
-        distance_source_point=(123.0, 456.0),
+        distance_source_point=(104.123, 30.456),
         base_height_meters=500.0,
         elevation_angle_degrees=3.0,
     )
 
     assert vertical == {
         "mode": "analytic_surface",
-        "coordinateSystem": "airport_local",
         "baseReference": "station",
         "baseHeightMeters": 500.0,
         "surface": {
             "type": "distance_parameterized",
             "distanceSource": {
                 "kind": "point",
-                "point": [123.0, 456.0],
+                "point": [104.123, 30.456],
             },
             "distanceMetric": "radial",
             "clampRange": {
@@ -151,6 +150,7 @@ def test_build_protection_zone_vertical_builds_radial_band_analytic_surface() ->
             "heightModel": {
                 "type": "angle_linear_rise",
                 "angleDegrees": 3.0,
+                "distanceOffsetMeters": 50.0,
             },
         },
     }

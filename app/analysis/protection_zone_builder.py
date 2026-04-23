@@ -119,7 +119,6 @@ def build_protection_zone_vertical(
             return None
         return {
             "mode": "analytic_surface",
-            "coordinateSystem": "airport_local",
             "baseReference": "station",
             "baseHeightMeters": float(base_height_meters),
             "surface": {
@@ -139,6 +138,7 @@ def build_protection_zone_vertical(
                 "heightModel": {
                     "type": "angle_linear_rise",
                     "angleDegrees": float(elevation_angle_degrees),
+                    "distanceOffsetMeters": float(min_radius_meters),
                 },
             },
         }

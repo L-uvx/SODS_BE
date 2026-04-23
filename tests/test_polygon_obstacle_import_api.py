@@ -1292,14 +1292,13 @@ def test_get_analysis_task_result_returns_radial_band_analytic_surface_protectio
     assert len(radial_band_zone["geometry"]["coordinates"][0]) == 2
     assert radial_band_zone["vertical"] == {
         "mode": "analytic_surface",
-        "coordinateSystem": "airport_local",
         "baseReference": "station",
         "baseHeightMeters": 500.0,
         "surface": {
             "type": "distance_parameterized",
             "distanceSource": {
                 "kind": "point",
-                "point": [0.0, 0.0],
+                "point": [104.123456, 30.123456],
             },
             "distanceMetric": "radial",
             "clampRange": {
@@ -1309,6 +1308,7 @@ def test_get_analysis_task_result_returns_radial_band_analytic_surface_protectio
             "heightModel": {
                 "type": "angle_linear_rise",
                 "angleDegrees": 3.0,
+                "distanceOffsetMeters": 50.0,
             },
         },
     }
@@ -1376,16 +1376,11 @@ def test_get_analysis_task_result_returns_offset_ndb_distance_source_point() -> 
         for item in response.json()["protectionZones"]
         if item["ruleCode"] == "ndb_conical_clearance_3deg"
     )
-    projector = AirportLocalProjector(airport_longitude, airport_latitude)
-    station_local_point = projector.project_point(station_longitude, station_latitude)
     distance_source_point = radial_band_zone["vertical"]["surface"]["distanceSource"][
         "point"
     ]
 
-    assert abs(distance_source_point[0] - station_local_point[0]) < 0.01
-    assert abs(distance_source_point[1] - station_local_point[1]) < 0.01
-    assert abs(distance_source_point[0]) > 1.0
-    assert abs(distance_source_point[1] - 0.0) < 0.01
+    assert distance_source_point == [station_longitude, station_latitude]
 
 
 def test_get_analysis_task_result_centers_ndb_protection_zone_on_station_point() -> None:

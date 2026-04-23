@@ -283,6 +283,10 @@ class AnalysisProtectionZoneClampRangeResponse(BaseModel):
 class AnalysisProtectionZoneHeightModelResponse(BaseModel):
     type: str
     angle_degrees: float = Field(alias="angleDegrees")
+    distance_offset_meters: float | None = Field(
+        alias="distanceOffsetMeters",
+        default=None,
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -321,7 +325,6 @@ class AnalysisProtectionZoneAnalyticSurfaceVerticalResponse(BaseModel):
 
 class AnalysisProtectionZoneSurfaceAnalyticVerticalResponse(BaseModel):
     mode: str
-    coordinate_system: str = Field(alias="coordinateSystem")
     base_reference: str = Field(alias="baseReference")
     base_height_meters: float = Field(alias="baseHeightMeters")
     surface: AnalysisProtectionZoneSurfaceResponse

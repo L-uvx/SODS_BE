@@ -604,7 +604,10 @@ class PolygonObstacleImportService:
             vertical = build_protection_zone_vertical(
                 shape="radial_band",
                 zone_definition=zone_definition,
-                distance_source_point=station_local_point,
+                distance_source_point=(
+                    float(station.longitude),
+                    float(station.latitude),
+                ),
                 base_height_meters=float(metrics["baseHeightMeters"]),
                 elevation_angle_degrees=float(metrics["elevationAngleDegrees"]),
             )
