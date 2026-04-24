@@ -122,3 +122,40 @@ def test_build_airport_spatial_facts_includes_global_obstacle_category() -> None
     facts = build_airport_spatial_facts(context)
 
     assert facts["obstacles"][0]["globalObstacleCategory"] == "building_general"
+
+
+def test_build_airport_spatial_facts_keeps_geometry_empty_when_only_local_geometry_exists() -> None:
+    airport = SimpleNamespace(id=1, name="Airport A", longitude=104.0, latitude=30.0)
+    local_geometry = {
+        "type": "MultiPolygon",
+        "coordinates": [
+            [
+                [
+                    [10.0, 20.0],
+                    [20.0, 20.0],
+                    [20.0, 30.0],
+                    [10.0, 30.0],
+                    [10.0, 20.0],
+                ]
+            ]
+        ],
+    }
+    obstacle = SimpleNamespace(
+        id=201,
+        name="Obstacle A",
+        obstacle_type="建筑物/构建物",
+        top_elevation=520.0,
+        raw_payload={"localGeometry": local_geometry},
+    )
+    context = SimpleNamespace(
+        airport=airport,
+        runways=[],
+        stations=[],
+        obstacles=[obstacle],
+    )
+
+    facts = build_airport_spatial_facts(context)
+
+    assert facts["obstacles"][0]["geometry"] is None
+    assert facts["obstacles"][0]["localGeometry"] == local_geometry
+    assert facts["obstacles"][0]["topElevation"] == 520.0

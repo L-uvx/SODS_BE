@@ -143,6 +143,39 @@ def build_protection_zone_vertical(
             },
         }
 
+    if shape == "sector":
+        vertical_mode = zone_definition.get("vertical_mode")
+        if vertical_mode == "flat":
+            flat_height_meters = zone_definition.get("flat_height_m")
+            if flat_height_meters is None:
+                return None
+            return {
+                "mode": "flat",
+                "baseReference": "station",
+                "baseHeightMeters": float(flat_height_meters),
+            }
+
+        min_radius_meters = zone_definition.get("min_radius_m")
+        max_radius_meters = zone_definition.get("max_radius_m")
+        if (
+            min_radius_meters is None
+            or max_radius_meters is None
+            or elevation_angle_degrees is None
+        ):
+            return None
+        return {
+            "mode": "analytic_surface",
+            "baseReference": "station",
+            "baseHeightMeters": float(base_height_meters),
+            "heightFunction": {
+                "type": "elevation_angle",
+                "elevationAngleDegrees": float(elevation_angle_degrees),
+                "distanceMetric": "radial",
+                "startDistanceMeters": float(min_radius_meters),
+                "endDistanceMeters": float(max_radius_meters),
+            },
+        }
+
     if shape in {"circle", "multipolygon"}:
         return {
             "mode": "flat",

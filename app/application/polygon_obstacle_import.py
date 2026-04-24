@@ -612,18 +612,12 @@ class PolygonObstacleImportService:
                 elevation_angle_degrees=float(metrics["elevationAngleDegrees"]),
             )
         elif shape == "sector":
-            vertical = {
-                "mode": "analytic_surface",
-                "baseReference": "station",
-                "baseHeightMeters": float(metrics["baseHeightMeters"]),
-                "heightFunction": {
-                    "type": "elevation_angle",
-                    "elevationAngleDegrees": float(metrics["elevationAngleDegrees"]),
-                    "distanceMetric": "radial",
-                    "startDistanceMeters": float(zone_definition["min_radius_m"]),
-                    "endDistanceMeters": float(zone_definition["max_radius_m"]),
-                },
-            }
+            vertical = build_protection_zone_vertical(
+                shape=shape,
+                zone_definition=zone_definition,
+                base_height_meters=float(metrics["baseHeightMeters"]),
+                elevation_angle_degrees=float(metrics["elevationAngleDegrees"]),
+            )
         elif shape in {"circle", "multipolygon", "radial_band"}:
             vertical = build_protection_zone_vertical(
                 shape=shape,

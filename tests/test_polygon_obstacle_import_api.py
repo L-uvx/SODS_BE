@@ -1265,11 +1265,29 @@ def test_get_analysis_task_result_returns_radial_band_analytic_surface_protectio
             ).scalar_one()
             session.execute(
                 text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation WHERE id = :obstacle_id"
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
                 ),
                 {
                     "obstacle_type": "建筑物/构建物",
                     "top_elevation": 520.0,
+                    "raw_payload": json.dumps(
+                        {
+                            "localGeometry": {
+                                "type": "MultiPolygon",
+                                "coordinates": [
+                                    [
+                                        [
+                                            [-20.0, 1000.0],
+                                            [20.0, 1000.0],
+                                            [20.0, 1040.0],
+                                            [-20.0, 1040.0],
+                                            [-20.0, 1000.0],
+                                        ]
+                                    ]
+                                ],
+                            }
+                        }
+                    ),
                     "obstacle_id": obstacle,
                 },
             )
@@ -1355,11 +1373,29 @@ def test_get_analysis_task_result_returns_offset_ndb_distance_source_point() -> 
             ).scalar_one()
             session.execute(
                 text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation WHERE id = :obstacle_id"
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
                 ),
                 {
                     "obstacle_type": "建筑物/构建物",
                     "top_elevation": 520.0,
+                    "raw_payload": json.dumps(
+                        {
+                            "localGeometry": {
+                                "type": "MultiPolygon",
+                                "coordinates": [
+                                    [
+                                        [
+                                            [-20.0, 1000.0],
+                                            [20.0, 1000.0],
+                                            [20.0, 1040.0],
+                                            [-20.0, 1040.0],
+                                            [-20.0, 1000.0],
+                                        ]
+                                    ]
+                                ],
+                            }
+                        }
+                    ),
                     "obstacle_id": obstacle,
                 },
             )
@@ -1605,11 +1641,29 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_conical_ru
             ).scalar_one()
             session.execute(
                 text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation WHERE id = :obstacle_id"
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
                 ),
                 {
                     "obstacle_type": "建筑物/构建物",
                     "top_elevation": 520.0,
+                    "raw_payload": json.dumps(
+                        {
+                            "localGeometry": {
+                                "type": "MultiPolygon",
+                                "coordinates": [
+                                    [
+                                        [
+                                            [-20.0, 1000.0],
+                                            [20.0, 1000.0],
+                                            [20.0, 1040.0],
+                                            [-20.0, 1040.0],
+                                            [-20.0, 1000.0],
+                                        ]
+                                    ]
+                                ],
+                            }
+                        }
+                    ),
                     "obstacle_id": obstacle,
                 },
             )
@@ -1738,6 +1792,127 @@ def test_get_analysis_task_result_returns_loc_site_protection_zone_as_multipolyg
     assert protection_zone["renderGeometry"] is None
 
 
+def test_get_analysis_task_result_returns_loc_forward_sector_zone() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Runway(
+                    id=201,
+                    airport_id=1,
+                    run_number="18",
+                    name="Runway 18/36",
+                    longitude=103.975864,
+                    latitude=30.507381,
+                    direction=180.0,
+                    length=600.0,
+                    width=45.0,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="LOC Station",
+                    airport_id=1,
+                    station_type="LOC",
+                    runway_no="18",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "top_elevation": 520.0,
+                    "raw_payload": json.dumps(
+                        {
+                            "localGeometry": {
+                                "type": "MultiPolygon",
+                                "coordinates": [
+                                    [
+                                        [
+                                            [-20.0, 1000.0],
+                                            [20.0, 1000.0],
+                                            [20.0, 1040.0],
+                                            [-20.0, 1040.0],
+                                            [-20.0, 1000.0],
+                                        ]
+                                    ]
+                                ],
+                            }
+                        }
+                    ),
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    payload = response.json()
+    loc_rule = next(
+        item
+        for item in payload["ruleResults"]
+        if item["ruleName"] == "loc_forward_sector_3000m_15m"
+    )
+    assert loc_rule["stationType"] == "LOC"
+    assert loc_rule["zoneCode"] == "loc_forward_sector_3000m_15m"
+    assert loc_rule["standards"] == {
+        "gb": {
+            "code": "GB_ILSLOC_前向正负10°，3000米区域",
+            "text": "在航向信标天线中心前向±10°、距离航向信标天线3km的区域内，不应有高于15m的建筑物、大型金属反射物和高压输电线存在。",
+            "isCompliant": False,
+        },
+        "mh": {
+            "code": "MH_ILSLOC_前向正负10°，3000米区域",
+            "text": "在航向信标天线中心前向±10°、距离航向信标天线3000m的区域内，不应有高于15m的建筑物、大型金属反射物和高压输电线。",
+            "isCompliant": False,
+        },
+    }
+
+    protection_zone = next(
+        item
+        for item in payload["protectionZones"]
+        if item["ruleCode"] == "loc_forward_sector_3000m_15m"
+    )
+    assert protection_zone["stationType"] == "LOC"
+    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
+    assert len(protection_zone["geometry"]["coordinates"]) == 1
+    assert protection_zone["vertical"] == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 515.0,
+    }
+    assert protection_zone["renderGeometry"] is None
+
+
 def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_station_types() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)
@@ -1822,6 +1997,7 @@ def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_st
     assert ("NDB", "ndb_minimum_distance_50m") in rule_names_by_station_type
     assert ("NDB", "ndb_conical_clearance_3deg") in rule_names_by_station_type
     assert ("LOC", "loc_site_protection") in rule_names_by_station_type
+    assert ("LOC", "loc_forward_sector_3000m_15m") in rule_names_by_station_type
 
     loc_rule = next(
         item

@@ -1,4 +1,7 @@
 from app.analysis.rule_result import AnalysisRuleResult
+from app.analysis.rules.loc.forward_sector_3000m_15m import (
+    LocForwardSector3000m15mRule,
+)
 from app.analysis.rules.loc.site_protection import LocSiteProtectionRule
 
 
@@ -6,6 +9,7 @@ class LocRuleProfile:
     # 初始化 LOC 最小规则集合。
     def __init__(self) -> None:
         self._site_protection_rule = LocSiteProtectionRule()
+        self._forward_sector_rule = LocForwardSector3000m15mRule()
 
     # 执行 LOC 场地保护区规则。
     def analyze(
@@ -20,15 +24,33 @@ class LocRuleProfile:
         if runway_context is None:
             return []
 
-        return [
-            self._site_protection_rule.analyze(
-                station=station,
-                obstacle=obstacle,
-                station_point=station_point,
-                runway_context=runway_context,
+        results: list[AnalysisRuleResult] = []
+        for obstacle in obstacles:
+            results.append(
+                self._site_protection_rule.analyze(
+                    station=station,
+                    obstacle=obstacle,
+                    station_point=station_point,
+                    runway_context=runway_context,
+                )
             )
-            for obstacle in obstacles
-        ]
+            if self._is_forward_sector_applicable(obstacle=obstacle):
+                results.append(
+                    self._forward_sector_rule.analyze(
+                        station=station,
+                        obstacle=obstacle,
+                        station_point=station_point,
+                        runway_context=runway_context,
+                    )
+                )
+        return results
+
+    # 按障碍物分类筛选 LOC 前向扇区规则。
+    def _is_forward_sector_applicable(self, *, obstacle: dict[str, object]) -> bool:
+        return (
+            str(obstacle["globalObstacleCategory"])
+            in LocForwardSector3000m15mRule.SUPPORTED_CATEGORIES
+        )
 
     # 按跑道号解析 LOC 所属跑道上下文。
     def _resolve_runway_context(

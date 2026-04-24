@@ -68,7 +68,10 @@ def test_station_rule_dispatcher_dispatches_loc_and_ndb_by_station_type() -> Non
         runways=[],
     )
 
-    assert [result.rule_name for result in loc_results] == ["loc_site_protection"]
+    assert [result.rule_name for result in loc_results] == [
+        "loc_site_protection",
+        "loc_forward_sector_3000m_15m",
+    ]
     assert {result.rule_name for result in ndb_results} == {
         "ndb_minimum_distance_50m",
         "ndb_conical_clearance_3deg",

@@ -47,6 +47,10 @@ _LOC_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
         "GB_ILSLOC_场地保护区",
         "MH_ILSLOC_场地保护区",
     ),
+    "loc_forward_sector_3000m_15m": (
+        "GB_ILSLOC_前向正负10°，3000米区域",
+        "MH_ILSLOC_前向正负10°，3000米区域",
+    ),
     "loc_site_protection_cable": (
         "GB_ILSLOC_场地保护区_线缆",
         "MH_ILSLOC_场地保护区_线缆",

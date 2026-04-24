@@ -156,6 +156,50 @@ def test_build_protection_zone_vertical_builds_radial_band_analytic_surface() ->
     }
 
 
+def test_build_protection_zone_vertical_builds_sector_analytic_surface() -> None:
+    vertical = build_protection_zone_vertical(
+        shape="sector",
+        zone_definition={
+            "min_radius_m": 50.0,
+            "max_radius_m": 300.0,
+        },
+        base_height_meters=500.0,
+        elevation_angle_degrees=3.0,
+    )
+
+    assert vertical == {
+        "mode": "analytic_surface",
+        "baseReference": "station",
+        "baseHeightMeters": 500.0,
+        "heightFunction": {
+            "type": "elevation_angle",
+            "elevationAngleDegrees": 3.0,
+            "distanceMetric": "radial",
+            "startDistanceMeters": 50.0,
+            "endDistanceMeters": 300.0,
+        },
+    }
+
+
+def test_build_protection_zone_vertical_builds_sector_flat_height_limit() -> None:
+    vertical = build_protection_zone_vertical(
+        shape="sector",
+        zone_definition={
+            "min_radius_m": 0.0,
+            "max_radius_m": 3000.0,
+            "vertical_mode": "flat",
+            "flat_height_m": 515.0,
+        },
+        base_height_meters=500.0,
+    )
+
+    assert vertical == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 515.0,
+    }
+
+
 def test_build_protection_zone_geometry_builds_sector_as_multipolygon_with_hole() -> None:
     projector = AirportLocalProjector(
         reference_longitude=104.123456,

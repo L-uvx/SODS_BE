@@ -3,3 +3,9 @@ LOC_SITE_PROTECTION = {
     "rectangle_width_m": 120.0,
     "minimum_rectangle_length_m": 300.0,
 }
+
+LOC_FORWARD_SECTOR_3000M_15M = {
+    "radius_m": 3000.0,
+    "half_angle_degrees": 10.0,
+    "height_limit_offset_m": 15.0,
+}

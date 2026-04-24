@@ -65,3 +65,7 @@ def test_standard_mappings_are_registered_by_station_type() -> None:
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_site_protection"][0]
         == "GB_ILSLOC_场地保护区"
     )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_forward_sector_3000m_15m"][0]
+        == "GB_ILSLOC_前向正负10°，3000米区域"
+    )
