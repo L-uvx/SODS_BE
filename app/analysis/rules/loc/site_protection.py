@@ -128,7 +128,7 @@ class LocSiteProtectionRule(ObstacleRule):
         )
         return unary_union([circle, rectangle]), rectangle_length_meters
 
-    # 解析矩形延伸方向与长度。
+    # 解析朝向跑道的矩形延伸方向与长度。
     def _resolve_axis(
         self,
         *,
@@ -136,43 +136,30 @@ class LocSiteProtectionRule(ObstacleRule):
         runway_context: dict[str, object],
     ) -> tuple[float, tuple[float, float], tuple[float, float]]:
         center_x, center_y = runway_context["localCenterPoint"]
-        direction_degrees = float(runway_context["directionDegrees"])
+        original_direction_degrees = float(runway_context["directionDegrees"])
+        direction_degrees = (original_direction_degrees + 180.0) % 360.0
         runway_length_meters = float(runway_context["lengthMeters"])
         radians = math.radians(direction_degrees)
-        forward_unit = (math.sin(radians), math.cos(radians))
-        reverse_unit = (-forward_unit[0], -forward_unit[1])
-        to_center = (center_x - station_point[0], center_y - station_point[1])
-        axis_unit = (
-            forward_unit
-            if forward_unit[0] * to_center[0] + forward_unit[1] * to_center[1] >= 0.0
-            else reverse_unit
+        axis_unit = (math.sin(radians), math.cos(radians))
+        original_radians = math.radians(original_direction_degrees)
+        original_axis_unit = (math.sin(original_radians), math.cos(original_radians))
+        original_direction_end_point = (
+            center_x + original_axis_unit[0] * (runway_length_meters / 2.0),
+            center_y + original_axis_unit[1] * (runway_length_meters / 2.0),
         )
-        endpoints = [
-            (
-                center_x + forward_unit[0] * (runway_length_meters / 2.0),
-                center_y + forward_unit[1] * (runway_length_meters / 2.0),
-            ),
-            (
-                center_x + reverse_unit[0] * (runway_length_meters / 2.0),
-                center_y + reverse_unit[1] * (runway_length_meters / 2.0),
-            ),
-        ]
-        nearest_distance = min(
-            max(
-                0.0,
-                (endpoint[0] - station_point[0]) * axis_unit[0]
-                + (endpoint[1] - station_point[1]) * axis_unit[1],
-            )
-            for endpoint in endpoints
+        projected_distance = max(
+            0.0,
+            (original_direction_end_point[0] - station_point[0]) * axis_unit[0]
+            + (original_direction_end_point[1] - station_point[1]) * axis_unit[1],
         )
         rectangle_length_meters = max(
             float(LOC_SITE_PROTECTION["minimum_rectangle_length_m"]),
-            nearest_distance,
+            projected_distance,
         )
         normal_unit = (-axis_unit[1], axis_unit[0])
         return rectangle_length_meters, axis_unit, normal_unit
 
-    # 构建沿跑道方向延伸的矩形。
+    # 构建沿保护区轴向延伸的矩形。
     def _build_rectangle(
         self,
         *,

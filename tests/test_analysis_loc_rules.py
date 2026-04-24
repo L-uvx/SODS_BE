@@ -24,7 +24,7 @@ def test_loc_site_protection_rule_rejects_general_obstacle_entering_zone() -> No
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (0.0, 0.0),
+        "localCenterPoint": (0.0, 400.0),
         "directionDegrees": 0.0,
         "lengthMeters": 400.0,
         "widthMeters": 45.0,
@@ -79,9 +79,9 @@ def test_loc_site_protection_rule_allows_cable_below_station_altitude() -> None:
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (150.0, 0.0),
+        "localCenterPoint": (-250.0, 0.0),
         "directionDegrees": 90.0,
-        "lengthMeters": 400.0,
+        "lengthMeters": 200.0,
         "widthMeters": 45.0,
     }
     obstacle = {
@@ -95,11 +95,11 @@ def test_loc_site_protection_rule_allows_cable_below_station_altitude() -> None:
             "coordinates": [
                 [
                     [
-                        [250.0, -5.0],
-                        [260.0, -5.0],
-                        [260.0, 5.0],
-                        [250.0, 5.0],
-                        [250.0, -5.0],
+                        [-260.0, -5.0],
+                        [-250.0, -5.0],
+                        [-250.0, 5.0],
+                        [-260.0, 5.0],
+                        [-260.0, -5.0],
                     ]
                 ]
             ],
@@ -120,7 +120,7 @@ def test_loc_site_protection_rule_allows_cable_below_station_altitude() -> None:
     assert result.is_compliant is True
 
 
-def test_loc_site_protection_uses_nearest_runway_endpoint_for_rectangle_length() -> None:
+def test_loc_site_protection_uses_runway_direction_end_for_rectangle_length() -> None:
     station = type(
         "Station",
         (),
@@ -134,7 +134,7 @@ def test_loc_site_protection_uses_nearest_runway_endpoint_for_rectangle_length()
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (600.0, 0.0),
+        "localCenterPoint": (-600.0, 0.0),
         "directionDegrees": 90.0,
         "lengthMeters": 400.0,
         "widthMeters": 45.0,
@@ -150,11 +150,170 @@ def test_loc_site_protection_uses_nearest_runway_endpoint_for_rectangle_length()
             "coordinates": [
                 [
                     [
-                        [430.0, -10.0],
-                        [440.0, -10.0],
-                        [440.0, 10.0],
-                        [430.0, 10.0],
-                        [430.0, -10.0],
+                        [-390.0, -10.0],
+                        [-380.0, -10.0],
+                        [-380.0, 10.0],
+                        [-390.0, 10.0],
+                        [-390.0, -10.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = LocSiteProtectionRule().analyze(
+        station=station,
+        obstacle=obstacle,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    )
+
+    assert result.metrics["rectangleLengthMeters"] == 400.0
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.is_compliant is False
+
+
+def test_loc_site_protection_uses_runway_end_in_direction_for_rectangle_length() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (-600.0, 0.0),
+        "directionDegrees": 90.0,
+        "lengthMeters": 400.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 31,
+        "name": "Obstacle Runway End",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [-390.0, -10.0],
+                        [-380.0, -10.0],
+                        [-380.0, 10.0],
+                        [-390.0, 10.0],
+                        [-390.0, -10.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = LocSiteProtectionRule().analyze(
+        station=station,
+        obstacle=obstacle,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    )
+
+    assert result.metrics["rectangleLengthMeters"] == 400.0
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.is_compliant is False
+
+
+def test_loc_site_protection_uses_reverse_runway_direction_for_rectangle_axis() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 400.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 32,
+        "name": "Obstacle Reverse Axis",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [-10.0, -390.0],
+                        [10.0, -390.0],
+                        [10.0, -380.0],
+                        [-10.0, -380.0],
+                        [-10.0, -390.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = LocSiteProtectionRule().analyze(
+        station=station,
+        obstacle=obstacle,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    )
+
+    assert result.metrics["rectangleLengthMeters"] == 400.0
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.is_compliant is False
+
+
+def test_loc_site_protection_uses_runway_direction_end_distance_after_reversing_axis() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (-600.0, 0.0),
+        "directionDegrees": 90.0,
+        "lengthMeters": 400.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 33,
+        "name": "Obstacle Direction End Distance",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [-790.0, -10.0],
+                        [-780.0, -10.0],
+                        [-780.0, 10.0],
+                        [-790.0, 10.0],
+                        [-790.0, -10.0],
                     ]
                 ]
             ],
@@ -187,7 +346,7 @@ def test_loc_site_protection_uses_config_defined_defaults() -> None:
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (0.0, 150.0),
+        "localCenterPoint": (0.0, 400.0),
         "directionDegrees": 180.0,
         "lengthMeters": 400.0,
         "widthMeters": 45.0,
@@ -257,7 +416,7 @@ def test_loc_site_protection_rule_allows_explicit_circle_step_override() -> None
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (0.0, 0.0),
+        "localCenterPoint": (0.0, -400.0),
         "directionDegrees": 0.0,
         "lengthMeters": 400.0,
         "widthMeters": 45.0,
@@ -323,7 +482,7 @@ def test_loc_forward_sector_rule_rejects_applicable_obstacle_above_height_limit(
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (0.0, 0.0),
+        "localCenterPoint": (0.0, -600.0),
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
@@ -379,7 +538,7 @@ def test_loc_forward_sector_rule_allows_applicable_obstacle_at_height_limit() ->
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (0.0, 0.0),
+        "localCenterPoint": (0.0, -600.0),
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
@@ -432,7 +591,7 @@ def test_loc_profile_skips_forward_sector_rule_for_non_applicable_obstacle() -> 
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (0.0, 0.0),
+        "localCenterPoint": (0.0, -600.0),
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
@@ -483,7 +642,7 @@ def test_loc_forward_sector_rule_uses_config_defined_defaults() -> None:
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (0.0, 0.0),
+        "localCenterPoint": (0.0, -600.0),
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
@@ -543,7 +702,7 @@ def test_loc_forward_sector_rule_respects_sector_angle_boundary() -> None:
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (0.0, 0.0),
+        "localCenterPoint": (0.0, -600.0),
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
@@ -624,7 +783,7 @@ def test_loc_forward_sector_rule_uses_reverse_runway_direction() -> None:
     runway = {
         "runwayId": 201,
         "runNumber": "18",
-        "localCenterPoint": (0.0, 0.0),
+        "localCenterPoint": (0.0, 600.0),
         "directionDegrees": 180.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
