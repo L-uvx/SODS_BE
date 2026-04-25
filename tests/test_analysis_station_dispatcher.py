@@ -55,24 +55,60 @@ def test_station_rule_dispatcher_dispatches_loc_and_ndb_by_station_type() -> Non
         "widthMeters": 45.0,
     }
 
-    loc_results = dispatcher.analyze_station(
+    loc_payload = dispatcher.analyze_station(
         station=loc_station,
         obstacles=[obstacle],
         station_point=(0.0, 0.0),
         runways=[runway_context],
     )
-    ndb_results = dispatcher.analyze_station(
+    ndb_payload = dispatcher.analyze_station(
         station=ndb_station,
         obstacles=[obstacle],
         station_point=(0.0, 0.0),
         runways=[],
     )
 
-    assert [result.rule_name for result in loc_results] == [
+    assert [result.rule_name for result in loc_payload.rule_results] == [
         "loc_site_protection",
         "loc_forward_sector_3000m_15m",
     ]
-    assert {result.rule_name for result in ndb_results} == {
+    assert len(loc_payload.protection_zones) == 2
+    assert {zone.rule_code for zone in loc_payload.protection_zones} == {
+        "loc_site_protection",
+        "loc_forward_sector_3000m_15m",
+    }
+    assert {result.rule_name for result in ndb_payload.rule_results} == {
         "ndb_minimum_distance_50m",
         "ndb_conical_clearance_3deg",
     }
+    assert {zone.rule_code for zone in ndb_payload.protection_zones} == {
+        "ndb_minimum_distance_50m",
+        "ndb_minimum_distance_150m",
+        "ndb_minimum_distance_300m",
+        "ndb_minimum_distance_500m",
+        "ndb_conical_clearance_3deg",
+    }
+
+
+def test_station_rule_dispatcher_skips_unsupported_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 999,
+            "name": "Unknown Station",
+            "station_type": "nav",
+            "altitude": 500.0,
+        },
+    )()
+
+    payload = dispatcher.analyze_station(
+        station=station,
+        obstacles=[],
+        station_point=(0.0, 0.0),
+        runways=[],
+    )
+
+    assert payload.rule_results == []
+    assert payload.protection_zones == []

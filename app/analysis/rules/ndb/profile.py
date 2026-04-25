@@ -1,9 +1,18 @@
+from dataclasses import dataclass
+
+from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.ndb.conical_clearance import NdbConicalClearance3DegRule
 from app.analysis.rules.ndb.minimum_distance_150m import NdbMinimumDistance150mRule
 from app.analysis.rules.ndb.minimum_distance_300m import NdbMinimumDistance300mRule
 from app.analysis.rules.ndb.minimum_distance_500m import NdbMinimumDistance500mRule
 from app.analysis.rules.ndb.minimum_distance_50m import NdbMinimumDistance50mRule
+
+
+@dataclass(slots=True)
+class NdbStationAnalysisPayload:
+    rule_results: list[AnalysisRuleResult]
+    protection_zones: list[ProtectionZoneSpec]
 
 
 class NdbRuleProfile:
@@ -26,6 +35,10 @@ class NdbRuleProfile:
         }
         self._conical_rule = NdbConicalClearance3DegRule()
 
+    # 提取规则稳定标识，兼容测试替身对象。
+    def _resolve_rule_code(self, rule: object) -> str:
+        return str(getattr(rule, "rule_code", getattr(rule, "rule_name")))
+
     # 按障碍物分类执行 NDB 规则集合。
     def analyze(
         self,
@@ -33,29 +46,39 @@ class NdbRuleProfile:
         station: object,
         obstacles: list[dict[str, object]],
         station_point: tuple[float, float],
-        runways: list[dict[str, object]],
-    ) -> list[AnalysisRuleResult]:
-        del runways
+    ) -> NdbStationAnalysisPayload:
         results: list[AnalysisRuleResult] = []
+        station_altitude = float(station.altitude) if station.altitude is not None else None
+        bound_rules_by_name: dict[str, object] = {}
+        bound_rules_by_category: dict[str, object] = {}
+        for category, rule in self._rules.items():
+            rule_code = self._resolve_rule_code(rule)
+            bound_rule = bound_rules_by_name.get(rule_code)
+            if bound_rule is None:
+                bound_rule = rule.bind(
+                    station=station,
+                    station_point=station_point,
+                )
+                bound_rules_by_name[rule_code] = bound_rule
+            bound_rules_by_category[category] = bound_rule
+
+        bound_conical_rule = self._conical_rule.bind(
+            station=station,
+            station_point=station_point,
+            station_altitude=station_altitude,
+        )
+        protection_zones: list[ProtectionZoneSpec] = [
+            *(bound_rule.protection_zone for bound_rule in bound_rules_by_name.values()),
+            bound_conical_rule.protection_zone,
+        ]
         for obstacle in obstacles:
             category = str(obstacle["globalObstacleCategory"])
-            rule = self._rules.get(category)
-            if rule is not None:
-                results.append(
-                    rule.analyze(
-                        station=station,
-                        obstacle=obstacle,
-                        station_point=station_point,
-                    )
-                )
-            results.append(
-                self._conical_rule.analyze(
-                    station=station,
-                    obstacle=obstacle,
-                    station_point=station_point,
-                    station_altitude=(
-                        float(station.altitude) if station.altitude is not None else None
-                    ),
-                )
-            )
-        return results
+            bound_rule = bound_rules_by_category.get(category)
+            if bound_rule is not None:
+                results.append(bound_rule.analyze(obstacle))
+
+            results.append(bound_conical_rule.analyze(obstacle))
+        return NdbStationAnalysisPayload(
+            rule_results=results,
+            protection_zones=protection_zones,
+        )

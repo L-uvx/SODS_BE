@@ -5,10 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis.context_builder import build_airport_analysis_context
 from app.analysis.local_coordinate import AirportLocalProjector
-from app.analysis.protection_zone_builder import (
-    build_protection_zone_geometry,
-    build_protection_zone_vertical,
-)
+from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.spatial_facts import build_airport_spatial_facts
 from app.analysis.station_dispatcher import StationAnalysisDispatcher
 from app.analysis.standards import build_rule_standards
@@ -334,12 +331,22 @@ class PolygonObstacleImportService:
                 self._build_airport_analysis_result(context) for context in contexts
             ]
             protection_zones = [
-                protection_zone
-                for context, airport_fact in zip(contexts, airport_facts, strict=False)
-                for protection_zone in self._build_airport_protection_zones(
-                    context=context,
-                    airport_facts=airport_fact,
+                self._build_protection_zone_payload(
+                    airport_id=context.airport.id,
+                    airport_name=context.airport.name,
+                    projector=AirportLocalProjector(
+                        float(context.airport.longitude),
+                        float(context.airport.latitude),
+                    ),
+                    station_altitude_by_id={
+                        station.id: float(station.altitude or 0.0)
+                        for station in context.stations
+                    },
+                    station_name_by_id={station.id: station.name for station in context.stations},
+                    protection_zone=protection_zone,
                 )
+                for context, airport_fact in zip(contexts, airport_facts, strict=False)
+                for protection_zone in airport_fact.get("protectionZones", [])
             ]
             obstacle_count = len(
                 self._repository.list_obstacles_by_batch_id(
@@ -353,7 +360,7 @@ class PolygonObstacleImportService:
                     "obstacleCount": obstacle_count,
                     "summary": "已完成局部坐标系与最小空间事实计算。",
                     "ruleResults": [
-                        self._build_rule_result_payload(rule_result)
+                        self._build_public_rule_result_payload(rule_result)
                         for airport_fact in airport_facts
                         for rule_result in airport_fact.get("ruleResults", [])
                     ],
@@ -376,6 +383,7 @@ class PolygonObstacleImportService:
             runways=context.runways,
         )
         rule_results: list[dict[str, object]] = []
+        protection_zones: list[ProtectionZoneSpec] = []
 
         for station in context.stations:
             if station.longitude is None or station.latitude is None:
@@ -393,15 +401,17 @@ class PolygonObstacleImportService:
             )
             rule_results.extend(
                 [
-                    self._build_internal_rule_result_payload(
+                    self._build_rule_result_payload(
                         result=result,
                         station_name=station.name,
                     )
-                    for result in station_results
+                    for result in station_results.rule_results
                 ]
             )
+            protection_zones.extend(station_results.protection_zones)
 
         airport_facts["ruleResults"] = rule_results
+        airport_facts["protectionZones"] = protection_zones
         return airport_facts
 
     # 构建机场下全部 LOC 规则所需的跑道上下文。
@@ -437,7 +447,7 @@ class PolygonObstacleImportService:
         return runway_contexts
 
     # 将规则结果序列化为 analysis API 输出项。
-    def _build_internal_rule_result_payload(
+    def _build_rule_result_payload(
         self,
         *,
         result: object,
@@ -445,12 +455,7 @@ class PolygonObstacleImportService:
     ) -> dict[str, object]:
         standards = build_rule_standards(
             station_type=result.station_type,
-            rule_name=(
-                "loc_site_protection_cable"
-                if result.station_type == "LOC"
-                and result.global_obstacle_category == "power_or_communication_cable"
-                else result.rule_name
-            ),
+            rule_name=str(result.standards_rule_code or result.rule_code),
             region_code=result.region_code,
         )
         return {
@@ -461,16 +466,17 @@ class PolygonObstacleImportService:
             "obstacleName": result.obstacle_name,
             "rawObstacleType": result.raw_obstacle_type,
             "globalObstacleCategory": result.global_obstacle_category,
+            "ruleCode": result.rule_code,
             "ruleName": result.rule_name,
             "zoneCode": result.zone_code,
             "zoneName": result.zone_name,
             "regionCode": result.region_code,
             "regionName": result.region_name,
-            "zoneDefinition": result.zone_definition,
             "isApplicable": result.is_applicable,
             "isCompliant": result.is_compliant,
             "message": result.message,
             "metrics": result.metrics,
+            "standardsRuleCode": result.standards_rule_code,
             "standards": {
                 "gb": (
                     {
@@ -494,146 +500,151 @@ class PolygonObstacleImportService:
         }
 
     # 将内部规则结果裁剪为对外 analysis API 输出项。
-    def _build_rule_result_payload(self, rule_result: dict[str, object]) -> dict[str, object]:
+    def _build_public_rule_result_payload(
+        self, rule_result: dict[str, object]
+    ) -> dict[str, object]:
         return {
             key: value
             for key, value in rule_result.items()
-            if key != "zoneDefinition"
+            if key != "standardsRuleCode"
         }
 
-    # 汇总机场下各台站的保护区要素。
-    def _build_airport_protection_zones(
+    # 将保护区规格转换为对外 analysis API 输出项。
+    def _build_protection_zone_payload(
         self,
         *,
-        context: object,
-        airport_facts: dict[str, object],
-    ) -> list[dict[str, object]]:
-        airport = context.airport
-        projector = AirportLocalProjector(
-            float(airport.longitude),
-            float(airport.latitude),
-        )
-        stations_by_id = {station.id: station for station in context.stations}
-        protection_zones: list[dict[str, object]] = []
-        seen_keys: set[tuple[object, ...]] = set()
-
-        for rule_result in airport_facts.get("ruleResults", []):
-            rule_code = str(rule_result["ruleName"])
-            key = (
-                airport.id,
-                rule_result["stationId"],
-                rule_code,
-                rule_result["zoneCode"],
-                rule_result["regionCode"],
-            )
-            if key in seen_keys:
-                continue
-            seen_keys.add(key)
-
-            station = stations_by_id.get(rule_result["stationId"])
-            if station is None or station.longitude is None or station.latitude is None:
-                continue
-
-            zone_definition = rule_result["zoneDefinition"]
-            zone_feature = self._build_protection_zone_feature(
-                airport=airport,
-                projector=projector,
-                station=station,
-                rule_code=rule_code,
-                rule_result=rule_result,
-                zone_definition=zone_definition,
-            )
-            if zone_feature is None:
-                continue
-
-            protection_zones.append(zone_feature)
-
-        return protection_zones
-
-    # 将规则结果转换为保护区响应结构。
-    def _build_protection_zone_feature(
-        self,
-        *,
-        airport: object,
+        airport_id: int,
+        airport_name: str,
         projector: AirportLocalProjector,
-        station: object,
-        rule_code: str,
-        rule_result: dict[str, object],
-        zone_definition: dict[str, object],
-    ) -> dict[str, object] | None:
-        base_feature = {
+        station_altitude_by_id: dict[int, float],
+        station_name_by_id: dict[int, str],
+        protection_zone: ProtectionZoneSpec,
+    ) -> dict[str, object]:
+        station_name = station_name_by_id.get(
+            protection_zone.station_id,
+            f"station-{protection_zone.station_id}",
+        )
+        return {
             "id": (
-                f"airport-{airport.id}-station-{station.id}-"
-                f"zone-{rule_result['zoneCode']}-region-{rule_result['regionCode']}"
+                f"airport-{airport_id}-station-{protection_zone.station_id}-"
+                f"zone-{protection_zone.zone_code}-region-{protection_zone.region_code}"
             ),
-            "airportId": airport.id,
-            "airportName": airport.name,
-            "stationId": station.id,
-            "stationName": station.name,
-            "stationType": station.station_type,
-            "ruleCode": rule_code,
-            "ruleName": rule_result["ruleName"],
-            "zoneCode": rule_result["zoneCode"],
-            "zoneName": rule_result["zoneName"],
-            "regionCode": rule_result["regionCode"],
-            "regionName": rule_result["regionName"],
+            "airportId": airport_id,
+            "airportName": airport_name,
+            "stationId": protection_zone.station_id,
+            "stationName": station_name,
+            "stationType": protection_zone.station_type,
+            "ruleCode": protection_zone.rule_code,
+            "ruleName": protection_zone.rule_name,
+            "zoneCode": protection_zone.zone_code,
+            "zoneName": protection_zone.zone_name,
+            "regionCode": protection_zone.region_code,
+            "regionName": protection_zone.region_name,
             "properties": {
                 "label": (
-                    f"{station.name} {rule_result['zoneName']} "
-                    f"{rule_result['regionName']}"
+                    f"{station_name} {protection_zone.zone_name} "
+                    f"{protection_zone.region_name}"
                 )
             },
-            "renderGeometry": None,
+            "geometry": self._build_public_protection_zone_geometry_payload(
+                projector=projector,
+                geometry_definition=protection_zone.geometry_definition,
+            ),
+            "vertical": self._build_public_protection_zone_vertical_payload(
+                vertical_definition=protection_zone.vertical_definition,
+                station_altitude_meters=station_altitude_by_id.get(
+                    protection_zone.station_id,
+                    0.0,
+                ),
+            ),
+            "renderGeometry": protection_zone.render_geometry,
         }
 
-        station_local_point = projector.project_point(
-            float(station.longitude),
-            float(station.latitude),
-        )
-        geometry = build_protection_zone_geometry(
-            projector=projector,
-            center_point=station_local_point,
-            zone_definition=zone_definition,
-        )
-        if geometry is None:
-            return None
-
-        metrics = rule_result["metrics"]
-        shape = zone_definition.get("shape")
-        if rule_code == "ndb_conical_clearance_3deg" and shape == "radial_band":
-            vertical = build_protection_zone_vertical(
-                shape="radial_band",
-                zone_definition=zone_definition,
-                distance_source_point=(
-                    float(station.longitude),
-                    float(station.latitude),
-                ),
-                base_height_meters=float(metrics["baseHeightMeters"]),
-                elevation_angle_degrees=float(metrics["elevationAngleDegrees"]),
-            )
-        elif shape == "sector":
-            vertical = build_protection_zone_vertical(
-                shape=shape,
-                zone_definition=zone_definition,
-                base_height_meters=float(metrics["baseHeightMeters"]),
-                elevation_angle_degrees=float(metrics["elevationAngleDegrees"]),
-            )
-        elif shape in {"circle", "multipolygon", "radial_band"}:
-            vertical = build_protection_zone_vertical(
-                shape=shape,
-                zone_definition=zone_definition,
-                base_height_meters=float(station.altitude or 0.0),
-            )
-        else:
-            return None
-
-        if vertical is None:
-            return None
+    # 将规则侧局部 multipolygon 几何反投影为对外 WGS84 坐标。
+    def _build_public_protection_zone_geometry_payload(
+        self,
+        *,
+        projector: AirportLocalProjector,
+        geometry_definition: dict[str, object],
+    ) -> dict[str, object]:
+        if geometry_definition.get("shapeType") != "multipolygon":
+            raise ValueError("protection zone geometry must be multipolygon")
+        coordinates = geometry_definition.get("coordinates")
+        if not isinstance(coordinates, list):
+            raise ValueError("protection zone geometry coordinates must be a list")
 
         return {
-            **base_feature,
-            "geometry": geometry,
-            "vertical": vertical,
+            "shapeType": "multipolygon",
+            "coordinates": [
+                [
+                    [
+                        [float(longitude), float(latitude)]
+                        for longitude, latitude in (
+                            projector.unproject_point(float(point[0]), float(point[1]))
+                            for point in ring
+                        )
+                    ]
+                    for ring in polygon
+                ]
+                for polygon in coordinates
+            ],
+        }
+
+    # 将内部保护区垂向结构转换为对外 API 稳定结构。
+    def _build_public_protection_zone_vertical_payload(
+        self,
+        *,
+        vertical_definition: dict[str, object],
+        station_altitude_meters: float,
+    ) -> dict[str, object]:
+        if vertical_definition.get("mode") != "analytic_surface":
+            payload = vertical_definition.copy()
+            if payload.get("mode") != "flat":
+                raise ValueError("unsupported protection zone vertical mode")
+            payload["baseHeightMeters"] = float(
+                payload.get("baseHeightMeters")
+                if payload.get("baseHeightMeters") not in (None, 0, 0.0)
+                else station_altitude_meters
+            )
+            return payload
+
+        surface = vertical_definition.get("surface")
+        if not isinstance(surface, dict):
+            raise ValueError("analytic surface definition must contain surface")
+
+        distance_source = surface.get("distanceSource")
+        clamp_range = surface.get("clampRange")
+        height_model = surface.get("heightModel")
+        if (
+            not isinstance(distance_source, dict)
+            or not isinstance(clamp_range, dict)
+            or not isinstance(height_model, dict)
+        ):
+            raise ValueError("analytic surface definition is incomplete")
+
+        return {
+            "mode": "analytic_surface",
+            "baseReference": vertical_definition.get("baseReference", "station"),
+            "baseHeightMeters": float(vertical_definition.get("baseHeightMeters", 0.0)),
+            "surface": {
+                "type": "distance_parameterized",
+                "distanceSource": {
+                    "kind": distance_source.get("kind", "point"),
+                    "point": distance_source.get("point"),
+                },
+                "distanceMetric": "radial",
+                "clampRange": {
+                    "startMeters": float(clamp_range.get("startMeters", 0.0)),
+                    "endMeters": float(clamp_range.get("endMeters", 0.0)),
+                },
+                "heightModel": {
+                    "type": "angle_linear_rise",
+                    "angleDegrees": float(height_model.get("angleDegrees", 0.0)),
+                    "distanceOffsetMeters": float(
+                        height_model.get("distanceOffsetMeters", 0.0)
+                    ),
+                },
+            },
         }
 
     # 查询分析任务的当前状态。

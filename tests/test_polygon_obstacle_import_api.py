@@ -1001,13 +1001,11 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
     ]
     assert payload["obstacleCount"] == 2
     assert payload["summary"] == "已完成局部坐标系与最小空间事实计算。"
-    assert [
-        airport_facts["airportId"]
-        for airport_facts in payload["spatialFacts"]["airports"]
-    ] == [1, 2]
+    assert payload["ruleResults"] == []
+    assert payload["protectionZones"] == []
 
 
-def test_get_analysis_task_result_returns_spatial_facts_after_worker_runs() -> None:
+def test_get_analysis_task_result_omits_spatial_facts_after_worker_runs() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)
 
@@ -1051,6 +1049,7 @@ def test_get_analysis_task_result_returns_spatial_facts_after_worker_runs() -> N
     assert payload["status"] == "succeeded"
     assert "spatialFacts" not in payload
     assert payload["ruleResults"] == []
+    assert payload["protectionZones"] == []
 
 
 def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
@@ -2094,9 +2093,15 @@ def test_build_airport_analysis_result_returns_only_internal_fields_still_in_use
 
             airport_result = service._build_airport_analysis_result(context)
 
-    assert set(airport_result.keys()) == {"airportId", "obstacles", "ruleResults"}
+    assert set(airport_result.keys()) == {
+        "airportId",
+        "obstacles",
+        "ruleResults",
+        "protectionZones",
+    }
     assert airport_result["airportId"] == 1
     assert airport_result["ruleResults"][0]["stationType"] == "LOC"
+    assert airport_result["protectionZones"][0].rule_code == "loc_site_protection"
     assert "localGeometry" in airport_result["obstacles"][0]
     assert "geometry" in airport_result["obstacles"][0]
     assert "distanceToAirportMeters" not in airport_result["obstacles"][0]
@@ -2121,8 +2126,7 @@ def test_run_analysis_task_skips_station_without_coordinates() -> None:
                         id, station_type, station_group, name, longitude, latitude,
                         altitude, station_sub_type, airport_id, created_at, updated_at
                     ) VALUES
-                    (101, 'nav', NULL, 'Station A', 104.12, 30.12, 498.2, 'ils', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-                    (102, 'nav', NULL, 'Station B', NULL, NULL, 500.0, 'ils', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    (102, 'LOC', NULL, 'Station B', NULL, NULL, 500.0, 'ils', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     """
                 )
             )
@@ -2132,10 +2136,46 @@ def test_run_analysis_task_skips_station_without_coordinates() -> None:
         _run_analysis_task(client, analysis_task_id)
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
-    airport_facts = response.json()["spatialFacts"]["airports"][0]
-    assert "stations" not in airport_facts
-    rule_results = airport_facts["ruleResults"]
-    assert all(result["stationName"] == "NDB Station" for result in rule_results)
+    payload = response.json()
+    assert "spatialFacts" not in payload
+    assert payload["ruleResults"] == []
+    assert payload["protectionZones"] == []
+
+
+def test_run_analysis_task_skips_unsupported_station_type() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=104.11,
+                    latitude=30.11,
+                )
+            )
+            session.execute(
+                text(
+                    """
+                    INSERT INTO stations (
+                        id, station_type, station_group, name, longitude, latitude,
+                        altitude, station_sub_type, airport_id, created_at, updated_at
+                    ) VALUES
+                    (103, 'Surface_Detection_Radar', NULL, 'Radar Station', 104.12, 30.12, 500.0, NULL, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """
+                )
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    payload = response.json()
+    assert payload["status"] == "succeeded"
+    assert payload["ruleResults"] == []
+    assert payload["protectionZones"] == []
 
 
 def test_run_analysis_task_fails_when_airport_has_no_coordinates() -> None:
@@ -2162,7 +2202,7 @@ def test_run_analysis_task_fails_when_airport_has_no_coordinates() -> None:
     assert response.json()["message"] == "analysis task failed"
 
 
-def test_get_analysis_task_result_returns_parallel_airport_facts_for_multiple_targets() -> (
+def test_get_analysis_task_result_keeps_selected_targets_for_multiple_targets() -> (
     None
 ):
     with _create_test_client() as client:
@@ -2191,10 +2231,10 @@ def test_get_analysis_task_result_returns_parallel_airport_facts_for_multiple_ta
         _run_analysis_task(client, analysis_task_id)
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
-    airport_ids = [
-        item["airportId"] for item in response.json()["spatialFacts"]["airports"]
+    assert response.json()["selectedTargets"] == [
+        {"id": 1, "name": "Airport A", "category": "机场"},
+        {"id": 2, "name": "Airport B", "category": "机场"},
     ]
-    assert airport_ids == [1, 2]
 
 
 def test_get_analysis_task_result_returns_empty_payload_before_completion() -> None:
@@ -2241,7 +2281,7 @@ def test_get_analysis_task_result_returns_empty_payload_before_completion() -> N
         "selectedTargets": [],
         "obstacleCount": 0,
         "summary": "",
-        "spatialFacts": None,
+        "ruleResults": [],
         "protectionZones": [],
     }
 

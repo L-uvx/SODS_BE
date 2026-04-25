@@ -1,16 +1,82 @@
 import math
+from dataclasses import dataclass
 
-from shapely.geometry import MultiPolygon, Point, Polygon, shape
+from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.rule_result import AnalysisRuleResult
-from app.analysis.rules.base import ObstacleRule
+from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
+from app.analysis.rules.geometry_helpers import ensure_multipolygon, resolve_obstacle_shape
 from app.analysis.rules.loc.config import LOC_SITE_PROTECTION
+from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
+
+
+@dataclass(slots=True)
+class BoundLocSiteProtectionRule(BoundObstacleRule):
+    station: object
+    rectangle_length_meters: float
+
+    # 执行已绑定的 LOC 场地保护区判定。
+    def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
+        obstacle_shape = resolve_obstacle_shape(obstacle)
+        entered_protection_zone = obstacle_shape.intersects(
+            self.protection_zone.local_geometry
+        )
+        base_height_meters = float(getattr(self.station, "altitude", 0.0) or 0.0)
+        top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
+        is_cable = (
+            str(obstacle["globalObstacleCategory"]) == "power_or_communication_cable"
+        )
+
+        is_compliant = True
+        message = "obstacle outside site protection zone"
+        if entered_protection_zone:
+            if is_cable:
+                is_compliant = top_elevation_meters < base_height_meters
+                message = (
+                    "cable below station base height"
+                    if is_compliant
+                    else "cable enters site protection zone above station base height"
+                )
+            else:
+                is_compliant = False
+                message = "obstacle enters site protection zone"
+
+        return AnalysisRuleResult(
+            station_id=self.protection_zone.station_id,
+            station_type=self.protection_zone.station_type,
+            obstacle_id=int(obstacle["obstacleId"]),
+            obstacle_name=str(obstacle["name"]),
+            raw_obstacle_type=obstacle["rawObstacleType"],
+            global_obstacle_category=str(obstacle["globalObstacleCategory"]),
+            rule_code=self.protection_zone.rule_code,
+            rule_name=self.protection_zone.rule_name,
+            zone_code=self.protection_zone.zone_code,
+            zone_name=self.protection_zone.zone_name,
+            region_code=self.protection_zone.region_code,
+            region_name=self.protection_zone.region_name,
+            is_applicable=True,
+            is_compliant=is_compliant,
+            message=message,
+            metrics={
+                "enteredProtectionZone": entered_protection_zone,
+                "baseHeightMeters": base_height_meters,
+                "topElevationMeters": top_elevation_meters,
+                "rectangleLengthMeters": self.rectangle_length_meters,
+            },
+            standards_rule_code=(
+                "loc_site_protection_cable"
+                if is_cable
+                else self.protection_zone.rule_code
+            ),
+        )
 
 
 class LocSiteProtectionRule(ObstacleRule):
+    rule_code = "loc_site_protection"
     rule_name = "loc_site_protection"
+    zone_code = "loc_site_protection"
     zone_name = "LOC site protection zone"
 
     def __init__(self, *, circle_step_degrees: float | None = None) -> None:
@@ -35,73 +101,38 @@ class LocSiteProtectionRule(ObstacleRule):
             )
         self._circle_step_degrees = resolved_circle_step_degrees
 
-    # 校验障碍物是否满足 LOC 场地保护区要求。
-    def analyze(
+    # 绑定单个 LOC 台站的场地保护区。
+    def bind(
         self,
         *,
         station: object,
-        obstacle: dict[str, object],
         station_point: tuple[float, float],
         runway_context: dict[str, object],
-    ) -> AnalysisRuleResult:
+    ) -> BoundLocSiteProtectionRule:
         protection_zone, rectangle_length_meters = self._build_zone_geometry(
             station_point=station_point,
             runway_context=runway_context,
         )
-        obstacle_shape = shape(obstacle.get("localGeometry") or obstacle["geometry"])
-        if not isinstance(obstacle_shape, MultiPolygon):
-            obstacle_shape = MultiPolygon([obstacle_shape])
-
-        entered_protection_zone = obstacle_shape.intersects(protection_zone)
         base_height_meters = float(getattr(station, "altitude", 0.0) or 0.0)
-        top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
-        is_cable = (
-            str(obstacle["globalObstacleCategory"]) == "power_or_communication_cable"
-        )
-
-        is_compliant = True
-        message = "obstacle outside site protection zone"
-        if entered_protection_zone:
-            if is_cable:
-                is_compliant = top_elevation_meters < base_height_meters
-                message = (
-                    "cable below station base height"
-                    if is_compliant
-                    else "cable enters site protection zone above station base height"
-                )
-            else:
-                is_compliant = False
-                message = "obstacle enters site protection zone"
-
-        return AnalysisRuleResult(
-            station_id=station.id,
-            station_type=str(station.station_type),
-            obstacle_id=int(obstacle["obstacleId"]),
-            obstacle_name=str(obstacle["name"]),
-            raw_obstacle_type=obstacle["rawObstacleType"],
-            global_obstacle_category=str(obstacle["globalObstacleCategory"]),
-            rule_name=self.rule_name,
-            zone_code=self.rule_name,
-            zone_name=self.zone_name,
-            region_code="default",
-            region_name="default",
-            zone_definition={
-                "shape": "multipolygon",
-                "circle_radius_m": LOC_SITE_PROTECTION["circle_radius_m"],
-                "rectangle_width_m": LOC_SITE_PROTECTION["rectangle_width_m"],
-                "rectangle_length_m": rectangle_length_meters,
-                "circle_step_degrees": self._circle_step_degrees,
-                "coordinates": self._serialize_multipolygon(protection_zone),
-            },
-            is_applicable=True,
-            is_compliant=is_compliant,
-            message=message,
-            metrics={
-                "enteredProtectionZone": entered_protection_zone,
-                "baseHeightMeters": base_height_meters,
-                "topElevationMeters": top_elevation_meters,
-                "rectangleLengthMeters": rectangle_length_meters,
-            },
+        return BoundLocSiteProtectionRule(
+            protection_zone=build_protection_zone_spec(
+                station_id=int(station.id),
+                station_type=str(station.station_type),
+                rule_code=self.rule_code,
+                rule_name=self.rule_name,
+                zone_code=self.zone_code,
+                zone_name=self.zone_name,
+                region_code="default",
+                region_name="default",
+                local_geometry=ensure_multipolygon(protection_zone),
+                vertical_definition={
+                    "mode": "flat",
+                    "baseReference": "station",
+                    "baseHeightMeters": base_height_meters,
+                },
+            ),
+            station=station,
+            rectangle_length_meters=rectangle_length_meters,
         )
 
     # 构建 LOC 场地保护区组合面与矩形长度。
@@ -110,7 +141,7 @@ class LocSiteProtectionRule(ObstacleRule):
         *,
         station_point: tuple[float, float],
         runway_context: dict[str, object],
-    ) -> tuple[Polygon | MultiPolygon, float]:
+    ) -> tuple[MultiPolygon, float]:
         rectangle_length_meters, axis_unit, normal_unit = self._resolve_axis(
             station_point=station_point,
             runway_context=runway_context,
@@ -126,7 +157,7 @@ class LocSiteProtectionRule(ObstacleRule):
             station_point=station_point,
             radius_meters=float(LOC_SITE_PROTECTION["circle_radius_m"]),
         )
-        return unary_union([circle, rectangle]), rectangle_length_meters
+        return ensure_multipolygon(unary_union([circle, rectangle])), rectangle_length_meters
 
     # 解析朝向跑道的矩形延伸方向与长度。
     def _resolve_axis(
@@ -208,21 +239,3 @@ class LocSiteProtectionRule(ObstacleRule):
             degrees += self._circle_step_degrees
         points.append(points[0])
         return Polygon(points)
-
-    # 将组合保护区序列化为 MultiPolygon 坐标列表。
-    def _serialize_multipolygon(
-        self, geometry: Polygon | MultiPolygon
-    ) -> list[list[list[list[float]]]]:
-        multipolygon = (
-            geometry if isinstance(geometry, MultiPolygon) else MultiPolygon([geometry])
-        )
-        return [
-            [
-                [[float(x), float(y)] for x, y in polygon.exterior.coords],
-                *[
-                    [[float(x), float(y)] for x, y in ring.coords]
-                    for ring in polygon.interiors
-                ],
-            ]
-            for polygon in multipolygon.geoms
-        ]

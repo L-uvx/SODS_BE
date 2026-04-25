@@ -1,6 +1,15 @@
+from dataclasses import dataclass
+
+from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.loc import LocRuleProfile
 from app.analysis.rules.ndb import NdbRuleProfile
+
+
+@dataclass(slots=True)
+class StationAnalysisPayload:
+    rule_results: list[AnalysisRuleResult]
+    protection_zones: list[ProtectionZoneSpec]
 
 
 class StationAnalysisDispatcher:
@@ -9,7 +18,7 @@ class StationAnalysisDispatcher:
         self._ndb_profile = NdbRuleProfile()
         self._loc_profile = LocRuleProfile()
 
-    # 按台站类型执行分析并返回规则结果集合。
+    # 按台站类型执行分析并返回规则结果与保护区集合。
     def analyze_station(
         self,
         *,
@@ -17,20 +26,27 @@ class StationAnalysisDispatcher:
         obstacles: list[dict[str, object]],
         station_point: tuple[float, float],
         runways: list[dict[str, object]],
-    ) -> list[AnalysisRuleResult]:
+    ) -> StationAnalysisPayload:
         if station.station_type == "LOC":
-            return self._loc_profile.analyze(
+            payload = self._loc_profile.analyze(
                 station=station,
                 obstacles=obstacles,
                 station_point=station_point,
                 runways=runways,
+            )
+            return StationAnalysisPayload(
+                rule_results=payload.rule_results,
+                protection_zones=payload.protection_zones,
             )
 
         if station.station_type == "NDB":
-            return self._ndb_profile.analyze(
+            payload = self._ndb_profile.analyze(
                 station=station,
                 obstacles=obstacles,
                 station_point=station_point,
-                runways=runways,
             )
-        return []
+            return StationAnalysisPayload(
+                rule_results=payload.rule_results,
+                protection_zones=payload.protection_zones,
+            )
+        return StationAnalysisPayload(rule_results=[], protection_zones=[])

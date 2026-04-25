@@ -1,8 +1,17 @@
+from dataclasses import dataclass
+
+from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.loc.forward_sector_3000m_15m import (
     LocForwardSector3000m15mRule,
 )
 from app.analysis.rules.loc.site_protection import LocSiteProtectionRule
+
+
+@dataclass(slots=True)
+class LocStationAnalysisPayload:
+    rule_results: list[AnalysisRuleResult]
+    protection_zones: list[ProtectionZoneSpec]
 
 
 class LocRuleProfile:
@@ -19,37 +28,34 @@ class LocRuleProfile:
         obstacles: list[dict[str, object]],
         station_point: tuple[float, float],
         runways: list[dict[str, object]],
-    ) -> list[AnalysisRuleResult]:
+    ) -> LocStationAnalysisPayload:
         runway_context = self._resolve_runway_context(station=station, runways=runways)
         if runway_context is None:
-            return []
+            return LocStationAnalysisPayload(rule_results=[], protection_zones=[])
+
+        site_protection_rule = self._site_protection_rule.bind(
+            station=station,
+            station_point=station_point,
+            runway_context=runway_context,
+        )
+        forward_sector_rule = self._forward_sector_rule.bind(
+            station=station,
+            station_point=station_point,
+            runway_context=runway_context,
+        )
 
         results: list[AnalysisRuleResult] = []
+        protection_zones: list[ProtectionZoneSpec] = [
+            site_protection_rule.protection_zone,
+            forward_sector_rule.protection_zone,
+        ]
         for obstacle in obstacles:
-            results.append(
-                self._site_protection_rule.analyze(
-                    station=station,
-                    obstacle=obstacle,
-                    station_point=station_point,
-                    runway_context=runway_context,
-                )
-            )
-            if self._is_forward_sector_applicable(obstacle=obstacle):
-                results.append(
-                    self._forward_sector_rule.analyze(
-                        station=station,
-                        obstacle=obstacle,
-                        station_point=station_point,
-                        runway_context=runway_context,
-                    )
-                )
-        return results
-
-    # 按障碍物分类筛选 LOC 前向扇区规则。
-    def _is_forward_sector_applicable(self, *, obstacle: dict[str, object]) -> bool:
-        return (
-            str(obstacle["globalObstacleCategory"])
-            in LocForwardSector3000m15mRule.SUPPORTED_CATEGORIES
+            results.append(site_protection_rule.analyze(obstacle))
+            if self._forward_sector_rule.is_applicable(obstacle):
+                results.append(forward_sector_rule.analyze(obstacle))
+        return LocStationAnalysisPayload(
+            rule_results=results,
+            protection_zones=protection_zones,
         )
 
     # 按跑道号解析 LOC 所属跑道上下文。
