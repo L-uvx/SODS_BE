@@ -1,3 +1,4 @@
+from app.analysis.rules.ndb.config import NDB_CONICAL_CLEARANCE
 from app.analysis.rules.ndb.common import (
     BoundNdbConicalClearanceRule,
     NdbRule,
@@ -10,12 +11,13 @@ class NdbConicalClearance3DegRule(NdbRule):
     rule_name = "ndb_conical_clearance_3deg"
     zone_code = "ndb_conical_clearance_3deg"
     zone_name = "NDB 3 degree conical clearance zone"
-    zone_definition = {
-        "shape": "radial_band",
-        "min_radius_m": 50.0,
-        "max_radius_m": 37040.0,
-        "vertical_angle_deg": 3.0,
-    }
+
+    def __init__(self) -> None:
+        self.inner_radius_meters = float(NDB_CONICAL_CLEARANCE["inner_radius_m"])
+        self.outer_radius_meters = float(NDB_CONICAL_CLEARANCE["outer_radius_m"])
+        self.elevation_angle_degrees = float(
+            NDB_CONICAL_CLEARANCE["vertical_angle_deg"]
+        )
 
     # 绑定单个 NDB 台站的 3 度锥形净空保护区。
     def bind(
@@ -25,9 +27,6 @@ class NdbConicalClearance3DegRule(NdbRule):
         station_point: tuple[float, float],
         station_altitude: float | None,
     ) -> BoundNdbConicalClearanceRule:
-        inner_radius_m = float(self.zone_definition["min_radius_m"])
-        outer_radius_m = float(self.zone_definition["max_radius_m"])
-        elevation_angle_degrees = float(self.zone_definition["vertical_angle_deg"])
         return BoundNdbConicalClearanceRule(
             protection_zone=build_ndb_conical_protection_zone(
                 station=station,
@@ -37,13 +36,13 @@ class NdbConicalClearance3DegRule(NdbRule):
                 zone_name=self.zone_name,
                 station_point=station_point,
                 station_altitude=station_altitude,
-                inner_radius_meters=inner_radius_m,
-                outer_radius_meters=outer_radius_m,
-                elevation_angle_degrees=elevation_angle_degrees,
+                inner_radius_meters=self.inner_radius_meters,
+                outer_radius_meters=self.outer_radius_meters,
+                elevation_angle_degrees=self.elevation_angle_degrees,
             ),
             station_point=station_point,
             station_altitude=station_altitude,
-            inner_radius_meters=inner_radius_m,
-            outer_radius_meters=outer_radius_m,
-            elevation_angle_degrees=elevation_angle_degrees,
+            inner_radius_meters=self.inner_radius_meters,
+            outer_radius_meters=self.outer_radius_meters,
+            elevation_angle_degrees=self.elevation_angle_degrees,
         )

@@ -67,17 +67,18 @@ class NdbRuleProfile:
             station_point=station_point,
             station_altitude=station_altitude,
         )
-        protection_zones: list[ProtectionZoneSpec] = [
-            *(bound_rule.protection_zone for bound_rule in bound_rules_by_name.values()),
-            bound_conical_rule.protection_zone,
-        ]
+        protection_zones: list[ProtectionZoneSpec] = []
         for obstacle in obstacles:
             category = str(obstacle["globalObstacleCategory"])
             bound_rule = bound_rules_by_category.get(category)
             if bound_rule is not None:
                 results.append(bound_rule.analyze(obstacle))
+                if bound_rule.protection_zone not in protection_zones:
+                    protection_zones.append(bound_rule.protection_zone)
 
             results.append(bound_conical_rule.analyze(obstacle))
+            if bound_conical_rule.protection_zone not in protection_zones:
+                protection_zones.append(bound_conical_rule.protection_zone)
         return NdbStationAnalysisPayload(
             rule_results=results,
             protection_zones=protection_zones,

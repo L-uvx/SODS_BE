@@ -1,7 +1,8 @@
 import math
 from dataclasses import dataclass
 
-from shapely.geometry import MultiPolygon, Point, shape
+from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
+from shapely.geometry import Point, shape
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
@@ -74,7 +75,10 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
         )
         actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         base_height_meters = float(self.station_altitude or 0.0)
-        top_elevation = float(obstacle.get("topElevation") or base_height_meters)
+        raw_top_elevation = obstacle.get("topElevation")
+        top_elevation = float(
+            base_height_meters if raw_top_elevation is None else raw_top_elevation
+        )
 
         allowed_height_meters = base_height_meters
         is_compliant = True
@@ -135,7 +139,12 @@ def build_ndb_circle_protection_zone(
     station_point: tuple[float, float],
     radius_meters: float,
 ) -> ProtectionZoneSpec:
-    protection_zone = ensure_multipolygon(Point(station_point).buffer(radius_meters))
+    protection_zone = ensure_multipolygon(
+        _build_circle_polygon(
+            center_point=station_point,
+            radius_meters=radius_meters,
+        )
+    )
     return build_protection_zone_spec(
         station_id=int(station.id),
         station_type=str(station.station_type),
@@ -168,8 +177,14 @@ def build_ndb_conical_protection_zone(
     outer_radius_meters: float,
     elevation_angle_degrees: float,
 ) -> ProtectionZoneSpec:
-    outer_zone = Point(station_point).buffer(outer_radius_meters)
-    inner_zone = Point(station_point).buffer(inner_radius_meters)
+    outer_zone = _build_circle_polygon(
+        center_point=station_point,
+        radius_meters=outer_radius_meters,
+    )
+    inner_zone = _build_circle_polygon(
+        center_point=station_point,
+        radius_meters=inner_radius_meters,
+    )
     protection_zone = ensure_multipolygon(outer_zone.difference(inner_zone))
     base_height_meters = float(station_altitude or 0.0)
     return build_protection_zone_spec(
@@ -211,3 +226,22 @@ def build_ndb_conical_protection_zone(
         },
     )
 
+
+# 按共享圆形步长构建圆形 polygon。
+def _build_circle_polygon(
+    *, center_point: tuple[float, float], radius_meters: float
+):
+    step_degrees = float(PROTECTION_ZONE_BUILDER_DISCRETIZATION["circle_step_degrees"])
+    points: list[tuple[float, float]] = []
+    degrees = 0.0
+    while degrees < 360.0:
+        radians = math.radians(degrees)
+        points.append(
+            (
+                center_point[0] + math.cos(radians) * radius_meters,
+                center_point[1] + math.sin(radians) * radius_meters,
+            )
+        )
+        degrees += step_degrees
+    points.append(points[0])
+    return shape({"type": "Polygon", "coordinates": [points]})

@@ -1,5 +1,8 @@
+import math
+
 from shapely.geometry import MultiPolygon, Polygon
 
+from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
@@ -305,15 +308,56 @@ def test_ndb_rule_profile_returns_minimum_distance_and_conical_results() -> None
     }
     assert {zone.rule_name for zone in payload.protection_zones} == {
         "ndb_minimum_distance_50m",
-        "ndb_minimum_distance_150m",
-        "ndb_minimum_distance_300m",
-        "ndb_minimum_distance_500m",
         "ndb_conical_clearance_3deg",
     }
     assert all(
         zone.geometry_definition["shapeType"] == "multipolygon"
         for zone in payload.protection_zones
     )
+
+
+def test_ndb_rule_profile_returns_only_matching_minimum_distance_zone_for_hill() -> None:
+    station = type(
+        "Station",
+        (),
+        {"id": 1, "station_type": "NDB", "altitude": 500.0},
+    )()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "Obstacle Hill",
+        "rawObstacleType": "山丘",
+        "globalObstacleCategory": "hill",
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [200.0, 0.0],
+                        [210.0, 0.0],
+                        [210.0, 10.0],
+                        [200.0, 10.0],
+                        [200.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+        "topElevation": 520.0,
+    }
+
+    payload = NdbRuleProfile().analyze(
+        station=station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+    )
+
+    assert {result.rule_name for result in payload.rule_results} == {
+        "ndb_minimum_distance_300m",
+        "ndb_conical_clearance_3deg",
+    }
+    assert {zone.rule_name for zone in payload.protection_zones} == {
+        "ndb_minimum_distance_300m",
+        "ndb_conical_clearance_3deg",
+    }
 
 
 def test_ndb_rule_profile_binds_rules_once_per_station() -> None:
@@ -376,6 +420,59 @@ def test_ndb_rule_profile_payload_is_not_iterable() -> None:
 
     with pytest.raises(TypeError):
         iter(payload)
+
+
+def test_ndb_circle_protection_zone_uses_shared_circle_step_discretization() -> None:
+    bound_rule = NdbMinimumDistance50mRule().bind(
+        station=type("Station", (), {"id": 1, "station_type": "NDB"})(),
+        station_point=(0.0, 0.0),
+    )
+
+    expected_segment_count = int(
+        math.ceil(
+            360.0 / PROTECTION_ZONE_BUILDER_DISCRETIZATION["circle_step_degrees"]
+        )
+    )
+    exterior_ring = bound_rule.protection_zone.geometry_definition["coordinates"][0][0]
+
+    assert len(exterior_ring) == expected_segment_count + 1
+
+
+def test_ndb_conical_protection_zone_uses_shared_circle_step_discretization() -> None:
+    bound_rule = NdbConicalClearance3DegRule().bind(
+        station=type(
+            "Station",
+            (),
+            {
+                "id": 1,
+                "station_type": "NDB",
+                "altitude": 500.0,
+                "longitude": 104.123456,
+                "latitude": 30.123456,
+            },
+        )(),
+        station_point=(0.0, 0.0),
+        station_altitude=500.0,
+    )
+
+    expected_segment_count = int(
+        math.ceil(
+            360.0 / PROTECTION_ZONE_BUILDER_DISCRETIZATION["circle_step_degrees"]
+        )
+    )
+    outer_ring = bound_rule.protection_zone.geometry_definition["coordinates"][0][0]
+    inner_ring = bound_rule.protection_zone.geometry_definition["coordinates"][0][1]
+
+    assert len(outer_ring) == expected_segment_count + 1
+    assert len(inner_ring) == expected_segment_count + 1
+
+
+def test_ndb_conical_clearance_rule_uses_shared_config_values() -> None:
+    rule = NdbConicalClearance3DegRule()
+
+    assert rule.inner_radius_meters == NDB_CONICAL_CLEARANCE["inner_radius_m"]
+    assert rule.outer_radius_meters == NDB_CONICAL_CLEARANCE["outer_radius_m"]
+    assert rule.elevation_angle_degrees == NDB_CONICAL_CLEARANCE["vertical_angle_deg"]
 
 
 def test_ndb_minimum_distance_rule_prefers_local_geometry() -> None:
@@ -504,6 +601,40 @@ def test_ndb_conical_clearance_rule_prefers_local_geometry() -> None:
     assert result.metrics["actualDistanceMeters"] == 20.0
     assert result.metrics["enteredProtectionZone"] is False
     assert result.metrics["allowedHeightMeters"] == 500.0
+    assert result.is_compliant is True
+
+
+def test_ndb_conical_clearance_rule_keeps_zero_top_elevation() -> None:
+    station = type("Station", (), {"id": 1, "station_type": "NDB"})()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "Obstacle Zero Elevation",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [60.0, 0.0],
+                        [70.0, 0.0],
+                        [70.0, 10.0],
+                        [60.0, 10.0],
+                        [60.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+        "topElevation": 0.0,
+    }
+
+    result = NdbConicalClearance3DegRule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        station_altitude=500.0,
+    ).analyze(obstacle)
+
+    assert result.metrics["topElevationMeters"] == 0.0
     assert result.is_compliant is True
 
 
