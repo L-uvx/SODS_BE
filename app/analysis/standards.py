@@ -55,6 +55,10 @@ _LOC_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
         "GB_ILSLOC_场地保护区_线缆",
         "MH_ILSLOC_场地保护区_线缆",
     ),
+    "loc_building_restriction_zone": (
+        None,
+        "MH_ILSLOC_建筑物限制区_Ⅲ",
+    ),
 }
 
 _STANDARD_KEYS_BY_STATION_TYPE: dict[

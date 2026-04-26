@@ -2,6 +2,9 @@ from dataclasses import dataclass
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
+from app.analysis.rules.loc.building_restriction_zone_region_3 import (
+    LocBuildingRestrictionZoneRegion3Rule,
+)
 from app.analysis.rules.loc.forward_sector_3000m_15m import (
     LocForwardSector3000m15mRule,
 )
@@ -15,10 +18,19 @@ class LocStationAnalysisPayload:
 
 
 class LocRuleProfile:
+    BUILDING_RESTRICTION_SUPPORTED_CATEGORIES = {
+        "building_general",
+        "building_hangar",
+        "building_terminal",
+    }
+
     # 初始化 LOC 最小规则集合。
     def __init__(self) -> None:
         self._site_protection_rule = LocSiteProtectionRule()
         self._forward_sector_rule = LocForwardSector3000m15mRule()
+        self._building_restriction_rules = [
+            LocBuildingRestrictionZoneRegion3Rule(),
+        ]
 
     # 执行 LOC 场地保护区规则。
     def analyze(
@@ -43,19 +55,38 @@ class LocRuleProfile:
             station_point=station_point,
             runway_context=runway_context,
         )
+        building_restriction_rules = [
+            rule.bind(
+                station=station,
+                station_point=station_point,
+                runway_context=runway_context,
+            )
+            for rule in self._building_restriction_rules
+        ]
 
         results: list[AnalysisRuleResult] = []
         protection_zones: list[ProtectionZoneSpec] = [
             site_protection_rule.protection_zone,
             forward_sector_rule.protection_zone,
+            *[rule.protection_zone for rule in building_restriction_rules],
         ]
         for obstacle in obstacles:
             results.append(site_protection_rule.analyze(obstacle))
             if self._forward_sector_rule.is_applicable(obstacle):
                 results.append(forward_sector_rule.analyze(obstacle))
+            if self._is_building_restriction_applicable(obstacle):
+                for rule in building_restriction_rules:
+                    results.append(rule.analyze(obstacle))
         return LocStationAnalysisPayload(
             rule_results=results,
             protection_zones=protection_zones,
+        )
+
+    # 校验障碍物是否适用建筑物限制区规则。
+    def _is_building_restriction_applicable(self, obstacle: dict[str, object]) -> bool:
+        return (
+            str(obstacle["globalObstacleCategory"])
+            in self.BUILDING_RESTRICTION_SUPPORTED_CATEGORIES
         )
 
     # 按跑道号解析 LOC 所属跑道上下文。

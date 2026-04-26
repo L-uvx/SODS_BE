@@ -9,3 +9,13 @@ LOC_FORWARD_SECTOR_3000M_15M = {
     "half_angle_degrees": 10.0,
     "height_limit_offset_m": 15.0,
 }
+
+LOC_BUILDING_RESTRICTION_ZONE = {
+    "zone_code": "loc_building_restriction_zone",
+    "zone_name": "building restriction zone",
+    "root_half_width_m": 500.0,
+    "arc_radius_offset_m": 6000.0,
+    "arc_height_offset_m": 70.0,
+    "base_angle_degrees": 20.0,
+    "region_codes": ("1", "2", "3", "4"),
+}

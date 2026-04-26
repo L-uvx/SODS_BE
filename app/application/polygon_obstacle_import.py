@@ -551,6 +551,7 @@ class PolygonObstacleImportService:
                 geometry_definition=protection_zone.geometry_definition,
             ),
             "vertical": self._build_public_protection_zone_vertical_payload(
+                projector=projector,
                 vertical_definition=protection_zone.vertical_definition,
                 station_altitude_meters=station_altitude_by_id.get(
                     protection_zone.station_id,
@@ -594,6 +595,7 @@ class PolygonObstacleImportService:
     def _build_public_protection_zone_vertical_payload(
         self,
         *,
+        projector: AirportLocalProjector,
         vertical_definition: dict[str, object],
         station_altitude_meters: float,
     ) -> dict[str, object]:
@@ -611,6 +613,52 @@ class PolygonObstacleImportService:
         surface = vertical_definition.get("surface")
         if not isinstance(surface, dict):
             raise ValueError("analytic surface definition must contain surface")
+
+        surface_type = str(surface.get("type") or "")
+        if surface_type == "loc_building_restriction_zone_region_3":
+            station_point = self._build_public_protection_zone_surface_point_payload(
+                projector=projector,
+                point=surface.get("stationPoint"),
+                field_name="stationPoint",
+            )
+            apex_point = self._build_public_protection_zone_surface_point_payload(
+                projector=projector,
+                point=surface.get("apexPoint"),
+                field_name="apexPoint",
+            )
+            root_left_point = self._build_public_protection_zone_surface_point_payload(
+                projector=projector,
+                point=surface.get("rootLeftPoint"),
+                field_name="rootLeftPoint",
+            )
+            root_right_point = self._build_public_protection_zone_surface_point_payload(
+                projector=projector,
+                point=surface.get("rootRightPoint"),
+                field_name="rootRightPoint",
+            )
+            arc_points = self._build_public_protection_zone_surface_points_payload(
+                projector=projector,
+                points=surface.get("arcPoints"),
+                field_name="arcPoints",
+            )
+            return {
+                "mode": "analytic_surface",
+                "baseReference": vertical_definition.get("baseReference", "station"),
+                "baseHeightMeters": float(
+                    vertical_definition.get("baseHeightMeters", 0.0)
+                ),
+                "surface": {
+                    "type": surface_type,
+                    "arcHeightMeters": float(surface.get("arcHeightMeters", 0.0)),
+                    "alphaDegrees": float(surface.get("alphaDegrees", 0.0)),
+                    "stationPoint": station_point,
+                    "apexPoint": apex_point,
+                    "rootLeftPoint": root_left_point,
+                    "rootRightPoint": root_right_point,
+                    "arcRadiusMeters": float(surface.get("arcRadiusMeters", 0.0)),
+                    "arcPoints": arc_points,
+                },
+            }
 
         distance_source = surface.get("distanceSource")
         clamp_range = surface.get("clampRange")
@@ -646,6 +694,44 @@ class PolygonObstacleImportService:
                 },
             },
         }
+
+    # 将局部平面控制点反投影为对外 WGS84 点坐标。
+    def _build_public_protection_zone_surface_point_payload(
+        self,
+        *,
+        projector: AirportLocalProjector,
+        point: object,
+        field_name: str,
+    ) -> list[float]:
+        if (
+            not isinstance(point, (list, tuple))
+            or len(point) != 2
+        ):
+            raise ValueError(f"{field_name} must contain two coordinates")
+        longitude, latitude = projector.unproject_point(
+            float(point[0]),
+            float(point[1]),
+        )
+        return [float(longitude), float(latitude)]
+
+    # 将局部平面控制点列表反投影为对外 WGS84 点坐标列表。
+    def _build_public_protection_zone_surface_points_payload(
+        self,
+        *,
+        projector: AirportLocalProjector,
+        points: object,
+        field_name: str,
+    ) -> list[list[float]]:
+        if not isinstance(points, list):
+            raise ValueError(f"{field_name} must be a list")
+        return [
+            self._build_public_protection_zone_surface_point_payload(
+                projector=projector,
+                point=point,
+                field_name=field_name,
+            )
+            for point in points
+        ]
 
     # 查询分析任务的当前状态。
     def get_analysis_task_status(

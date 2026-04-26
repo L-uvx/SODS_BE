@@ -198,6 +198,7 @@ class AnalysisRuleResultResponse(BaseModel):
     obstacle_name: str = Field(alias="obstacleName")
     raw_obstacle_type: str | None = Field(alias="rawObstacleType", default=None)
     global_obstacle_category: str = Field(alias="globalObstacleCategory")
+    rule_code: str = Field(alias="ruleCode")
     rule_name: str = Field(alias="ruleName")
     zone_code: str = Field(alias="zoneCode")
     zone_name: str = Field(alias="zoneName")
@@ -309,6 +310,31 @@ class AnalysisProtectionZoneSurfaceResponse(BaseModel):
     )
 
 
+class AnalysisProtectionZoneLocBuildingRestrictionZoneRegion3SurfaceResponse(BaseModel):
+    type: str
+    arc_height_meters: float = Field(alias="arcHeightMeters")
+    alpha_degrees: float = Field(alias="alphaDegrees")
+    station_point: list[float] = Field(alias="stationPoint", min_length=2, max_length=2)
+    apex_point: list[float] = Field(alias="apexPoint", min_length=2, max_length=2)
+    root_left_point: list[float] = Field(
+        alias="rootLeftPoint",
+        min_length=2,
+        max_length=2,
+    )
+    root_right_point: list[float] = Field(
+        alias="rootRightPoint",
+        min_length=2,
+        max_length=2,
+    )
+    arc_radius_meters: float = Field(alias="arcRadiusMeters")
+    arc_points: list[list[float]] = Field(alias="arcPoints")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
 class AnalysisProtectionZoneAnalyticSurfaceVerticalResponse(BaseModel):
     mode: str
     base_reference: str = Field(alias="baseReference")
@@ -327,7 +353,10 @@ class AnalysisProtectionZoneSurfaceAnalyticVerticalResponse(BaseModel):
     mode: str
     base_reference: str = Field(alias="baseReference")
     base_height_meters: float = Field(alias="baseHeightMeters")
-    surface: AnalysisProtectionZoneSurfaceResponse
+    surface: (
+        AnalysisProtectionZoneSurfaceResponse
+        | AnalysisProtectionZoneLocBuildingRestrictionZoneRegion3SurfaceResponse
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,

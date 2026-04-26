@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
+import pytest
 from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy import text
@@ -1032,7 +1033,7 @@ def test_get_analysis_task_result_omits_spatial_facts_after_worker_runs() -> Non
                     "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
                 ),
                 {
-                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_type": "building_general",
                     "obstacle_id": obstacle,
                 },
             )
@@ -1106,6 +1107,7 @@ def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
     rule_results = payload["ruleResults"]
     assert rule_results[0]["stationType"] == "NDB"
     assert rule_results[0]["stationName"] == "NDB Station"
+    assert rule_results[0]["ruleCode"] == "ndb_minimum_distance_50m"
     assert rule_results[0]["ruleName"] == "ndb_minimum_distance_50m"
     assert rule_results[0]["globalObstacleCategory"] == "building_general"
     assert "zoneDefinition" not in rule_results[0]
@@ -1909,6 +1911,146 @@ def test_get_analysis_task_result_returns_loc_forward_sector_zone() -> None:
         "baseReference": "station",
         "baseHeightMeters": 515.0,
     }
+    assert protection_zone["renderGeometry"] is None
+
+
+def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_3() -> (
+    None
+):
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Runway(
+                    id=201,
+                    airport_id=1,
+                    run_number="18",
+                    name="Runway 18/36",
+                    longitude=103.975864,
+                    latitude=30.512271,
+                    direction=180.0,
+                    length=600.0,
+                    width=45.0,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="LOC Station",
+                    airport_id=1,
+                    station_type="LOC",
+                    runway_no="18",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "top_elevation": 571.0,
+                    "raw_payload": json.dumps(
+                        {
+                            "localGeometry": {
+                                "type": "MultiPolygon",
+                                "coordinates": [
+                                    [
+                                        [
+                                            [-20.0, 3000.0],
+                                            [20.0, 3000.0],
+                                            [20.0, 3040.0],
+                                            [-20.0, 3040.0],
+                                            [-20.0, 3000.0],
+                                        ]
+                                    ]
+                                ],
+                            }
+                        }
+                    ),
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    payload = response.json()
+    loc_rule = next(
+        item
+        for item in payload["ruleResults"]
+        if item["ruleName"] == "loc_building_restriction_zone_region_3"
+    )
+    assert loc_rule["zoneCode"] == "loc_building_restriction_zone"
+    assert loc_rule["zoneName"] == "building restriction zone"
+    assert loc_rule["regionCode"] == "3"
+    assert loc_rule["standards"] == {
+        "gb": None,
+        "mh": {
+            "code": "MH_ILSLOC_建筑物限制区_Ⅲ",
+            "text": "航向信标台建筑物限制区：对于Ⅲ类运行或规划Ⅲ类运行的跑道，飞行区与建筑物限制区重叠范围内规划建设超过高度限制的机库、航站楼等大型建筑物，应采用计算机仿真的方式确定建筑物的尺寸；飞行区外的建筑物限制区范围内规划建设超过高度限制的民用设施等大型建筑物，宜采用计算机仿真的方式确定建筑物的尺寸。",
+            "isCompliant": False,
+        },
+    }
+
+    protection_zone = next(
+        item
+        for item in payload["protectionZones"]
+        if item["ruleCode"] == "loc_building_restriction_zone_region_3"
+    )
+    assert protection_zone["zoneCode"] == "loc_building_restriction_zone"
+    assert protection_zone["zoneName"] == "building restriction zone"
+    assert protection_zone["regionCode"] == "3"
+    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
+    assert protection_zone["vertical"]["mode"] == "analytic_surface"
+    assert protection_zone["vertical"]["baseReference"] == "station"
+    assert protection_zone["vertical"]["baseHeightMeters"] == 500.0
+    assert protection_zone["vertical"]["surface"]["type"] == (
+        "loc_building_restriction_zone_region_3"
+    )
+    surface = protection_zone["vertical"]["surface"]
+    assert surface["arcHeightMeters"] == 570.0
+    assert surface["alphaDegrees"] > 0.0
+    assert surface["stationPoint"] == [103.975864, 30.506881]
+    assert surface["apexPoint"][0] == pytest.approx(103.975864, abs=1e-6)
+    assert surface["apexPoint"][1] > surface["stationPoint"][1]
+    assert surface["rootLeftPoint"][0] < surface["rootRightPoint"][0]
+    assert surface["rootLeftPoint"][1] == pytest.approx(
+        surface["rootRightPoint"][1],
+        abs=1e-9,
+    )
+    assert surface["arcRadiusMeters"] > 0.0
+    assert len(surface["arcPoints"]) >= 2
+    assert all(len(point) == 2 for point in surface["arcPoints"])
+    assert surface["arcPoints"][0][0] < surface["arcPoints"][-1][0]
+    assert all(
+        point[1] > surface["stationPoint"][1] for point in surface["arcPoints"]
+    )
     assert protection_zone["renderGeometry"] is None
 
 
