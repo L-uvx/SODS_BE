@@ -22,10 +22,22 @@ class BoundLocBuildingRestrictionZoneRegion1Rule(BoundObstacleRule):
         entered_protection_zone = obstacle_shape.intersects(
             self.protection_zone.local_geometry
         )
+        allowed_height_meters = float(
+            self.protection_zone.vertical_definition["baseHeightMeters"]
+        )
         base_height_meters = float(getattr(self.station, "altitude", 0.0) or 0.0)
         top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
 
-        is_compliant = not entered_protection_zone
+        is_compliant = True
+        message = "obstacle outside region 1"
+        if entered_protection_zone:
+            is_compliant = top_elevation_meters <= allowed_height_meters
+            message = (
+                "obstacle within region 1 and below allowed height"
+                if is_compliant
+                else "obstacle within region 1 above allowed height"
+            )
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -41,14 +53,11 @@ class BoundLocBuildingRestrictionZoneRegion1Rule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=is_compliant,
-            message=(
-                "obstacle outside loc building restriction zone region 1"
-                if is_compliant
-                else "obstacle enters loc building restriction zone region 1"
-            ),
+            message=message,
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
                 "baseHeightMeters": base_height_meters,
+                "allowedHeightMeters": allowed_height_meters,
                 "topElevationMeters": top_elevation_meters,
             },
         )
@@ -76,7 +85,9 @@ class LocBuildingRestrictionZoneRegion1Rule(ObstacleRule):
         region_1_geometry = build_loc_building_restriction_zone_region_1_geometry(
             resolved_shared_context
         )
-        base_height_meters = float(getattr(station, "altitude", 0.0) or 0.0)
+        base_height_meters = float(getattr(station, "altitude", 0.0) or 0.0) + float(
+            LOC_BUILDING_RESTRICTION_ZONE["region_1_2_height_offset_m"]
+        )
         return BoundLocBuildingRestrictionZoneRegion1Rule(
             protection_zone=build_protection_zone_spec(
                 station_id=int(station.id),

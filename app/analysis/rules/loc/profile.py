@@ -2,6 +2,12 @@ from dataclasses import dataclass
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
+from app.analysis.rules.loc.building_restriction_zone_region_1 import (
+    LocBuildingRestrictionZoneRegion1Rule,
+)
+from app.analysis.rules.loc.building_restriction_zone_region_2 import (
+    LocBuildingRestrictionZoneRegion2Rule,
+)
 from app.analysis.rules.loc.building_restriction_zone_region_3 import (
     LocBuildingRestrictionZoneRegion3Rule,
 )
@@ -35,6 +41,8 @@ class LocRuleProfile:
         self._site_protection_rule = LocSiteProtectionRule()
         self._forward_sector_rule = LocForwardSector3000m15mRule()
         self._building_restriction_rules = [
+            LocBuildingRestrictionZoneRegion1Rule(),
+            LocBuildingRestrictionZoneRegion2Rule(),
             LocBuildingRestrictionZoneRegion3Rule(),
             LocBuildingRestrictionZoneRegion4Rule(),
         ]

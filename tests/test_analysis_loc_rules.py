@@ -1,3 +1,5 @@
+import math
+
 import pytest
 from shapely.geometry import LineString, MultiPolygon, Polygon
 
@@ -776,6 +778,8 @@ def test_loc_profile_skips_forward_sector_rule_for_non_applicable_obstacle() -> 
     assert {zone.rule_code for zone in payload.protection_zones} == {
         "loc_site_protection",
         "loc_forward_sector_3000m_15m",
+        "loc_building_restriction_zone_region_1",
+        "loc_building_restriction_zone_region_2",
         "loc_building_restriction_zone_region_3",
         "loc_building_restriction_zone_region_4",
     }
@@ -829,8 +833,8 @@ def test_loc_rule_profile_returns_rule_results_and_protection_zone_specs() -> No
         runways=[runway],
     )
 
-    assert len(payload.rule_results) == 4
-    assert len(payload.protection_zones) == 4
+    assert len(payload.rule_results) == 6
+    assert len(payload.protection_zones) == 6
     assert all(
         zone.geometry_definition["shapeType"] == "multipolygon"
         for zone in payload.protection_zones
@@ -838,16 +842,11 @@ def test_loc_rule_profile_returns_rule_results_and_protection_zone_specs() -> No
     assert {result.rule_code for result in payload.rule_results} == {
         "loc_site_protection",
         "loc_forward_sector_3000m_15m",
+        "loc_building_restriction_zone_region_1",
+        "loc_building_restriction_zone_region_2",
         "loc_building_restriction_zone_region_3",
         "loc_building_restriction_zone_region_4",
     }
-    assert all(
-        result.rule_code not in {
-            "loc_building_restriction_zone_region_1",
-            "loc_building_restriction_zone_region_2",
-        }
-        for result in payload.rule_results
-    )
 
 
 def test_loc_rule_profile_payload_is_not_iterable() -> None:
@@ -1064,6 +1063,11 @@ def test_loc_forward_sector_rule_uses_reverse_runway_direction() -> None:
 def test_loc_building_restriction_zone_shared_context_resolves_apex_root_and_arc_geometry() -> None:
     assert LOC_BUILDING_RESTRICTION_ZONE["zone_code"] == "loc_building_restriction_zone"
     assert LOC_BUILDING_RESTRICTION_ZONE["zone_name"] == "building restriction zone"
+    assert "region_1_2_inner_offset_m" not in LOC_BUILDING_RESTRICTION_ZONE
+    assert LOC_BUILDING_RESTRICTION_ZONE["region_1_2_forward_length_m"] == 500.0
+    assert LOC_BUILDING_RESTRICTION_ZONE["region_1_2_outer_offset_m"] == 1500.0
+    assert LOC_BUILDING_RESTRICTION_ZONE["region_1_2_side_angle_degrees"] == 20.0
+    assert LOC_BUILDING_RESTRICTION_ZONE["region_1_2_height_offset_m"] == 20.0
 
     shared_context = build_loc_building_restriction_zone_shared_context(
         station_point=(0.0, 0.0),
@@ -1131,54 +1135,13 @@ def test_loc_building_restriction_zone_region_builders_share_same_context_output
     region_4_geometry = build_loc_building_restriction_zone_region_4_geometry(
         shared_context
     )
-    assert region_1_geometry.local_geometry.bounds == pytest.approx(
-        (
-            min(
-                shared_context.apex_point[0],
-                shared_context.root_left_point[0],
-                shared_context.station_point[0],
-            ),
-            min(
-                shared_context.apex_point[1],
-                shared_context.root_left_point[1],
-                shared_context.station_point[1],
-            ),
-            max(
-                shared_context.apex_point[0],
-                shared_context.root_left_point[0],
-                shared_context.station_point[0],
-            ),
-            max(
-                shared_context.apex_point[1],
-                shared_context.root_left_point[1],
-                shared_context.station_point[1],
-            ),
-        )
-    )
-    assert region_2_geometry.local_geometry.bounds == pytest.approx(
-        (
-            min(
-                shared_context.apex_point[0],
-                shared_context.root_right_point[0],
-                shared_context.station_point[0],
-            ),
-            min(
-                shared_context.apex_point[1],
-                shared_context.root_right_point[1],
-                shared_context.station_point[1],
-            ),
-            max(
-                shared_context.apex_point[0],
-                shared_context.root_right_point[0],
-                shared_context.station_point[0],
-            ),
-            max(
-                shared_context.apex_point[1],
-                shared_context.root_right_point[1],
-                shared_context.station_point[1],
-            ),
-        )
-    )
+    region_1_points = list(region_1_geometry.local_geometry.geoms[0].exterior.coords)[:-1]
+    region_2_points = list(region_2_geometry.local_geometry.geoms[0].exterior.coords)[:-1]
+
+    assert len(region_1_points) == 4
+    assert len(region_2_points) == 4
+    assert region_1_points[0] == pytest.approx(shared_context.root_left_point)
+    assert region_2_points[0] == pytest.approx(shared_context.root_right_point)
     assert region_3_geometry.local_geometry.bounds[1] == pytest.approx(
         shared_context.root_left_point[1]
     )
@@ -1190,6 +1153,360 @@ def test_loc_building_restriction_zone_region_builders_share_same_context_output
         (-400.0, 905.5385138137417)
     )
     assert region_4_geometry.back_right_point == pytest.approx((600.0, -500.0))
+
+
+def test_loc_building_restriction_zone_region_1_2_build_mirrored_trapezoids() -> None:
+    shared_context = build_loc_building_restriction_zone_shared_context(
+        station_point=(0.0, 0.0),
+        runway_context={
+            "localCenterPoint": (0.0, 600.0),
+            "directionDegrees": 180.0,
+            "lengthMeters": 600.0,
+            "widthMeters": 45.0,
+        },
+    )
+
+    region_1_geometry = build_loc_building_restriction_zone_region_1_geometry(
+        shared_context
+    )
+    region_2_geometry = build_loc_building_restriction_zone_region_2_geometry(
+        shared_context
+    )
+
+    region_1_points = list(region_1_geometry.local_geometry.geoms[0].exterior.coords)[:-1]
+    region_2_points = list(region_2_geometry.local_geometry.geoms[0].exterior.coords)[:-1]
+    expected_forward_length = LOC_BUILDING_RESTRICTION_ZONE[
+        "region_1_2_forward_length_m"
+    ]
+    expected_outer_offset = LOC_BUILDING_RESTRICTION_ZONE["region_1_2_outer_offset_m"]
+    expected_lateral_delta = (
+        expected_outer_offset - LOC_BUILDING_RESTRICTION_ZONE["root_half_width_m"]
+    )
+    expected_reverse_delta = expected_lateral_delta / math.tan(
+        math.radians(LOC_BUILDING_RESTRICTION_ZONE["region_1_2_side_angle_degrees"])
+    )
+
+    assert len(region_1_points) == 4
+    assert len(region_2_points) == 4
+    assert region_1_points[0] == pytest.approx(shared_context.root_left_point)
+    assert region_2_points[0] == pytest.approx(shared_context.root_right_point)
+    assert region_1_points[1] == pytest.approx((-500.0, -500.0))
+    assert region_1_points[2] == pytest.approx((-1500.0, -500.0))
+    assert region_1_points[3] == pytest.approx((-1500.0, 900.0 + expected_reverse_delta))
+    assert region_2_points[1] == pytest.approx((500.0, -500.0))
+    assert region_2_points[2] == pytest.approx((1500.0, -500.0))
+    assert region_2_points[3] == pytest.approx((1500.0, 900.0 + expected_reverse_delta))
+    assert region_1_points[1][1] == pytest.approx(region_2_points[1][1])
+    assert region_1_points[2][1] == pytest.approx(region_2_points[2][1])
+    assert region_1_points[3][1] == pytest.approx(region_2_points[3][1])
+    assert abs(region_1_points[1][1] - shared_context.station_point[1]) == pytest.approx(
+        expected_forward_length
+    )
+    assert abs(region_1_points[2][0] - region_1_points[1][0]) == pytest.approx(
+        expected_lateral_delta
+    )
+
+
+def test_loc_building_restriction_zone_region_1_2_bind_uses_height_offset_config() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, 600.0),
+        "directionDegrees": 180.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+
+    region_1_rule = LocBuildingRestrictionZoneRegion1Rule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    )
+    region_2_rule = LocBuildingRestrictionZoneRegion2Rule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    )
+
+    assert region_1_rule.protection_zone.vertical_definition == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 520.0,
+    }
+    assert region_2_rule.protection_zone.vertical_definition == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 520.0,
+    }
+
+
+def test_loc_building_restriction_zone_region_1_rule_allows_obstacle_within_zone_below_allowed_height() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, 600.0),
+        "directionDegrees": 180.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 14,
+        "name": "Obstacle Region 1 Below Limit",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 519.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [-520.0, 500.0],
+                        [-480.0, 500.0],
+                        [-480.0, 540.0],
+                        [-520.0, 540.0],
+                        [-520.0, 500.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = LocBuildingRestrictionZoneRegion1Rule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    ).analyze(obstacle)
+
+    assert result.region_code == "1"
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "baseHeightMeters": 500.0,
+        "allowedHeightMeters": 520.0,
+        "topElevationMeters": 519.0,
+    }
+    assert result.message == "obstacle within region 1 and below allowed height"
+    assert result.is_compliant is True
+
+
+def test_loc_building_restriction_zone_region_1_rule_rejects_obstacle_within_zone_above_allowed_height() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, 600.0),
+        "directionDegrees": 180.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 15,
+        "name": "Obstacle Region 1 Above Limit",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 521.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [-520.0, 500.0],
+                        [-480.0, 500.0],
+                        [-480.0, 540.0],
+                        [-520.0, 540.0],
+                        [-520.0, 500.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = LocBuildingRestrictionZoneRegion1Rule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    ).analyze(obstacle)
+
+    assert result.region_code == "1"
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "baseHeightMeters": 500.0,
+        "allowedHeightMeters": 520.0,
+        "topElevationMeters": 521.0,
+    }
+    assert result.message == "obstacle within region 1 above allowed height"
+    assert result.is_compliant is False
+
+
+def test_loc_building_restriction_zone_region_2_rule_allows_obstacle_within_zone_below_allowed_height() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, 600.0),
+        "directionDegrees": 180.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 16,
+        "name": "Obstacle Region 2 Below Limit",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 519.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [480.0, 500.0],
+                        [520.0, 500.0],
+                        [520.0, 540.0],
+                        [480.0, 540.0],
+                        [480.0, 500.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = LocBuildingRestrictionZoneRegion2Rule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    ).analyze(obstacle)
+
+    assert result.region_code == "2"
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "baseHeightMeters": 500.0,
+        "allowedHeightMeters": 520.0,
+        "topElevationMeters": 519.0,
+    }
+    assert result.message == "obstacle within region 2 and below allowed height"
+    assert result.is_compliant is True
+
+
+def test_loc_building_restriction_zone_region_2_rule_rejects_obstacle_within_zone_above_allowed_height() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, 600.0),
+        "directionDegrees": 180.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 17,
+        "name": "Obstacle Region 2 Above Limit",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 521.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [480.0, 500.0],
+                        [520.0, 500.0],
+                        [520.0, 540.0],
+                        [480.0, 540.0],
+                        [480.0, 500.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = LocBuildingRestrictionZoneRegion2Rule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    ).analyze(obstacle)
+
+    assert result.region_code == "2"
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "baseHeightMeters": 500.0,
+        "allowedHeightMeters": 520.0,
+        "topElevationMeters": 521.0,
+    }
+    assert result.message == "obstacle within region 2 above allowed height"
+    assert result.is_compliant is False
+
+
+def test_loc_building_restriction_zone_region_1_2_keeps_root_anchor_points() -> None:
+    shared_context = build_loc_building_restriction_zone_shared_context(
+        station_point=(0.0, 0.0),
+        runway_context={
+            "localCenterPoint": (0.0, 600.0),
+            "directionDegrees": 180.0,
+            "lengthMeters": 600.0,
+            "widthMeters": 45.0,
+        },
+    )
+
+    region_1_geometry = build_loc_building_restriction_zone_region_1_geometry(
+        shared_context
+    )
+    region_2_geometry = build_loc_building_restriction_zone_region_2_geometry(
+        shared_context
+    )
+
+    region_1_points = list(region_1_geometry.local_geometry.geoms[0].exterior.coords)[:-1]
+    region_2_points = list(region_2_geometry.local_geometry.geoms[0].exterior.coords)[:-1]
+
+    assert shared_context.root_left_point == pytest.approx((-500.0, 900.0))
+    assert shared_context.root_right_point == pytest.approx((500.0, 900.0))
+    assert region_1_points[0] == pytest.approx(shared_context.root_left_point)
+    assert region_2_points[0] == pytest.approx(shared_context.root_right_point)
 
 
 def test_loc_building_restriction_zone_helper_builds_region_4_rectangle() -> None:
@@ -1542,7 +1859,7 @@ def test_loc_building_restriction_zone_region_3_helper_handles_boundary_only_int
     assert worst_allowed_height_meters == pytest.approx(500.0)
 
 
-def test_loc_rule_profile_returns_active_region_3_and_region_4_zone_specs() -> None:
+def test_loc_rule_profile_returns_active_region_1_to_region_4_zone_specs() -> None:
     station = type(
         "Station",
         (),
@@ -1574,7 +1891,7 @@ def test_loc_rule_profile_returns_active_region_3_and_region_4_zone_specs() -> N
         for zone in payload.protection_zones
         if zone.zone_code == LOC_BUILDING_RESTRICTION_ZONE["zone_code"]
     ]
-    assert {zone.region_code for zone in matching_zones} == {"3", "4"}
+    assert {zone.region_code for zone in matching_zones} == {"1", "2", "3", "4"}
 
 
 def test_loc_rule_profile_builds_building_restriction_shared_context_once_per_station(
@@ -1610,8 +1927,18 @@ def test_loc_rule_profile_builds_building_restriction_shared_context_once_per_st
         captured["runway_context"] = runway_context
         return expected_shared_context
 
+    original_region_1_bind = LocBuildingRestrictionZoneRegion1Rule.bind
+    original_region_2_bind = LocBuildingRestrictionZoneRegion2Rule.bind
     original_region_3_bind = LocBuildingRestrictionZoneRegion3Rule.bind
     original_region_4_bind = LocBuildingRestrictionZoneRegion4Rule.bind
+
+    def _record_region_1_bind(self: object, **kwargs: object) -> object:
+        captured["bind_shared_contexts"].append(kwargs.get("shared_context"))
+        return original_region_1_bind(self, **kwargs)
+
+    def _record_region_2_bind(self: object, **kwargs: object) -> object:
+        captured["bind_shared_contexts"].append(kwargs.get("shared_context"))
+        return original_region_2_bind(self, **kwargs)
 
     def _record_region_3_bind(self: object, **kwargs: object) -> object:
         captured["bind_shared_contexts"].append(kwargs.get("shared_context"))
@@ -1625,6 +1952,16 @@ def test_loc_rule_profile_builds_building_restriction_shared_context_once_per_st
         loc_profile_module,
         "build_loc_building_restriction_zone_shared_context",
         _record_shared_context,
+    )
+    monkeypatch.setattr(
+        LocBuildingRestrictionZoneRegion1Rule,
+        "bind",
+        _record_region_1_bind,
+    )
+    monkeypatch.setattr(
+        LocBuildingRestrictionZoneRegion2Rule,
+        "bind",
+        _record_region_2_bind,
     )
     monkeypatch.setattr(
         LocBuildingRestrictionZoneRegion3Rule,
@@ -1650,13 +1987,15 @@ def test_loc_rule_profile_builds_building_restriction_shared_context_once_per_st
     assert captured["bind_shared_contexts"] == [
         expected_shared_context,
         expected_shared_context,
+        expected_shared_context,
+        expected_shared_context,
     ]
     matching_zones = [
         zone
         for zone in payload.protection_zones
         if zone.zone_code == LOC_BUILDING_RESTRICTION_ZONE["zone_code"]
     ]
-    assert {zone.region_code for zone in matching_zones} == {"3", "4"}
+    assert {zone.region_code for zone in matching_zones} == {"1", "2", "3", "4"}
 
 
 def test_loc_building_restriction_zone_region_4_rule_allows_obstacle_within_zone_at_station_height() -> None:

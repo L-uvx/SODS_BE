@@ -131,16 +131,13 @@ def build_loc_building_restriction_zone_shared_context(
 def build_loc_building_restriction_zone_region_1_geometry(
     shared_context: LocBuildingRestrictionZoneSharedContext,
 ) -> LocBuildingRestrictionZoneRegion1Geometry:
+    trapezoid_points = _build_region_1_2_trapezoid_points(
+        shared_context=shared_context,
+        side_sign=1.0,
+    )
     return LocBuildingRestrictionZoneRegion1Geometry(
         local_geometry=ensure_multipolygon(
-            Polygon(
-                [
-                    shared_context.apex_point,
-                    shared_context.root_left_point,
-                    shared_context.station_point,
-                    shared_context.apex_point,
-                ]
-            )
+            Polygon([*trapezoid_points, trapezoid_points[0]])
         )
     )
 
@@ -149,16 +146,13 @@ def build_loc_building_restriction_zone_region_1_geometry(
 def build_loc_building_restriction_zone_region_2_geometry(
     shared_context: LocBuildingRestrictionZoneSharedContext,
 ) -> LocBuildingRestrictionZoneRegion2Geometry:
+    trapezoid_points = _build_region_1_2_trapezoid_points(
+        shared_context=shared_context,
+        side_sign=-1.0,
+    )
     return LocBuildingRestrictionZoneRegion2Geometry(
         local_geometry=ensure_multipolygon(
-            Polygon(
-                [
-                    shared_context.apex_point,
-                    shared_context.station_point,
-                    shared_context.root_right_point,
-                    shared_context.apex_point,
-                ]
-            )
+            Polygon([*trapezoid_points, trapezoid_points[0]])
         )
     )
 
@@ -439,6 +433,73 @@ def _build_arc_points(
             ),
         )
     return points
+
+
+def _build_region_1_2_trapezoid_points(
+    *,
+    shared_context: LocBuildingRestrictionZoneSharedContext,
+    side_sign: float,
+) -> list[tuple[float, float]]:
+    forward_axis_unit = shared_context.runway_axis_unit
+    reverse_axis_unit = (-forward_axis_unit[0], -forward_axis_unit[1])
+    outward_normal_unit = (
+        shared_context.normal_unit[0] * side_sign,
+        shared_context.normal_unit[1] * side_sign,
+    )
+    forward_length_m = float(
+        LOC_BUILDING_RESTRICTION_ZONE["region_1_2_forward_length_m"]
+    )
+    outer_offset_m = float(LOC_BUILDING_RESTRICTION_ZONE["region_1_2_outer_offset_m"])
+    side_angle_degrees = float(
+        LOC_BUILDING_RESTRICTION_ZONE["region_1_2_side_angle_degrees"]
+    )
+
+    root_point = (
+        shared_context.root_left_point
+        if side_sign > 0.0
+        else shared_context.root_right_point
+    )
+    forward_end_point = _offset_point(
+        shared_context.station_point,
+        along_vector=forward_axis_unit,
+        along_distance_m=forward_length_m,
+    )
+    point_2 = _offset_point(
+        forward_end_point,
+        along_vector=outward_normal_unit,
+        along_distance_m=float(LOC_BUILDING_RESTRICTION_ZONE["root_half_width_m"]),
+    )
+    point_3 = _offset_point(
+        forward_end_point,
+        along_vector=outward_normal_unit,
+        along_distance_m=outer_offset_m,
+    )
+    lateral_delta_m = outer_offset_m - float(
+        LOC_BUILDING_RESTRICTION_ZONE["root_half_width_m"]
+    )
+    reverse_distance_m = lateral_delta_m / math.tan(math.radians(side_angle_degrees))
+    point_4 = _offset_point(
+        _offset_point(
+            root_point,
+            along_vector=outward_normal_unit,
+            along_distance_m=lateral_delta_m,
+        ),
+        along_vector=reverse_axis_unit,
+        along_distance_m=reverse_distance_m,
+    )
+    return [root_point, point_2, point_3, point_4]
+
+
+def _offset_point(
+    point: tuple[float, float],
+    *,
+    along_vector: tuple[float, float],
+    along_distance_m: float,
+) -> tuple[float, float]:
+    return (
+        point[0] + along_vector[0] * along_distance_m,
+        point[1] + along_vector[1] * along_distance_m,
+    )
 
 
 def _normalize_vector(vector: tuple[float, float]) -> tuple[float, float]:
