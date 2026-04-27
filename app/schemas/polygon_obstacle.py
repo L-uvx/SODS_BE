@@ -368,6 +368,17 @@ class AnalysisProtectionZonePropertiesResponse(BaseModel):
     label: str
 
 
+class AnalysisProtectionZoneStyleResponse(BaseModel):
+    color_key: str = Field(alias="colorKey")
+    fill: str
+    stroke: str
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
 class AnalysisProtectionZoneResponse(BaseModel):
     id: str
     airport_id: int = Field(alias="airportId")
@@ -387,6 +398,7 @@ class AnalysisProtectionZoneResponse(BaseModel):
         | AnalysisProtectionZoneAnalyticSurfaceVerticalResponse
         | AnalysisProtectionZoneSurfaceAnalyticVerticalResponse
     )
+    style: AnalysisProtectionZoneStyleResponse
     properties: AnalysisProtectionZonePropertiesResponse
     render_geometry: dict[str, object] | None = Field(
         alias="renderGeometry",

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis.context_builder import build_airport_analysis_context
 from app.analysis.local_coordinate import AirportLocalProjector
+from app.analysis.protection_zone_style import resolve_protection_zone_style
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.spatial_facts import build_airport_spatial_facts
 from app.analysis.station_dispatcher import StationAnalysisDispatcher
@@ -540,6 +541,10 @@ class PolygonObstacleImportService:
             "zoneName": protection_zone.zone_name,
             "regionCode": protection_zone.region_code,
             "regionName": protection_zone.region_name,
+            "style": resolve_protection_zone_style(
+                zone_code=protection_zone.zone_code,
+                region_code=protection_zone.region_code,
+            ),
             "properties": {
                 "label": (
                     f"{station_name} {protection_zone.zone_name} "
@@ -759,6 +764,10 @@ class PolygonObstacleImportService:
             return None
 
         result_payload = analysis_task.result_payload or {}
+        protection_zones = [
+            self._build_compatible_protection_zone_result_payload(item)
+            for item in result_payload.get("protectionZones", [])
+        ]
         return AnalysisTaskResultResponse(
             analysisTaskId=analysis_task.id,
             status=analysis_task.status,
@@ -774,11 +783,21 @@ class PolygonObstacleImportService:
                 AnalysisRuleResultResponse(**item)
                 for item in result_payload.get("ruleResults", [])
             ],
-            protectionZones=[
-                AnalysisProtectionZoneResponse(**item)
-                for item in result_payload.get("protectionZones", [])
-            ],
+            protectionZones=[AnalysisProtectionZoneResponse(**item) for item in protection_zones],
         )
+
+    # 为旧版保护区结果补齐缺失的 style 字段。
+    def _build_compatible_protection_zone_result_payload(
+        self,
+        payload: dict[str, object],
+    ) -> dict[str, object]:
+        compatible_payload = dict(payload)
+        if "style" not in compatible_payload:
+            compatible_payload["style"] = resolve_protection_zone_style(
+                zone_code=str(compatible_payload.get("zoneCode") or ""),
+                region_code=str(compatible_payload.get("regionCode") or ""),
+            )
+        return compatible_payload
 
     # 投递分析异步任务到运行时调度器。
     def _dispatch_analysis_task(self, task_id: str) -> None:
