@@ -2054,6 +2054,123 @@ def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_3
     assert protection_zone["renderGeometry"] is None
 
 
+def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_4() -> (
+    None
+):
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Runway(
+                    id=201,
+                    airport_id=1,
+                    run_number="18",
+                    name="Runway 18/36",
+                    longitude=103.975864,
+                    latitude=30.512271,
+                    direction=180.0,
+                    length=600.0,
+                    width=45.0,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="LOC Station",
+                    airport_id=1,
+                    station_type="LOC",
+                    runway_no="18",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "top_elevation": 501.0,
+                    "raw_payload": json.dumps(
+                        {
+                            "localGeometry": {
+                                "type": "MultiPolygon",
+                                "coordinates": [
+                                    [
+                                        [
+                                            [-20.0, 100.0],
+                                            [20.0, 100.0],
+                                            [20.0, 140.0],
+                                            [-20.0, 140.0],
+                                            [-20.0, 100.0],
+                                        ]
+                                    ]
+                                ],
+                            }
+                        }
+                    ),
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    payload = response.json()
+    loc_rule = next(
+        item
+        for item in payload["ruleResults"]
+        if item["ruleName"] == "loc_building_restriction_zone_region_4"
+    )
+    assert loc_rule["zoneCode"] == "loc_building_restriction_zone"
+    assert loc_rule["zoneName"] == "building restriction zone"
+    assert loc_rule["regionCode"] == "4"
+    assert loc_rule["standards"] == {
+        "gb": None,
+        "mh": None,
+    }
+
+    protection_zone = next(
+        item
+        for item in payload["protectionZones"]
+        if item["ruleCode"] == "loc_building_restriction_zone_region_4"
+    )
+    assert protection_zone["zoneCode"] == "loc_building_restriction_zone"
+    assert protection_zone["zoneName"] == "building restriction zone"
+    assert protection_zone["regionCode"] == "4"
+    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
+    assert protection_zone["vertical"] == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 500.0,
+    }
+    assert protection_zone["renderGeometry"] is None
+
+
 def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_station_types() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)

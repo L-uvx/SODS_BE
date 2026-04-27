@@ -4,8 +4,11 @@ from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
 from app.analysis.rules.loc.building_restriction_zone_helpers import (
-    LocBuildingRestrictionZoneGeometry,
-    build_loc_building_restriction_zone_geometry,
+    LocBuildingRestrictionZoneRegion3AnalysisGeometry,
+    LocBuildingRestrictionZoneRegion3Geometry,
+    LocBuildingRestrictionZoneSharedContext,
+    build_loc_building_restriction_zone_region_3_geometry,
+    build_loc_building_restriction_zone_shared_context,
     calculate_region_3_worst_allowed_height_meters,
 )
 from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
@@ -15,7 +18,7 @@ from app.analysis.rules.protection_zone_helpers import build_protection_zone_spe
 @dataclass(slots=True)
 class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
     station: object
-    zone_geometry: LocBuildingRestrictionZoneGeometry
+    zone_geometry: LocBuildingRestrictionZoneRegion3AnalysisGeometry
 
     # 执行 LOC 建筑物限制区第 3 区最不利点判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
@@ -80,10 +83,17 @@ class LocBuildingRestrictionZoneRegion3Rule(ObstacleRule):
         station: object,
         station_point: tuple[float, float],
         runway_context: dict[str, object],
+        shared_context: LocBuildingRestrictionZoneSharedContext | None = None,
     ) -> BoundLocBuildingRestrictionZoneRegion3Rule:
-        zone_geometry = build_loc_building_restriction_zone_geometry(
-            station_point=station_point,
-            runway_context=runway_context,
+        resolved_shared_context = (
+            shared_context
+            or build_loc_building_restriction_zone_shared_context(
+                station_point=station_point,
+                runway_context=runway_context,
+            )
+        )
+        region_3_geometry = build_loc_building_restriction_zone_region_3_geometry(
+            resolved_shared_context
         )
         base_height_meters = float(getattr(station, "altitude", 0.0) or 0.0)
         return BoundLocBuildingRestrictionZoneRegion3Rule(
@@ -96,7 +106,7 @@ class LocBuildingRestrictionZoneRegion3Rule(ObstacleRule):
                 zone_name=self.zone_name,
                 region_code="3",
                 region_name="3",
-                local_geometry=zone_geometry.region_geometries["3"],
+                local_geometry=region_3_geometry.local_geometry,
                 vertical_definition={
                     "mode": "analytic_surface",
                     "baseReference": "station",
@@ -104,29 +114,48 @@ class LocBuildingRestrictionZoneRegion3Rule(ObstacleRule):
                     "surface": {
                         "type": "loc_building_restriction_zone_region_3",
                         "arcHeightMeters": base_height_meters
-                        + zone_geometry.arc_height_offset_meters,
-                        "alphaDegrees": zone_geometry.alpha_degrees,
-                        "stationPoint": [station_point[0], station_point[1]],
+                        + resolved_shared_context.arc_height_offset_meters,
+                        "alphaDegrees": resolved_shared_context.alpha_degrees,
+                        "stationPoint": [
+                            resolved_shared_context.station_point[0],
+                            resolved_shared_context.station_point[1],
+                        ],
                         "apexPoint": [
-                            zone_geometry.apex_point[0],
-                            zone_geometry.apex_point[1],
+                            resolved_shared_context.apex_point[0],
+                            resolved_shared_context.apex_point[1],
                         ],
                         "rootLeftPoint": [
-                            zone_geometry.root_left_point[0],
-                            zone_geometry.root_left_point[1],
+                            resolved_shared_context.root_left_point[0],
+                            resolved_shared_context.root_left_point[1],
                         ],
                         "rootRightPoint": [
-                            zone_geometry.root_right_point[0],
-                            zone_geometry.root_right_point[1],
+                            resolved_shared_context.root_right_point[0],
+                            resolved_shared_context.root_right_point[1],
                         ],
-                        "arcRadiusMeters": zone_geometry.arc_radius_meters,
+                        "arcRadiusMeters": resolved_shared_context.arc_radius_meters,
                         "arcPoints": [
                             [arc_point[0], arc_point[1]]
-                            for arc_point in zone_geometry.arc_points
+                            for arc_point in region_3_geometry.arc_points
                         ],
                     },
                 },
             ),
             station=station,
-            zone_geometry=zone_geometry,
+            zone_geometry=_build_region_3_analysis_geometry(
+                shared_context=resolved_shared_context,
+                region_3_geometry=region_3_geometry,
+            ),
         )
+
+
+def _build_region_3_analysis_geometry(
+    *,
+    shared_context: LocBuildingRestrictionZoneSharedContext,
+    region_3_geometry: LocBuildingRestrictionZoneRegion3Geometry,
+) -> LocBuildingRestrictionZoneRegion3AnalysisGeometry:
+    return LocBuildingRestrictionZoneRegion3AnalysisGeometry(
+        apex_point=shared_context.apex_point,
+        arc_height_offset_meters=shared_context.arc_height_offset_meters,
+        arc_points=region_3_geometry.arc_points,
+        local_geometry=region_3_geometry.local_geometry,
+    )

@@ -4,7 +4,9 @@ from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
 from app.analysis.rules.loc.building_restriction_zone_helpers import (
-    build_loc_building_restriction_zone_geometry,
+    LocBuildingRestrictionZoneSharedContext,
+    build_loc_building_restriction_zone_region_1_geometry,
+    build_loc_building_restriction_zone_shared_context,
 )
 from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
 from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
@@ -65,10 +67,14 @@ class LocBuildingRestrictionZoneRegion1Rule(ObstacleRule):
         station: object,
         station_point: tuple[float, float],
         runway_context: dict[str, object],
+        shared_context: LocBuildingRestrictionZoneSharedContext | None = None,
     ) -> BoundLocBuildingRestrictionZoneRegion1Rule:
-        zone_geometry = build_loc_building_restriction_zone_geometry(
+        resolved_shared_context = shared_context or build_loc_building_restriction_zone_shared_context(
             station_point=station_point,
             runway_context=runway_context,
+        )
+        region_1_geometry = build_loc_building_restriction_zone_region_1_geometry(
+            resolved_shared_context
         )
         base_height_meters = float(getattr(station, "altitude", 0.0) or 0.0)
         return BoundLocBuildingRestrictionZoneRegion1Rule(
@@ -81,7 +87,7 @@ class LocBuildingRestrictionZoneRegion1Rule(ObstacleRule):
                 zone_name=self.zone_name,
                 region_code="1",
                 region_name="1",
-                local_geometry=zone_geometry.region_geometries["1"],
+                local_geometry=region_1_geometry.local_geometry,
                 vertical_definition={
                     "mode": "flat",
                     "baseReference": "station",

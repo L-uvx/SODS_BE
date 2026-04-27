@@ -14,6 +14,8 @@ LOC_BUILDING_RESTRICTION_ZONE = {
     "zone_code": "loc_building_restriction_zone",
     "zone_name": "building restriction zone",
     "root_half_width_m": 500.0,
+    "region_4_side_offset_m": 500.0,
+    "region_4_backward_length_m": 500.0,
     "arc_radius_offset_m": 6000.0,
     "arc_height_offset_m": 70.0,
     "base_angle_degrees": 20.0,

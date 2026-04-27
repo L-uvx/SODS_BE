@@ -18,7 +18,8 @@ from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
 
 
 @dataclass(slots=True)
-class LocBuildingRestrictionZoneGeometry:
+class LocBuildingRestrictionZoneSharedContext:
+    station_point: tuple[float, float]
     apex_point: tuple[float, float]
     root_left_point: tuple[float, float]
     root_right_point: tuple[float, float]
@@ -28,16 +29,48 @@ class LocBuildingRestrictionZoneGeometry:
     alpha_degrees: float
     axis_unit: tuple[float, float]
     normal_unit: tuple[float, float]
+    runway_axis_unit: tuple[float, float]
+
+
+@dataclass(slots=True)
+class LocBuildingRestrictionZoneRegion1Geometry:
+    local_geometry: MultiPolygon
+
+
+@dataclass(slots=True)
+class LocBuildingRestrictionZoneRegion2Geometry:
+    local_geometry: MultiPolygon
+
+
+@dataclass(slots=True)
+class LocBuildingRestrictionZoneRegion3Geometry:
+    local_geometry: MultiPolygon
     arc_points: list[tuple[float, float]]
-    region_geometries: dict[str, MultiPolygon]
 
 
-# 构建 LOC 建筑物限制区共享几何。
-def build_loc_building_restriction_zone_geometry(
+@dataclass(slots=True)
+class LocBuildingRestrictionZoneRegion3AnalysisGeometry:
+    apex_point: tuple[float, float]
+    arc_height_offset_meters: float
+    arc_points: list[tuple[float, float]]
+    local_geometry: MultiPolygon
+
+
+@dataclass(slots=True)
+class LocBuildingRestrictionZoneRegion4Geometry:
+    local_geometry: MultiPolygon
+    front_left_point: tuple[float, float]
+    front_right_point: tuple[float, float]
+    back_left_point: tuple[float, float]
+    back_right_point: tuple[float, float]
+
+
+# 构建 LOC 建筑物限制区共享上下文。
+def build_loc_building_restriction_zone_shared_context(
     *,
     station_point: tuple[float, float],
     runway_context: dict[str, object],
-) -> LocBuildingRestrictionZoneGeometry:
+) -> LocBuildingRestrictionZoneSharedContext:
     center_x, center_y = runway_context["localCenterPoint"]
     original_direction_degrees = float(runway_context["directionDegrees"])
     runway_length_meters = float(runway_context["lengthMeters"])
@@ -77,29 +110,8 @@ def build_loc_building_restriction_zone_geometry(
         station_to_apex_distance_meters=station_to_apex_distance_meters,
         root_half_width_m=root_half_width_m,
     )
-    arc_points = _build_arc_points(
+    return LocBuildingRestrictionZoneSharedContext(
         station_point=station_point,
-        axis_unit=axis_unit,
-        radius_meters=arc_radius_meters,
-        alpha_degrees=alpha_degrees,
-    )
-    left_arc_point = arc_points[0]
-    right_arc_point = arc_points[-1]
-    region_geometries = {
-        "1": ensure_multipolygon(
-            Polygon([apex_point, root_left_point, station_point, apex_point])
-        ),
-        "2": ensure_multipolygon(
-            Polygon([apex_point, station_point, root_right_point, apex_point])
-        ),
-        "3": ensure_multipolygon(
-            Polygon([root_left_point, *arc_points, root_right_point, root_left_point])
-        ),
-        "4": ensure_multipolygon(
-            Polygon([root_left_point, left_arc_point, right_arc_point, root_right_point, root_left_point])
-        ),
-    }
-    return LocBuildingRestrictionZoneGeometry(
         apex_point=apex_point,
         root_left_point=root_left_point,
         root_right_point=root_right_point,
@@ -111,19 +123,144 @@ def build_loc_building_restriction_zone_geometry(
         alpha_degrees=alpha_degrees,
         axis_unit=axis_unit,
         normal_unit=normal_unit,
-        arc_points=arc_points,
-        region_geometries=region_geometries,
+        runway_axis_unit=original_axis_unit,
     )
 
+
+# 构建 LOC 建筑物限制区第 1 区几何。
+def build_loc_building_restriction_zone_region_1_geometry(
+    shared_context: LocBuildingRestrictionZoneSharedContext,
+) -> LocBuildingRestrictionZoneRegion1Geometry:
+    return LocBuildingRestrictionZoneRegion1Geometry(
+        local_geometry=ensure_multipolygon(
+            Polygon(
+                [
+                    shared_context.apex_point,
+                    shared_context.root_left_point,
+                    shared_context.station_point,
+                    shared_context.apex_point,
+                ]
+            )
+        )
+    )
+
+
+# 构建 LOC 建筑物限制区第 2 区几何。
+def build_loc_building_restriction_zone_region_2_geometry(
+    shared_context: LocBuildingRestrictionZoneSharedContext,
+) -> LocBuildingRestrictionZoneRegion2Geometry:
+    return LocBuildingRestrictionZoneRegion2Geometry(
+        local_geometry=ensure_multipolygon(
+            Polygon(
+                [
+                    shared_context.apex_point,
+                    shared_context.station_point,
+                    shared_context.root_right_point,
+                    shared_context.apex_point,
+                ]
+            )
+        )
+    )
+
+
+# 构建 LOC 建筑物限制区第 3 区几何。
+def build_loc_building_restriction_zone_region_3_geometry(
+    shared_context: LocBuildingRestrictionZoneSharedContext,
+) -> LocBuildingRestrictionZoneRegion3Geometry:
+    arc_points = _build_arc_points(
+        station_point=shared_context.station_point,
+        axis_unit=shared_context.axis_unit,
+        radius_meters=shared_context.arc_radius_meters,
+        alpha_degrees=shared_context.alpha_degrees,
+    )
+    return LocBuildingRestrictionZoneRegion3Geometry(
+        local_geometry=ensure_multipolygon(
+            Polygon(
+                [
+                    shared_context.root_left_point,
+                    *arc_points,
+                    shared_context.root_right_point,
+                    shared_context.root_left_point,
+                ]
+            )
+        ),
+        arc_points=arc_points,
+    )
+
+
+# 构建 LOC 建筑物限制区第 4 区几何。
+def build_loc_building_restriction_zone_region_4_geometry(
+    shared_context: LocBuildingRestrictionZoneSharedContext,
+) -> LocBuildingRestrictionZoneRegion4Geometry:
+    reverse_axis_unit = (
+        -shared_context.runway_axis_unit[0],
+        -shared_context.runway_axis_unit[1],
+    )
+    region_4_side_offset_m = float(
+        LOC_BUILDING_RESTRICTION_ZONE["region_4_side_offset_m"]
+    )
+    region_4_backward_length_m = float(
+        LOC_BUILDING_RESTRICTION_ZONE["region_4_backward_length_m"]
+    )
+    region_4_normal_unit = (-reverse_axis_unit[1], reverse_axis_unit[0])
+    region_4_back_center_point = (
+        shared_context.station_point[0]
+        - reverse_axis_unit[0] * region_4_backward_length_m,
+        shared_context.station_point[1]
+        - reverse_axis_unit[1] * region_4_backward_length_m,
+    )
+    region_4_back_left_point = (
+        region_4_back_center_point[0] + region_4_normal_unit[0] * region_4_side_offset_m,
+        region_4_back_center_point[1] + region_4_normal_unit[1] * region_4_side_offset_m,
+    )
+    region_4_back_right_point = (
+        region_4_back_center_point[0] - region_4_normal_unit[0] * region_4_side_offset_m,
+        region_4_back_center_point[1] - region_4_normal_unit[1] * region_4_side_offset_m,
+    )
+    region_4_front_center_point = (
+        shared_context.station_point[0]
+        + reverse_axis_unit[0] * shared_context.station_to_apex_distance_meters,
+        shared_context.station_point[1]
+        + reverse_axis_unit[1] * shared_context.station_to_apex_distance_meters,
+    )
+    region_4_front_left_point = (
+        region_4_front_center_point[0]
+        + region_4_normal_unit[0] * region_4_side_offset_m,
+        region_4_front_center_point[1]
+        + region_4_normal_unit[1] * region_4_side_offset_m,
+    )
+    region_4_front_right_point = (
+        region_4_front_center_point[0]
+        - region_4_normal_unit[0] * region_4_side_offset_m,
+        region_4_front_center_point[1]
+        - region_4_normal_unit[1] * region_4_side_offset_m,
+    )
+    return LocBuildingRestrictionZoneRegion4Geometry(
+        local_geometry=ensure_multipolygon(
+            Polygon(
+                [
+                    region_4_front_left_point,
+                    region_4_back_left_point,
+                    region_4_back_right_point,
+                    region_4_front_right_point,
+                    region_4_front_left_point,
+                ]
+            )
+        ),
+        front_left_point=region_4_front_left_point,
+        front_right_point=region_4_front_right_point,
+        back_left_point=region_4_back_left_point,
+        back_right_point=region_4_back_right_point,
+    )
 
 # 计算区域 3 的最不利允许高度。
 def calculate_region_3_worst_allowed_height_meters(
     *,
-    zone_geometry: LocBuildingRestrictionZoneGeometry,
+    zone_geometry: LocBuildingRestrictionZoneRegion3AnalysisGeometry,
     obstacle_geometry: MultiPolygon,
     station_altitude_meters: float,
 ) -> float | None:
-    intersection = obstacle_geometry.intersection(zone_geometry.region_geometries["3"])
+    intersection = obstacle_geometry.intersection(zone_geometry.local_geometry)
     if intersection.is_empty:
         return None
 
@@ -200,20 +337,11 @@ def _collect_line_candidate_points(
     apex_point: tuple[float, float],
 ) -> list[tuple[float, float]]:
     coordinates = [(float(x), float(y)) for x, y in line.coords]
-    candidate_points = list(coordinates)
-    if len(coordinates) < 2:
-        return candidate_points
-
-    apex = Point(apex_point)
-    for start_point, end_point in zip(coordinates, coordinates[1:]):
-        segment = LineString([start_point, end_point])
-        projected_distance = segment.project(apex)
-        projected_point = segment.interpolate(projected_distance)
-        if projected_point.intersects(segment):
-            candidate_points.append(
-                (float(projected_point.x), float(projected_point.y))
-            )
-    return candidate_points
+    return _collect_segment_projection_candidate_points(
+        coordinates=coordinates,
+        apex_point=apex_point,
+        closed=False,
+    )
 
 
 def _collect_ring_candidate_points(
@@ -221,12 +349,26 @@ def _collect_ring_candidate_points(
     apex_point: tuple[float, float],
 ) -> list[tuple[float, float]]:
     coordinates = [(float(x), float(y)) for x, y in ring.coords[:-1]]
+    return _collect_segment_projection_candidate_points(
+        coordinates=coordinates,
+        apex_point=apex_point,
+        closed=True,
+    )
+
+
+def _collect_segment_projection_candidate_points(
+    *,
+    coordinates: list[tuple[float, float]],
+    apex_point: tuple[float, float],
+    closed: bool,
+) -> list[tuple[float, float]]:
     candidate_points = list(coordinates)
     if len(coordinates) < 2:
         return candidate_points
 
     apex = Point(apex_point)
-    for start_point, end_point in zip(coordinates, coordinates[1:] + coordinates[:1]):
+    end_coordinates = coordinates[1:] + coordinates[:1] if closed else coordinates[1:]
+    for start_point, end_point in zip(coordinates, end_coordinates):
         segment = LineString([start_point, end_point])
         projected_distance = segment.project(apex)
         projected_point = segment.interpolate(projected_distance)

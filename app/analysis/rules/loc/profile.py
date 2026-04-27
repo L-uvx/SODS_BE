@@ -5,6 +5,12 @@ from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.loc.building_restriction_zone_region_3 import (
     LocBuildingRestrictionZoneRegion3Rule,
 )
+from app.analysis.rules.loc.building_restriction_zone_region_4 import (
+    LocBuildingRestrictionZoneRegion4Rule,
+)
+from app.analysis.rules.loc.building_restriction_zone_helpers import (
+    build_loc_building_restriction_zone_shared_context,
+)
 from app.analysis.rules.loc.forward_sector_3000m_15m import (
     LocForwardSector3000m15mRule,
 )
@@ -30,6 +36,7 @@ class LocRuleProfile:
         self._forward_sector_rule = LocForwardSector3000m15mRule()
         self._building_restriction_rules = [
             LocBuildingRestrictionZoneRegion3Rule(),
+            LocBuildingRestrictionZoneRegion4Rule(),
         ]
 
     # 执行 LOC 场地保护区规则。
@@ -55,11 +62,20 @@ class LocRuleProfile:
             station_point=station_point,
             runway_context=runway_context,
         )
+        building_restriction_shared_context = None
+        if self._building_restriction_rules:
+            building_restriction_shared_context = (
+                build_loc_building_restriction_zone_shared_context(
+                    station_point=station_point,
+                    runway_context=runway_context,
+                )
+            )
         building_restriction_rules = [
             rule.bind(
                 station=station,
                 station_point=station_point,
                 runway_context=runway_context,
+                shared_context=building_restriction_shared_context,
             )
             for rule in self._building_restriction_rules
         ]
