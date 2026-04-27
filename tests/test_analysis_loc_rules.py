@@ -1,4 +1,6 @@
+import importlib
 import math
+from decimal import Decimal
 
 import pytest
 from shapely.geometry import LineString, MultiPolygon, Polygon
@@ -18,6 +20,8 @@ from app.analysis.rules.loc import (
     LocBuildingRestrictionZoneRegion3Rule,
     LocBuildingRestrictionZoneRegion4Rule,
     LocForwardSector3000m15mRule,
+    LocRunAreaProtectionRegionARule,
+    LocRunAreaProtectionRegionCRule,
     LocSiteProtectionRule,
 )
 from app.analysis.rules.loc.building_restriction.helpers import (
@@ -28,11 +32,17 @@ from app.analysis.rules.loc.building_restriction.helpers import (
     build_loc_building_restriction_zone_shared_context,
     calculate_region_3_worst_allowed_height_meters,
 )
+from app.analysis.rules.loc.run_area_protection.helpers import (
+    build_loc_run_area_shared_context,
+)
 import app.analysis.rules.loc.building_restriction.region_3 as loc_region_3_module
 import app.analysis.rules.loc.building_restriction.region_1 as loc_region_1_module
 import app.analysis.rules.loc.building_restriction.region_2 as loc_region_2_module
 import app.analysis.rules.loc.building_restriction.region_4 as loc_region_4_module
+import app.analysis.rules.loc.building_restriction as loc_building_restriction_module
 import app.analysis.rules.loc.profile as loc_profile_module
+import app.analysis.rules.loc.run_area_protection as loc_run_area_protection_module
+from app.application.polygon_obstacle_import import PolygonObstacleImportService
 
 
 def test_loc_bound_rule_keeps_protection_zone_and_returns_uniform_result() -> None:
@@ -102,6 +112,8 @@ def test_loc_placeholder_building_restriction_regions_keep_standards_neutral() -
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
+            "unit_number": "16",
         },
     )()
     runway = {
@@ -175,6 +187,274 @@ def test_build_geometry_definition_returns_multipolygon_coordinates() -> None:
     assert geometry_definition["coordinates"][0][0][0] == [0.0, 0.0]
 
 
+def _make_loc_run_area_station() -> object:
+    return type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+            "unit_number": "11",
+        },
+    )()
+
+
+def _make_loc_run_area_shared_context() -> tuple[object, object]:
+    station = _make_loc_run_area_station()
+    shared_context = build_loc_run_area_shared_context(
+        station=station,
+        station_point=(0.0, 0.0),
+        runway_context={
+            "localCenterPoint": (0.0, -600.0),
+            "directionDegrees": 0.0,
+            "lengthMeters": 600.0,
+            "maximumAirworthiness": 1,
+        },
+    )
+
+    assert shared_context is not None
+    return station, shared_context
+
+
+def _make_local_geometry_obstacle(
+    *,
+    obstacle_id: int,
+    name: str,
+    geometry: MultiPolygon,
+    top_elevation: float = 520.0,
+    raw_obstacle_type: str = "建筑物/构建物",
+    global_obstacle_category: str = "building_general",
+) -> dict[str, object]:
+    polygon = max(geometry.geoms, key=lambda item: item.area)
+    coordinates = [
+        [[float(x), float(y)] for x, y in polygon.exterior.coords]
+    ]
+    return {
+        "obstacleId": obstacle_id,
+        "name": name,
+        "rawObstacleType": raw_obstacle_type,
+        "globalObstacleCategory": global_obstacle_category,
+        "topElevation": top_elevation,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [coordinates],
+        },
+    }
+
+
+def _build_inside_obstacle_for_zone(
+    *,
+    zone_geometry: MultiPolygon,
+    obstacle_id: int,
+    name: str,
+) -> dict[str, object]:
+    point = zone_geometry.representative_point()
+    x = float(point.x)
+    y = float(point.y)
+    polygon = Polygon(
+        [
+            (x - 2.0, y - 2.0),
+            (x + 2.0, y - 2.0),
+            (x + 2.0, y + 2.0),
+            (x - 2.0, y + 2.0),
+            (x - 2.0, y - 2.0),
+        ]
+    )
+    return _make_local_geometry_obstacle(
+        obstacle_id=obstacle_id,
+        name=name,
+        geometry=MultiPolygon([polygon]),
+        raw_obstacle_type="车辆/航空器/机械",
+        global_obstacle_category="vehicle_or_aircraft_or_machine",
+    )
+
+
+def _build_outside_obstacle_for_zone(
+    *,
+    zone_geometry: MultiPolygon,
+    obstacle_id: int,
+    name: str,
+) -> dict[str, object]:
+    _, _, max_x, max_y = zone_geometry.bounds
+    polygon = Polygon(
+        [
+            (max_x + 100.0, max_y + 100.0),
+            (max_x + 120.0, max_y + 100.0),
+            (max_x + 120.0, max_y + 120.0),
+            (max_x + 100.0, max_y + 120.0),
+            (max_x + 100.0, max_y + 100.0),
+        ]
+    )
+    return _make_local_geometry_obstacle(
+        obstacle_id=obstacle_id,
+        name=name,
+        geometry=MultiPolygon([polygon]),
+    )
+
+
+def test_loc_run_area_region_a_rule_bind_builds_sensitive_zone_spec() -> None:
+    module = importlib.import_module(
+        "app.analysis.rules.loc.run_area_protection.region_a"
+    )
+    station, shared_context = _make_loc_run_area_shared_context()
+
+    bound_rule = module.LocRunAreaProtectionRegionARule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+
+    assert bound_rule.protection_zone.rule_code == "loc_run_area_protection_region_a"
+    assert bound_rule.protection_zone.zone_code == "loc_run_area_protection"
+    assert bound_rule.protection_zone.region_code == "A"
+    assert (
+        bound_rule.protection_zone.geometry_definition["shapeType"] == "multipolygon"
+    )
+
+
+def test_loc_run_area_region_c_rule_rejects_obstacle_entering_critical_zone() -> None:
+    station, shared_context = _make_loc_run_area_shared_context()
+    bound_rule = LocRunAreaProtectionRegionCRule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+    obstacle = _build_inside_obstacle_for_zone(
+        zone_geometry=bound_rule.protection_zone.local_geometry,
+        obstacle_id=201,
+        name="Critical Obstacle",
+    )
+
+    result = bound_rule.analyze(obstacle)
+
+    assert result.is_applicable is True
+    assert result.is_compliant is False
+    assert result.standards_rule_code == "loc_run_area_protection_critical"
+    assert result.metrics["enteredProtectionZone"] is True
+
+
+def test_loc_run_area_region_c_rule_allows_obstacle_outside_critical_zone() -> None:
+    station, shared_context = _make_loc_run_area_shared_context()
+    bound_rule = LocRunAreaProtectionRegionCRule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+    obstacle = _build_outside_obstacle_for_zone(
+        zone_geometry=bound_rule.protection_zone.local_geometry,
+        obstacle_id=202,
+        name="Outside Critical Obstacle",
+    )
+    obstacle["rawObstacleType"] = "车辆/航空器/机械"
+    obstacle["globalObstacleCategory"] = "vehicle_or_aircraft_or_machine"
+
+    result = bound_rule.analyze(obstacle)
+
+    assert result.is_applicable is True
+    assert result.is_compliant is True
+    assert result.standards_rule_code == "loc_run_area_protection_critical"
+    assert result.metrics["enteredProtectionZone"] is False
+
+
+def test_loc_run_area_region_b_rule_bind_builds_sensitive_zone_spec() -> None:
+    module = importlib.import_module(
+        "app.analysis.rules.loc.run_area_protection.region_b"
+    )
+    station, shared_context = _make_loc_run_area_shared_context()
+
+    bound_rule = module.LocRunAreaProtectionRegionBRule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+
+    assert bound_rule.protection_zone.rule_code == "loc_run_area_protection_region_b"
+    assert bound_rule.protection_zone.zone_code == "loc_run_area_protection"
+    assert bound_rule.protection_zone.region_code == "B"
+    assert (
+        bound_rule.protection_zone.geometry_definition["shapeType"] == "multipolygon"
+    )
+
+
+def test_loc_run_area_region_a_rule_rejects_obstacle_entering_sensitive_zone() -> None:
+    station, shared_context = _make_loc_run_area_shared_context()
+    bound_rule = LocRunAreaProtectionRegionARule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+    obstacle = _build_inside_obstacle_for_zone(
+        zone_geometry=bound_rule.protection_zone.local_geometry,
+        obstacle_id=203,
+        name="Sensitive Obstacle",
+    )
+
+    result = bound_rule.analyze(obstacle)
+
+    assert result.is_applicable is True
+    assert result.is_compliant is False
+    assert result.standards_rule_code == "loc_run_area_protection_sensitive"
+    assert result.metrics["enteredProtectionZone"] is True
+
+
+def test_loc_run_area_region_a_rule_skips_non_mobile_obstacle_type() -> None:
+    station, shared_context = _make_loc_run_area_shared_context()
+    bound_rule = LocRunAreaProtectionRegionARule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+    obstacle = _make_local_geometry_obstacle(
+        obstacle_id=2031,
+        name="Static Building In Sensitive Zone",
+        geometry=bound_rule.protection_zone.local_geometry,
+        raw_obstacle_type="建筑物/构建物",
+        global_obstacle_category="building_general",
+    )
+
+    result = bound_rule.analyze(obstacle)
+
+    assert result.is_applicable is False
+    assert result.is_compliant is True
+    assert result.standards_rule_code == "loc_run_area_protection_sensitive"
+    assert result.metrics["enteredProtectionZone"] is True
+
+
+def test_loc_run_area_region_c_rule_bind_builds_critical_zone_spec() -> None:
+    module = importlib.import_module(
+        "app.analysis.rules.loc.run_area_protection.region_c"
+    )
+    station, shared_context = _make_loc_run_area_shared_context()
+
+    bound_rule = module.LocRunAreaProtectionRegionCRule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+
+    assert bound_rule.protection_zone.rule_code == "loc_run_area_protection_region_c"
+    assert bound_rule.protection_zone.zone_code == "loc_run_area_protection"
+    assert bound_rule.protection_zone.region_code == "C"
+    assert (
+        bound_rule.protection_zone.geometry_definition["shapeType"] == "multipolygon"
+    )
+
+
+def test_loc_run_area_region_d_rule_bind_builds_sensitive_zone_spec() -> None:
+    module = importlib.import_module(
+        "app.analysis.rules.loc.run_area_protection.region_d"
+    )
+    station, shared_context = _make_loc_run_area_shared_context()
+
+    bound_rule = module.LocRunAreaProtectionRegionDRule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+
+    assert bound_rule.protection_zone.rule_code == "loc_run_area_protection_region_d"
+    assert bound_rule.protection_zone.zone_code == "loc_run_area_protection"
+    assert bound_rule.protection_zone.region_code == "D"
+    assert (
+        bound_rule.protection_zone.geometry_definition["shapeType"] == "multipolygon"
+    )
+
+
 def test_loc_site_protection_rule_rejects_general_obstacle_entering_zone() -> None:
     station = type(
         "Station",
@@ -184,6 +464,8 @@ def test_loc_site_protection_rule_rejects_general_obstacle_entering_zone() -> No
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
+            "unit_number": "16",
         },
     )()
     runway = {
@@ -240,6 +522,8 @@ def test_loc_site_protection_rule_allows_cable_below_station_altitude() -> None:
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
+            "unit_number": "16",
         },
     )()
     runway = {
@@ -294,6 +578,8 @@ def test_loc_site_protection_uses_runway_direction_end_for_rectangle_length() ->
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
+            "unit_number": "16",
         },
     )()
     runway = {
@@ -634,6 +920,7 @@ def test_loc_forward_sector_rule_rejects_applicable_obstacle_above_height_limit(
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
+        "maximumAirworthiness": 2,
     }
     obstacle = {
         "obstacleId": 5,
@@ -683,6 +970,8 @@ def test_loc_forward_sector_rule_allows_applicable_obstacle_at_height_limit() ->
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
+            "unit_number": "16",
         },
     )()
     runway = {
@@ -692,6 +981,7 @@ def test_loc_forward_sector_rule_allows_applicable_obstacle_at_height_limit() ->
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
+        "maximumAirworthiness": 2,
     }
     obstacle = {
         "obstacleId": 6,
@@ -735,6 +1025,8 @@ def test_loc_profile_skips_forward_sector_rule_for_non_applicable_obstacle() -> 
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
+            "unit_number": "16",
         },
     )()
     runway = {
@@ -744,6 +1036,7 @@ def test_loc_profile_skips_forward_sector_rule_for_non_applicable_obstacle() -> 
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
+        "maximumAirworthiness": 2,
     }
     obstacle = {
         "obstacleId": 7,
@@ -774,15 +1067,363 @@ def test_loc_profile_skips_forward_sector_rule_for_non_applicable_obstacle() -> 
         runways=[runway],
     )
 
-    assert [result.rule_name for result in payload.rule_results] == ["loc_site_protection"]
+    assert [result.rule_name for result in payload.rule_results] == [
+        "loc_site_protection",
+    ]
     assert {zone.rule_code for zone in payload.protection_zones} == {
         "loc_site_protection",
-        "loc_forward_sector_3000m_15m",
-        "loc_building_restriction_zone_region_1",
-        "loc_building_restriction_zone_region_2",
-        "loc_building_restriction_zone_region_3",
-        "loc_building_restriction_zone_region_4",
     }
+
+
+def _make_loc_profile_station() -> object:
+    return type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "II",
+            "unit_number": "16",
+        },
+    )()
+
+
+def _make_loc_profile_runway(*, maximum_airworthiness: float = 2.0) -> dict[str, object]:
+    return {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+        "maximumAirworthiness": maximum_airworthiness,
+    }
+
+
+class _FakeBoundRule(BoundObstacleRule):
+    def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
+        return AnalysisRuleResult(
+            station_id=self.protection_zone.station_id,
+            station_type=self.protection_zone.station_type,
+            obstacle_id=int(obstacle["obstacleId"]),
+            obstacle_name=str(obstacle["name"]),
+            raw_obstacle_type=str(obstacle["rawObstacleType"]),
+            global_obstacle_category=str(obstacle["globalObstacleCategory"]),
+            rule_code=self.protection_zone.rule_code,
+            rule_name=self.protection_zone.rule_name,
+            zone_code=self.protection_zone.zone_code,
+            zone_name=self.protection_zone.zone_name,
+            region_code=self.protection_zone.region_code,
+            region_name=self.protection_zone.region_name,
+            is_applicable=True,
+            is_compliant=True,
+            message="fake result",
+            metrics={},
+        )
+
+
+def _make_fake_bound_rule(*, rule_code: str, zone_code: str, region_code: str) -> _FakeBoundRule:
+    return _FakeBoundRule(
+        protection_zone=ProtectionZoneSpec(
+            station_id=101,
+            station_type="LOC",
+            rule_code=rule_code,
+            rule_name=rule_code,
+            zone_code=zone_code,
+            zone_name=zone_code,
+            region_code=region_code,
+            region_name=region_code,
+            local_geometry=MultiPolygon(
+                [
+                    Polygon(
+                        [
+                            (0.0, 0.0),
+                            (1.0, 0.0),
+                            (1.0, 1.0),
+                            (0.0, 1.0),
+                            (0.0, 0.0),
+                        ]
+                    )
+                ]
+            ),
+            geometry_definition={"shapeType": "multipolygon", "coordinates": []},
+            vertical_definition={
+                "mode": "flat",
+                "baseReference": "station",
+                "baseHeightMeters": 500.0,
+            },
+        )
+    )
+
+
+def test_loc_rule_profile_skips_run_area_and_building_restriction_prebind_for_hill_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    station = _make_loc_profile_station()
+    runway = _make_loc_profile_runway()
+    obstacle = {
+        "obstacleId": 701,
+        "name": "Hill Only Obstacle",
+        "rawObstacleType": "山丘",
+        "globalObstacleCategory": "hill",
+        "topElevation": 999.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]],
+        },
+    }
+    calls = {
+        "run_area_builder": 0,
+        "building_builder": 0,
+    }
+
+    def _fake_site_bind(self, *, station: object, station_point: tuple[float, float], runway_context: dict[str, object]) -> BoundObstacleRule:
+        return _make_fake_bound_rule(
+            rule_code="loc_site_protection",
+            zone_code="loc_site_protection",
+            region_code="default",
+        )
+
+    def _record_run_area_builder(*, station: object, station_point: tuple[float, float], runway_context: dict[str, object]) -> object:
+        calls["run_area_builder"] += 1
+        return object()
+
+    def _record_building_builder(*, station_point: tuple[float, float], runway_context: dict[str, object]) -> object:
+        calls["building_builder"] += 1
+        return object()
+
+    monkeypatch.setattr(loc_profile_module.LocSiteProtectionRule, "bind", _fake_site_bind)
+    monkeypatch.setattr(
+        loc_profile_module,
+        "build_loc_run_area_shared_context",
+        _record_run_area_builder,
+    )
+    monkeypatch.setattr(
+        loc_profile_module,
+        "build_loc_building_restriction_zone_shared_context",
+        _record_building_builder,
+    )
+
+    LocRuleProfile().analyze(
+        station=station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+
+    assert calls["run_area_builder"] == 0
+    assert calls["building_builder"] == 0
+
+
+def test_loc_rule_profile_only_prebinds_run_area_for_mobile_obstacle_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    station = _make_loc_profile_station()
+    runway = _make_loc_profile_runway(maximum_airworthiness=1.0)
+    obstacle = {
+        "obstacleId": 702,
+        "name": "Mobile Obstacle",
+        "rawObstacleType": "车辆/航空器/机械",
+        "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
+        "topElevation": 505.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]],
+        },
+    }
+    calls = {
+        "run_area_builder": 0,
+        "building_builder": 0,
+        "forward_sector_bind": 0,
+    }
+
+    def _fake_site_bind(self, *, station: object, station_point: tuple[float, float], runway_context: dict[str, object]) -> BoundObstacleRule:
+        return _make_fake_bound_rule(
+            rule_code="loc_site_protection",
+            zone_code="loc_site_protection",
+            region_code="default",
+        )
+
+    def _record_forward_sector_bind(self, *, station: object, station_point: tuple[float, float], runway_context: dict[str, object]) -> BoundObstacleRule:
+        calls["forward_sector_bind"] += 1
+        return _make_fake_bound_rule(
+            rule_code="loc_forward_sector_3000m_15m",
+            zone_code="loc_forward_sector_3000m_15m",
+            region_code="default",
+        )
+
+    def _record_run_area_builder(*, station: object, station_point: tuple[float, float], runway_context: dict[str, object]) -> object:
+        calls["run_area_builder"] += 1
+        return object()
+
+    def _record_building_builder(*, station_point: tuple[float, float], runway_context: dict[str, object]) -> object:
+        calls["building_builder"] += 1
+        return object()
+
+    def _fake_run_area_bind(self, *, station: object, shared_context: object) -> BoundObstacleRule:
+        return _make_fake_bound_rule(
+            rule_code=str(self.rule_code),
+            zone_code="loc_run_area_protection",
+            region_code=str(getattr(self, "region_code", "default")),
+        )
+
+    monkeypatch.setattr(loc_profile_module.LocSiteProtectionRule, "bind", _fake_site_bind)
+    monkeypatch.setattr(
+        loc_profile_module.LocForwardSector3000m15mRule,
+        "bind",
+        _record_forward_sector_bind,
+    )
+    monkeypatch.setattr(
+        loc_profile_module,
+        "build_loc_run_area_shared_context",
+        _record_run_area_builder,
+    )
+    monkeypatch.setattr(
+        loc_profile_module,
+        "build_loc_building_restriction_zone_shared_context",
+        _record_building_builder,
+    )
+    monkeypatch.setattr(
+        loc_profile_module.LocRunAreaProtectionRegionARule,
+        "bind",
+        _fake_run_area_bind,
+    )
+    monkeypatch.setattr(
+        loc_profile_module.LocRunAreaProtectionRegionBRule,
+        "bind",
+        _fake_run_area_bind,
+    )
+    monkeypatch.setattr(
+        loc_profile_module.LocRunAreaProtectionRegionCRule,
+        "bind",
+        _fake_run_area_bind,
+    )
+    monkeypatch.setattr(
+        loc_profile_module.LocRunAreaProtectionRegionDRule,
+        "bind",
+        _fake_run_area_bind,
+    )
+
+    LocRuleProfile().analyze(
+        station=station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+
+    assert calls["run_area_builder"] == 1
+    assert calls["building_builder"] == 0
+    assert calls["forward_sector_bind"] == 0
+
+
+def test_loc_rule_profile_only_prebinds_building_groups_for_building_obstacle_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    station = _make_loc_profile_station()
+    runway = _make_loc_profile_runway()
+    obstacle = {
+        "obstacleId": 703,
+        "name": "Building Obstacle",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]],
+        },
+    }
+    calls = {
+        "run_area_builder": 0,
+        "building_builder": 0,
+        "forward_sector_bind": 0,
+    }
+
+    def _fake_site_bind(self, *, station: object, station_point: tuple[float, float], runway_context: dict[str, object]) -> BoundObstacleRule:
+        return _make_fake_bound_rule(
+            rule_code="loc_site_protection",
+            zone_code="loc_site_protection",
+            region_code="default",
+        )
+
+    def _record_forward_sector_bind(self, *, station: object, station_point: tuple[float, float], runway_context: dict[str, object]) -> BoundObstacleRule:
+        calls["forward_sector_bind"] += 1
+        return _make_fake_bound_rule(
+            rule_code="loc_forward_sector_3000m_15m",
+            zone_code="loc_forward_sector_3000m_15m",
+            region_code="default",
+        )
+
+    def _record_run_area_builder(*, station: object, station_point: tuple[float, float], runway_context: dict[str, object]) -> object:
+        calls["run_area_builder"] += 1
+        return object()
+
+    def _record_building_builder(*, station_point: tuple[float, float], runway_context: dict[str, object]) -> object:
+        calls["building_builder"] += 1
+        return object()
+
+    def _fake_building_bind(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+        runway_context: dict[str, object],
+        shared_context: object,
+    ) -> BoundObstacleRule:
+        return _make_fake_bound_rule(
+            rule_code=str(self.rule_code),
+            zone_code="loc_building_restriction_zone",
+            region_code=str(getattr(self, "region_code", "default")),
+        )
+
+    monkeypatch.setattr(loc_profile_module.LocSiteProtectionRule, "bind", _fake_site_bind)
+    monkeypatch.setattr(
+        loc_profile_module.LocForwardSector3000m15mRule,
+        "bind",
+        _record_forward_sector_bind,
+    )
+    monkeypatch.setattr(
+        loc_profile_module,
+        "build_loc_run_area_shared_context",
+        _record_run_area_builder,
+    )
+    monkeypatch.setattr(
+        loc_profile_module,
+        "build_loc_building_restriction_zone_shared_context",
+        _record_building_builder,
+    )
+    monkeypatch.setattr(
+        loc_profile_module.LocBuildingRestrictionZoneRegion1Rule,
+        "bind",
+        _fake_building_bind,
+    )
+    monkeypatch.setattr(
+        loc_profile_module.LocBuildingRestrictionZoneRegion2Rule,
+        "bind",
+        _fake_building_bind,
+    )
+    monkeypatch.setattr(
+        loc_profile_module.LocBuildingRestrictionZoneRegion3Rule,
+        "bind",
+        _fake_building_bind,
+    )
+    monkeypatch.setattr(
+        loc_profile_module.LocBuildingRestrictionZoneRegion4Rule,
+        "bind",
+        _fake_building_bind,
+    )
+
+    LocRuleProfile().analyze(
+        station=station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+
+    assert calls["building_builder"] == 1
+    assert calls["forward_sector_bind"] == 1
+    assert calls["run_area_builder"] == 0
 
 
 def test_loc_rule_profile_returns_rule_results_and_protection_zone_specs() -> None:
@@ -794,6 +1435,8 @@ def test_loc_rule_profile_returns_rule_results_and_protection_zone_specs() -> No
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
+            "unit_number": "16",
         },
     )()
     runway = {
@@ -803,6 +1446,7 @@ def test_loc_rule_profile_returns_rule_results_and_protection_zone_specs() -> No
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 45.0,
+        "maximumAirworthiness": 2,
     }
     obstacle = {
         "obstacleId": 70,
@@ -847,6 +1491,303 @@ def test_loc_rule_profile_returns_rule_results_and_protection_zone_specs() -> No
         "loc_building_restriction_zone_region_3",
         "loc_building_restriction_zone_region_4",
     }
+    assert {zone.rule_code for zone in payload.protection_zones} == {
+        "loc_site_protection",
+        "loc_forward_sector_3000m_15m",
+        "loc_building_restriction_zone_region_1",
+        "loc_building_restriction_zone_region_2",
+        "loc_building_restriction_zone_region_3",
+        "loc_building_restriction_zone_region_4",
+    }
+
+
+def test_loc_rule_profile_returns_run_area_abcd_protection_zones_when_context_valid() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+            "unit_number": "11",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+        "maximumAirworthiness": 1,
+    }
+
+    payload = LocRuleProfile().analyze(
+        station=station,
+        obstacles=[],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+
+    run_area_zone_codes = {
+        zone.rule_code
+        for zone in payload.protection_zones
+        if zone.zone_code == "loc_run_area_protection"
+    }
+
+    assert run_area_zone_codes == {
+        "loc_run_area_protection_region_a",
+        "loc_run_area_protection_region_b",
+        "loc_run_area_protection_region_c",
+        "loc_run_area_protection_region_d",
+    }
+
+
+def test_loc_rule_profile_does_not_raise_when_run_area_table_row_lacks_optional_region_parameters() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+            "unit_number": "12",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+        "maximumAirworthiness": 1,
+    }
+    obstacle = {
+        "obstacleId": 205,
+        "name": "Run Area Optional Region Obstacle",
+        "rawObstacleType": "车辆/航空器/机械",
+        "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
+        "topElevation": 505.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [-20.0, -1040.0],
+                        [20.0, -1040.0],
+                        [20.0, -1000.0],
+                        [-20.0, -1000.0],
+                        [-20.0, -1040.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    try:
+        LocRuleProfile().analyze(
+            station=station,
+            obstacles=[obstacle],
+            station_point=(0.0, 0.0),
+            runways=[runway],
+        )
+    except ValueError as exc:
+        pytest.fail(f"LocRuleProfile.analyze should skip unavailable run-area regions: {exc}")
+
+
+def test_loc_rule_profile_keeps_region_c_and_skips_unavailable_run_area_regions() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+            "unit_number": "12",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+        "maximumAirworthiness": 1,
+    }
+    obstacle = {
+        "obstacleId": 206,
+        "name": "Run Area Critical Obstacle",
+        "rawObstacleType": "车辆/航空器/机械",
+        "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
+        "topElevation": 505.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [-20.0, -1040.0],
+                        [20.0, -1040.0],
+                        [20.0, -1000.0],
+                        [-20.0, -1000.0],
+                        [-20.0, -1040.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    payload = LocRuleProfile().analyze(
+        station=station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+
+    run_area_zone_codes = {
+        zone.rule_code
+        for zone in payload.protection_zones
+        if zone.zone_code == "loc_run_area_protection"
+    }
+
+    assert run_area_zone_codes == {"loc_run_area_protection_region_c"}
+
+
+def test_loc_rule_profile_emits_run_area_rule_results_for_intersecting_zone() -> None:
+    station, shared_context = _make_loc_run_area_shared_context()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+        "maximumAirworthiness": 1,
+    }
+    run_area_rule = LocRunAreaProtectionRegionCRule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+    obstacle = _build_inside_obstacle_for_zone(
+        zone_geometry=run_area_rule.protection_zone.local_geometry,
+        obstacle_id=204,
+        name="Profile Critical Obstacle",
+    )
+
+    payload = LocRuleProfile().analyze(
+        station=station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+
+    region_c_results = [
+        result
+        for result in payload.rule_results
+        if result.rule_code == "loc_run_area_protection_region_c"
+    ]
+
+    assert len(region_c_results) == 1
+    assert region_c_results[0].is_applicable is True
+    assert region_c_results[0].is_compliant is False
+    assert (
+        region_c_results[0].standards_rule_code
+        == "loc_run_area_protection_critical"
+    )
+    assert region_c_results[0].metrics["enteredProtectionZone"] is True
+
+
+def test_loc_rule_profile_accepts_integral_float_airworthiness_from_service_context() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+            "unit_number": "11",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+        "maximumAirworthiness": 1.0,
+    }
+
+    payload = LocRuleProfile().analyze(
+        station=station,
+        obstacles=[],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+
+    assert {
+        zone.rule_code
+        for zone in payload.protection_zones
+        if zone.zone_code == "loc_run_area_protection"
+    } == {
+        "loc_run_area_protection_region_a",
+        "loc_run_area_protection_region_b",
+        "loc_run_area_protection_region_c",
+        "loc_run_area_protection_region_d",
+    }
+
+
+def test_loc_rule_profile_returns_no_run_area_abcd_protection_zones_when_context_invalid() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+            "unit_number": "11",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+        "maximumAirworthiness": 99,
+    }
+
+    payload = LocRuleProfile().analyze(
+        station=station,
+        obstacles=[],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+
+    assert {zone.rule_code for zone in payload.protection_zones} == {
+        "loc_site_protection",
+        "loc_forward_sector_3000m_15m",
+        "loc_building_restriction_zone_region_1",
+        "loc_building_restriction_zone_region_2",
+        "loc_building_restriction_zone_region_3",
+        "loc_building_restriction_zone_region_4",
+    }
+    assert all(
+        zone.zone_code != "loc_run_area_protection"
+        for zone in payload.protection_zones
+    )
 
 
 def test_loc_rule_profile_payload_is_not_iterable() -> None:
@@ -931,6 +1872,36 @@ def test_loc_forward_sector_rule_uses_config_defined_defaults() -> None:
     assert LOC_FORWARD_SECTOR_3000M_15M["height_limit_offset_m"] == 15.0
     assert result.metrics["heightLimitMeters"] == 515.0
     assert result.metrics["elevationAngleDegrees"] == 0.0
+
+
+def test_build_runway_contexts_preserves_non_integral_airworthiness_for_validation() -> None:
+    service = PolygonObstacleImportService.__new__(PolygonObstacleImportService)
+
+    class _Projector:
+        def project_point(self, longitude: float, latitude: float) -> tuple[float, float]:
+            return (longitude, latitude)
+
+    runway = type(
+        "Runway",
+        (),
+        {
+            "id": 201,
+            "run_number": "18",
+            "longitude": Decimal("120.100000"),
+            "latitude": Decimal("30.100000"),
+            "direction": Decimal("90.00"),
+            "length": Decimal("600.00"),
+            "width": Decimal("45.00"),
+            "maximum_airworthiness": Decimal("2.50"),
+        },
+    )()
+
+    runway_contexts = service._build_runway_contexts(
+        projector=_Projector(),
+        runways=[runway],
+    )
+
+    assert runway_contexts[0]["maximumAirworthiness"] == 2.5
 
 
 def test_loc_forward_sector_rule_respects_sector_angle_boundary() -> None:
@@ -2031,6 +3002,168 @@ def test_loc_rule_profile_builds_building_restriction_shared_context_once_per_st
         if zone.zone_code == LOC_BUILDING_RESTRICTION_ZONE["zone_code"]
     ]
     assert {zone.region_code for zone in matching_zones} == {"1", "2", "3", "4"}
+
+
+def test_loc_run_area_rule_group_exposes_shared_supported_categories_declaration() -> None:
+    assert loc_run_area_protection_module.SUPPORTED_CATEGORIES == {
+        "vehicle_or_aircraft_or_machine",
+    }
+
+
+def test_loc_building_restriction_rule_group_exposes_shared_supported_categories_declaration() -> None:
+    assert loc_building_restriction_module.SUPPORTED_CATEGORIES == {
+        "building_general",
+        "building_hangar",
+        "building_terminal",
+    }
+
+
+def test_loc_rule_profile_prebind_gating_follows_patched_rule_group_declarations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    station = _make_loc_profile_station()
+    runway = _make_loc_profile_runway(maximum_airworthiness=1.0)
+    obstacles = [
+        {
+            "obstacleId": 801,
+            "name": "Patched Run Area Obstacle",
+            "rawObstacleType": "山丘",
+            "globalObstacleCategory": "hill",
+            "topElevation": 505.0,
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [[[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0], [-1.0, -1.0]]]
+                ],
+            },
+        },
+        {
+            "obstacleId": 802,
+            "name": "Patched Building Obstacle",
+            "rawObstacleType": "树木",
+            "globalObstacleCategory": "tree",
+            "topElevation": 506.0,
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [[[-2.0, -2.0], [2.0, -2.0], [2.0, 2.0], [-2.0, 2.0], [-2.0, -2.0]]]
+                ],
+            },
+        },
+    ]
+    calls = {
+        "run_area_builder": 0,
+        "building_builder": 0,
+    }
+
+    monkeypatch.setattr(
+        loc_run_area_protection_module,
+        "SUPPORTED_CATEGORIES",
+        {"hill"},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        loc_building_restriction_module,
+        "SUPPORTED_CATEGORIES",
+        {"tree"},
+        raising=False,
+    )
+
+    def _fake_site_bind(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+        runway_context: dict[str, object],
+    ) -> BoundObstacleRule:
+        return _make_fake_bound_rule(
+            rule_code="loc_site_protection",
+            zone_code="loc_site_protection",
+            region_code="default",
+        )
+
+    def _record_run_area_builder(
+        *,
+        station: object,
+        station_point: tuple[float, float],
+        runway_context: dict[str, object],
+    ) -> object:
+        calls["run_area_builder"] += 1
+        return object()
+
+    def _record_building_builder(
+        *, station_point: tuple[float, float], runway_context: dict[str, object]
+    ) -> object:
+        calls["building_builder"] += 1
+        return object()
+
+    def _fake_run_area_bind(self: object, **kwargs: object) -> BoundObstacleRule:
+        return _make_fake_bound_rule(
+            rule_code="loc_run_area_protection_region_a",
+            zone_code="loc_run_area_protection",
+            region_code="A",
+        )
+
+    def _fake_building_bind(self: object, **kwargs: object) -> BoundObstacleRule:
+        return _make_fake_bound_rule(
+            rule_code="loc_building_restriction_zone_region_1",
+            zone_code="loc_building_restriction_zone",
+            region_code="1",
+        )
+
+    monkeypatch.setattr(loc_profile_module.LocSiteProtectionRule, "bind", _fake_site_bind)
+    monkeypatch.setattr(
+        loc_profile_module,
+        "build_loc_run_area_shared_context",
+        _record_run_area_builder,
+    )
+    monkeypatch.setattr(
+        loc_profile_module,
+        "build_loc_building_restriction_zone_shared_context",
+        _record_building_builder,
+    )
+    monkeypatch.setattr(LocRunAreaProtectionRegionARule, "bind", _fake_run_area_bind)
+    monkeypatch.setattr(
+        loc_profile_module.LocRunAreaProtectionRegionBRule,
+        "bind",
+        _fake_run_area_bind,
+    )
+    monkeypatch.setattr(LocRunAreaProtectionRegionCRule, "bind", _fake_run_area_bind)
+    monkeypatch.setattr(
+        loc_profile_module.LocRunAreaProtectionRegionDRule,
+        "bind",
+        _fake_run_area_bind,
+    )
+    monkeypatch.setattr(
+        LocBuildingRestrictionZoneRegion1Rule,
+        "bind",
+        _fake_building_bind,
+    )
+    monkeypatch.setattr(
+        LocBuildingRestrictionZoneRegion2Rule,
+        "bind",
+        _fake_building_bind,
+    )
+    monkeypatch.setattr(
+        LocBuildingRestrictionZoneRegion3Rule,
+        "bind",
+        _fake_building_bind,
+    )
+    monkeypatch.setattr(
+        LocBuildingRestrictionZoneRegion4Rule,
+        "bind",
+        _fake_building_bind,
+    )
+
+    LocRuleProfile().analyze(
+        station=station,
+        obstacles=obstacles,
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+
+    assert calls["run_area_builder"] == 1
+    assert calls["building_builder"] == 1
 
 
 def test_loc_building_restriction_zone_region_4_rule_allows_obstacle_within_zone_at_station_height() -> None:

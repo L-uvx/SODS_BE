@@ -25,6 +25,12 @@ from app.analysis.rules.loc.building_restriction.region_4 import (
     LocBuildingRestrictionZoneRegion4Rule,
 )
 
+SUPPORTED_CATEGORIES = {
+    "building_general",
+    "building_hangar",
+    "building_terminal",
+}
+
 __all__ = [
     "LocBuildingRestrictionZoneRegion1Geometry",
     "LocBuildingRestrictionZoneRegion2Geometry",
@@ -42,4 +48,5 @@ __all__ = [
     "LocBuildingRestrictionZoneRegion2Rule",
     "LocBuildingRestrictionZoneRegion3Rule",
     "LocBuildingRestrictionZoneRegion4Rule",
+    "SUPPORTED_CATEGORIES",
 ]

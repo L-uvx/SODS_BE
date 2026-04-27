@@ -19,6 +19,12 @@ from app.analysis.rules.loc.forward_sector_3000m_15m import (
     LocForwardSector3000m15mRule,
 )
 from app.analysis.rules.loc.profile import LocRuleProfile
+from app.analysis.rules.loc.run_area_protection import (
+    LocRunAreaProtectionRegionARule,
+    LocRunAreaProtectionRegionBRule,
+    LocRunAreaProtectionRegionCRule,
+    LocRunAreaProtectionRegionDRule,
+)
 from app.analysis.rules.loc.site_protection import LocSiteProtectionRule
 
 __all__ = [
@@ -31,5 +37,9 @@ __all__ = [
     "LocBuildingRestrictionZoneRegion4Rule",
     "LocForwardSector3000m15mRule",
     "LocRuleProfile",
+    "LocRunAreaProtectionRegionARule",
+    "LocRunAreaProtectionRegionBRule",
+    "LocRunAreaProtectionRegionCRule",
+    "LocRunAreaProtectionRegionDRule",
     "LocSiteProtectionRule",
 ]

@@ -443,6 +443,11 @@ class PolygonObstacleImportService:
                     "directionDegrees": float(runway.direction),
                     "lengthMeters": float(runway.length),
                     "widthMeters": float(runway.width or 0.0),
+                    "maximumAirworthiness": (
+                        float(runway.maximum_airworthiness)
+                        if runway.maximum_airworthiness is not None
+                        else None
+                    ),
                 }
             )
         return runway_contexts

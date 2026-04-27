@@ -13,6 +13,8 @@ def test_station_rule_dispatcher_dispatches_loc_and_ndb_by_station_type() -> Non
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
+            "unit_number": "16",
         },
     )()
     ndb_station = type(
@@ -28,8 +30,8 @@ def test_station_rule_dispatcher_dispatches_loc_and_ndb_by_station_type() -> Non
     obstacle = {
         "obstacleId": 1,
         "name": "Obstacle A",
-        "rawObstacleType": "建筑物/构建物",
-        "globalObstacleCategory": "building_general",
+        "rawObstacleType": "车辆/航空器/机械",
+        "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
         "topElevation": 520.0,
         "geometry": {
             "type": "MultiPolygon",
@@ -53,6 +55,7 @@ def test_station_rule_dispatcher_dispatches_loc_and_ndb_by_station_type() -> Non
         "directionDegrees": 180.0,
         "lengthMeters": 400.0,
         "widthMeters": 45.0,
+        "maximumAirworthiness": 2,
     }
 
     loc_payload = dispatcher.analyze_station(
@@ -70,27 +73,23 @@ def test_station_rule_dispatcher_dispatches_loc_and_ndb_by_station_type() -> Non
 
     assert [result.rule_name for result in loc_payload.rule_results] == [
         "loc_site_protection",
-        "loc_forward_sector_3000m_15m",
-        "loc_building_restriction_zone_region_1",
-        "loc_building_restriction_zone_region_2",
-        "loc_building_restriction_zone_region_3",
-        "loc_building_restriction_zone_region_4",
+        "loc_run_area_protection_region_a",
+        "loc_run_area_protection_region_b",
+        "loc_run_area_protection_region_c",
+        "loc_run_area_protection_region_d",
     ]
-    assert len(loc_payload.protection_zones) == 6
+    assert len(loc_payload.protection_zones) == 5
     assert {zone.rule_code for zone in loc_payload.protection_zones} == {
         "loc_site_protection",
-        "loc_forward_sector_3000m_15m",
-        "loc_building_restriction_zone_region_1",
-        "loc_building_restriction_zone_region_2",
-        "loc_building_restriction_zone_region_3",
-        "loc_building_restriction_zone_region_4",
+        "loc_run_area_protection_region_a",
+        "loc_run_area_protection_region_b",
+        "loc_run_area_protection_region_c",
+        "loc_run_area_protection_region_d",
     }
     assert {result.rule_name for result in ndb_payload.rule_results} == {
-        "ndb_minimum_distance_50m",
         "ndb_conical_clearance_3deg",
     }
     assert {zone.rule_code for zone in ndb_payload.protection_zones} == {
-        "ndb_minimum_distance_50m",
         "ndb_conical_clearance_3deg",
     }
 

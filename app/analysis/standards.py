@@ -59,6 +59,14 @@ _LOC_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
         None,
         "MH_ILSLOC_建筑物限制区_Ⅲ",
     ),
+    "loc_run_area_protection_critical": (
+        None,
+        "MH_ILSLOC_运行保护区_临界区",
+    ),
+    "loc_run_area_protection_sensitive": (
+        None,
+        "MH_ILSLOC_运行保护区_敏感区",
+    ),
 }
 
 _STANDARD_KEYS_BY_STATION_TYPE: dict[

@@ -76,6 +76,44 @@ def test_build_rule_standards_returns_shared_loc_building_restriction_mapping() 
     )
 
 
+def test_build_rule_standards_returns_loc_run_area_critical_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="LOC",
+        rule_name="loc_run_area_protection_critical",
+        region_code="C",
+    )
+
+    assert standards == AnalysisStandardSet(
+        mh=AnalysisStandardReference(
+            code="MH_ILSLOC_运行保护区_临界区",
+            text=(
+                "航向信标台运行保护区：实施Ⅰ/Ⅱ/Ⅲ类运行时，临界区内不应停放"
+                "车辆、机械和航空器，不应有任何地面交通活动。"
+            ),
+        ),
+        gb=None,
+    )
+
+
+def test_build_rule_standards_returns_loc_run_area_sensitive_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="LOC",
+        rule_name="loc_run_area_protection_sensitive",
+        region_code="A",
+    )
+
+    assert standards == AnalysisStandardSet(
+        mh=AnalysisStandardReference(
+            code="MH_ILSLOC_运行保护区_敏感区",
+            text=(
+                "航向信标台运行保护区：车辆、航空器等移动物体未经许可不应进入"
+                "相应类别的敏感区，跑道等待位置应位于敏感区外。"
+            ),
+        ),
+        gb=None,
+    )
+
+
 def test_standard_mappings_are_registered_by_station_type() -> None:
     assert "NDB" in _STANDARD_KEYS_BY_STATION_TYPE
     assert "LOC" in _STANDARD_KEYS_BY_STATION_TYPE
@@ -94,4 +132,20 @@ def test_standard_mappings_are_registered_by_station_type() -> None:
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_building_restriction_zone"][0]
         is None
+    )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_run_area_protection_critical"][0]
+        is None
+    )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_run_area_protection_critical"][1]
+        == "MH_ILSLOC_运行保护区_临界区"
+    )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_run_area_protection_sensitive"][0]
+        is None
+    )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_run_area_protection_sensitive"][1]
+        == "MH_ILSLOC_运行保护区_敏感区"
     )

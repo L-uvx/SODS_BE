@@ -32,29 +32,58 @@ def test_resolve_protection_zone_style_explicitly_maps_all_current_protection_zo
         ("ndb_conical_clearance_3deg", "default"),
         ("loc_site_protection", "default"),
         ("loc_forward_sector_3000m_15m", "default"),
+        ("loc_run_area_protection", "A"),
+        ("loc_run_area_protection", "B"),
+        ("loc_run_area_protection", "C"),
+        ("loc_run_area_protection", "D"),
         ("loc_building_restriction_zone", "1"),
         ("loc_building_restriction_zone", "2"),
         ("loc_building_restriction_zone", "3"),
         ("loc_building_restriction_zone", "4"),
     }
 
-    mapped_color_keys = {
-        resolve_protection_zone_style(zone_code=zone_code, region_code=region_code)[
-            "colorKey"
-        ]
+    resolved_color_keys = {
+        (zone_code, region_code): resolve_protection_zone_style(
+            zone_code=zone_code,
+            region_code=region_code,
+        )["colorKey"]
         for zone_code, region_code in current_zone_pairs
     }
 
-    assert len(mapped_color_keys) == len(current_zone_pairs)
+    assert all(color_key != "default_blue" for color_key in resolved_color_keys.values())
 
 
-def test_resolve_protection_zone_style_assigns_distinct_colors_to_loc_building_restriction_regions() -> None:
-    color_keys = {
-        resolve_protection_zone_style(
+def test_resolve_protection_zone_style_maps_loc_building_restriction_regions_to_stable_palette_keys() -> None:
+    resolved_color_keys = {
+        region_code: resolve_protection_zone_style(
             zone_code="loc_building_restriction_zone",
             region_code=region_code,
         )["colorKey"]
         for region_code in ("1", "2", "3", "4")
     }
 
-    assert len(color_keys) == 4
+    assert resolved_color_keys == {
+        "1": "lime_green",
+        "2": "lime_green",
+        "3": "danger_red",
+        "4": "cyan_blue",
+    }
+
+
+def test_resolve_protection_zone_style_assigns_distinct_colors_to_loc_run_area_regions() -> None:
+    expected_color_keys = {
+        "A": "sky_blue",
+        "B": "teal_green",
+        "C": "danger_red",
+        "D": "amber_orange",
+    }
+
+    resolved_color_keys = {
+        region_code: resolve_protection_zone_style(
+            zone_code="loc_run_area_protection",
+            region_code=region_code,
+        )["colorKey"]
+        for region_code in ("A", "B", "C", "D")
+    }
+
+    assert resolved_color_keys == expected_color_keys
