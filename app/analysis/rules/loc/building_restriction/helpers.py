@@ -247,6 +247,7 @@ def build_loc_building_restriction_zone_region_4_geometry(
         back_right_point=region_4_back_right_point,
     )
 
+
 # 计算区域 3 的最不利允许高度。
 def calculate_region_3_worst_allowed_height_meters(
     *,

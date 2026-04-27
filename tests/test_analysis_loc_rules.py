@@ -20,7 +20,7 @@ from app.analysis.rules.loc import (
     LocForwardSector3000m15mRule,
     LocSiteProtectionRule,
 )
-from app.analysis.rules.loc.building_restriction_zone_helpers import (
+from app.analysis.rules.loc.building_restriction.helpers import (
     build_loc_building_restriction_zone_region_1_geometry,
     build_loc_building_restriction_zone_region_2_geometry,
     build_loc_building_restriction_zone_region_3_geometry,
@@ -28,10 +28,10 @@ from app.analysis.rules.loc.building_restriction_zone_helpers import (
     build_loc_building_restriction_zone_shared_context,
     calculate_region_3_worst_allowed_height_meters,
 )
-import app.analysis.rules.loc.building_restriction_zone_region_3 as loc_region_3_module
-import app.analysis.rules.loc.building_restriction_zone_region_1 as loc_region_1_module
-import app.analysis.rules.loc.building_restriction_zone_region_2 as loc_region_2_module
-import app.analysis.rules.loc.building_restriction_zone_region_4 as loc_region_4_module
+import app.analysis.rules.loc.building_restriction.region_3 as loc_region_3_module
+import app.analysis.rules.loc.building_restriction.region_1 as loc_region_1_module
+import app.analysis.rules.loc.building_restriction.region_2 as loc_region_2_module
+import app.analysis.rules.loc.building_restriction.region_4 as loc_region_4_module
 import app.analysis.rules.loc.profile as loc_profile_module
 
 

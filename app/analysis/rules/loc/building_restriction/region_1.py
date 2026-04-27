@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
-from app.analysis.rules.loc.building_restriction_zone_helpers import (
+from app.analysis.rules.loc.building_restriction.helpers import (
     LocBuildingRestrictionZoneSharedContext,
-    build_loc_building_restriction_zone_region_2_geometry,
+    build_loc_building_restriction_zone_region_1_geometry,
     build_loc_building_restriction_zone_shared_context,
 )
 from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
@@ -13,10 +13,10 @@ from app.analysis.rules.protection_zone_helpers import build_protection_zone_spe
 
 
 @dataclass(slots=True)
-class BoundLocBuildingRestrictionZoneRegion2Rule(BoundObstacleRule):
+class BoundLocBuildingRestrictionZoneRegion1Rule(BoundObstacleRule):
     station: object
 
-    # 执行 LOC 建筑物限制区第 2 区判定。
+    # 执行 LOC 建筑物限制区第 1 区判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         obstacle_shape = resolve_obstacle_shape(obstacle)
         entered_protection_zone = obstacle_shape.intersects(
@@ -29,13 +29,13 @@ class BoundLocBuildingRestrictionZoneRegion2Rule(BoundObstacleRule):
         top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
 
         is_compliant = True
-        message = "obstacle outside region 2"
+        message = "obstacle outside region 1"
         if entered_protection_zone:
             is_compliant = top_elevation_meters <= allowed_height_meters
             message = (
-                "obstacle within region 2 and below allowed height"
+                "obstacle within region 1 and below allowed height"
                 if is_compliant
-                else "obstacle within region 2 above allowed height"
+                else "obstacle within region 1 above allowed height"
             )
 
         return AnalysisRuleResult(
@@ -63,13 +63,13 @@ class BoundLocBuildingRestrictionZoneRegion2Rule(BoundObstacleRule):
         )
 
 
-class LocBuildingRestrictionZoneRegion2Rule(ObstacleRule):
-    rule_code = "loc_building_restriction_zone_region_2"
-    rule_name = "loc_building_restriction_zone_region_2"
+class LocBuildingRestrictionZoneRegion1Rule(ObstacleRule):
+    rule_code = "loc_building_restriction_zone_region_1"
+    rule_name = "loc_building_restriction_zone_region_1"
     zone_code = str(LOC_BUILDING_RESTRICTION_ZONE["zone_code"])
     zone_name = str(LOC_BUILDING_RESTRICTION_ZONE["zone_name"])
 
-    # 绑定 LOC 建筑物限制区第 2 区。
+    # 绑定 LOC 建筑物限制区第 1 区。
     def bind(
         self,
         *,
@@ -77,18 +77,18 @@ class LocBuildingRestrictionZoneRegion2Rule(ObstacleRule):
         station_point: tuple[float, float],
         runway_context: dict[str, object],
         shared_context: LocBuildingRestrictionZoneSharedContext | None = None,
-    ) -> BoundLocBuildingRestrictionZoneRegion2Rule:
+    ) -> BoundLocBuildingRestrictionZoneRegion1Rule:
         resolved_shared_context = shared_context or build_loc_building_restriction_zone_shared_context(
             station_point=station_point,
             runway_context=runway_context,
         )
-        region_2_geometry = build_loc_building_restriction_zone_region_2_geometry(
+        region_1_geometry = build_loc_building_restriction_zone_region_1_geometry(
             resolved_shared_context
         )
         base_height_meters = float(getattr(station, "altitude", 0.0) or 0.0) + float(
             LOC_BUILDING_RESTRICTION_ZONE["region_1_2_height_offset_m"]
         )
-        return BoundLocBuildingRestrictionZoneRegion2Rule(
+        return BoundLocBuildingRestrictionZoneRegion1Rule(
             protection_zone=build_protection_zone_spec(
                 station_id=int(station.id),
                 station_type=str(station.station_type),
@@ -96,9 +96,9 @@ class LocBuildingRestrictionZoneRegion2Rule(ObstacleRule):
                 rule_name=self.rule_name,
                 zone_code=self.zone_code,
                 zone_name=self.zone_name,
-                region_code="2",
-                region_name="2",
-                local_geometry=region_2_geometry.local_geometry,
+                region_code="1",
+                region_name="1",
+                local_geometry=region_1_geometry.local_geometry,
                 vertical_definition={
                     "mode": "flat",
                     "baseReference": "station",

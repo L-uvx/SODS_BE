@@ -2,19 +2,19 @@ from dataclasses import dataclass
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
-from app.analysis.rules.loc.building_restriction_zone_region_1 import (
+from app.analysis.rules.loc.building_restriction.region_1 import (
     LocBuildingRestrictionZoneRegion1Rule,
 )
-from app.analysis.rules.loc.building_restriction_zone_region_2 import (
+from app.analysis.rules.loc.building_restriction.region_2 import (
     LocBuildingRestrictionZoneRegion2Rule,
 )
-from app.analysis.rules.loc.building_restriction_zone_region_3 import (
+from app.analysis.rules.loc.building_restriction.region_3 import (
     LocBuildingRestrictionZoneRegion3Rule,
 )
-from app.analysis.rules.loc.building_restriction_zone_region_4 import (
+from app.analysis.rules.loc.building_restriction.region_4 import (
     LocBuildingRestrictionZoneRegion4Rule,
 )
-from app.analysis.rules.loc.building_restriction_zone_helpers import (
+from app.analysis.rules.loc.building_restriction.helpers import (
     build_loc_building_restriction_zone_shared_context,
 )
 from app.analysis.rules.loc.forward_sector_3000m_15m import (

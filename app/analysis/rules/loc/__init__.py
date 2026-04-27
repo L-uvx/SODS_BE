@@ -3,16 +3,16 @@ from app.analysis.rules.loc.config import (
     LOC_FORWARD_SECTOR_3000M_15M,
     LOC_SITE_PROTECTION,
 )
-from app.analysis.rules.loc.building_restriction_zone_region_1 import (
+from app.analysis.rules.loc.building_restriction.region_1 import (
     LocBuildingRestrictionZoneRegion1Rule,
 )
-from app.analysis.rules.loc.building_restriction_zone_region_2 import (
+from app.analysis.rules.loc.building_restriction.region_2 import (
     LocBuildingRestrictionZoneRegion2Rule,
 )
-from app.analysis.rules.loc.building_restriction_zone_region_3 import (
+from app.analysis.rules.loc.building_restriction.region_3 import (
     LocBuildingRestrictionZoneRegion3Rule,
 )
-from app.analysis.rules.loc.building_restriction_zone_region_4 import (
+from app.analysis.rules.loc.building_restriction.region_4 import (
     LocBuildingRestrictionZoneRegion4Rule,
 )
 from app.analysis.rules.loc.forward_sector_3000m_15m import (

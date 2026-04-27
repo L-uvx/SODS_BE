@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
-from app.analysis.rules.loc.building_restriction_zone_helpers import (
+from app.analysis.rules.loc.building_restriction.helpers import (
     LocBuildingRestrictionZoneRegion3AnalysisGeometry,
     LocBuildingRestrictionZoneRegion3Geometry,
     LocBuildingRestrictionZoneSharedContext,
