@@ -1149,10 +1149,48 @@ def test_loc_building_restriction_zone_region_builders_share_same_context_output
         max(point[1] for point in region_3_geometry.arc_points)
     )
     assert region_3_geometry.arc_points
-    assert region_4_geometry.front_left_point == pytest.approx(
-        (-400.0, 905.5385138137417)
+    assert region_4_geometry.front_left_point == pytest.approx((-500.0, 900.0))
+    assert region_4_geometry.back_right_point == pytest.approx((500.0, -500.0))
+
+
+def test_loc_building_restriction_zone_region_3_root_edge_aligns_with_region_4_front_edge() -> None:
+    shared_context = build_loc_building_restriction_zone_shared_context(
+        station_point=(100.0, 0.0),
+        runway_context={
+            "localCenterPoint": (0.0, 600.0),
+            "directionDegrees": 180.0,
+            "lengthMeters": 600.0,
+            "widthMeters": 45.0,
+        },
     )
-    assert region_4_geometry.back_right_point == pytest.approx((600.0, -500.0))
+
+    region_3_geometry = build_loc_building_restriction_zone_region_3_geometry(
+        shared_context
+    )
+    region_4_geometry = build_loc_building_restriction_zone_region_4_geometry(
+        shared_context
+    )
+    region_3_points = list(region_3_geometry.local_geometry.geoms[0].exterior.coords)[:-1]
+
+    assert region_3_points[0] == pytest.approx(region_4_geometry.front_left_point)
+    assert region_3_points[-1] == pytest.approx(region_4_geometry.front_right_point)
+
+
+def test_loc_building_restriction_zone_region_4_back_edge_uses_apex_based_full_length() -> None:
+    shared_context = build_loc_building_restriction_zone_shared_context(
+        station_point=(100.0, 0.0),
+        runway_context={
+            "localCenterPoint": (0.0, 600.0),
+            "directionDegrees": 180.0,
+            "lengthMeters": 600.0,
+            "widthMeters": 45.0,
+        },
+    )
+
+    geometry = build_loc_building_restriction_zone_region_4_geometry(shared_context)
+
+    assert geometry.back_left_point == pytest.approx((-500.0, -500.0))
+    assert geometry.back_right_point == pytest.approx((500.0, -500.0))
 
 
 def test_loc_building_restriction_zone_region_1_2_build_mirrored_trapezoids() -> None:
@@ -1543,12 +1581,8 @@ def test_loc_building_restriction_zone_helper_builds_region_4_front_edge_from_fr
 
     geometry = build_loc_building_restriction_zone_region_4_geometry(shared_context)
 
-    min_x, min_y, max_x, max_y = geometry.local_geometry.bounds
-
-    assert min_x == pytest.approx(-400.0)
-    assert max_x == pytest.approx(600.0)
-    assert min_y == pytest.approx(-500.0)
-    assert max_y == pytest.approx(905.5385138137417)
+    assert geometry.front_left_point == pytest.approx((-500.0, 900.0))
+    assert geometry.front_right_point == pytest.approx((500.0, 900.0))
 
 
 def test_loc_building_restriction_zone_region_3_rule_uses_worst_point_height_check() -> None:
@@ -1849,7 +1883,8 @@ def test_loc_building_restriction_zone_region_3_helper_handles_boundary_only_int
 
     intersection = obstacle_geometry.intersection(geometry.local_geometry)
 
-    assert isinstance(intersection, LineString)
+    assert intersection.is_empty is False
+    assert intersection.bounds[3] == pytest.approx(900.0)
     worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
         zone_geometry=geometry,
         obstacle_geometry=obstacle_geometry,

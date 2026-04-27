@@ -85,12 +85,7 @@ def build_loc_building_restriction_zone_shared_context(
         apex_point[0] - station_point[0],
         apex_point[1] - station_point[1],
     )
-    axis_unit = _normalize_vector(
-        (
-            apex_point[0] - station_point[0],
-            apex_point[1] - station_point[1],
-        )
-    )
+    axis_unit = (-original_axis_unit[0], -original_axis_unit[1])
     normal_unit = (-axis_unit[1], axis_unit[0])
     root_half_width_m = float(LOC_BUILDING_RESTRICTION_ZONE["root_half_width_m"])
     root_left_point = (
@@ -197,11 +192,20 @@ def build_loc_building_restriction_zone_region_4_geometry(
         LOC_BUILDING_RESTRICTION_ZONE["region_4_backward_length_m"]
     )
     region_4_normal_unit = (-reverse_axis_unit[1], reverse_axis_unit[0])
+    region_4_front_center_point = shared_context.apex_point
+    region_4_forward_length_m = (
+        (region_4_front_center_point[0] - shared_context.station_point[0])
+        * reverse_axis_unit[0]
+        + (region_4_front_center_point[1] - shared_context.station_point[1])
+        * reverse_axis_unit[1]
+    )
     region_4_back_center_point = (
-        shared_context.station_point[0]
-        - reverse_axis_unit[0] * region_4_backward_length_m,
-        shared_context.station_point[1]
-        - reverse_axis_unit[1] * region_4_backward_length_m,
+        region_4_front_center_point[0]
+        - reverse_axis_unit[0]
+        * (region_4_forward_length_m + region_4_backward_length_m),
+        region_4_front_center_point[1]
+        - reverse_axis_unit[1]
+        * (region_4_forward_length_m + region_4_backward_length_m),
     )
     region_4_back_left_point = (
         region_4_back_center_point[0] + region_4_normal_unit[0] * region_4_side_offset_m,
@@ -210,12 +214,6 @@ def build_loc_building_restriction_zone_region_4_geometry(
     region_4_back_right_point = (
         region_4_back_center_point[0] - region_4_normal_unit[0] * region_4_side_offset_m,
         region_4_back_center_point[1] - region_4_normal_unit[1] * region_4_side_offset_m,
-    )
-    region_4_front_center_point = (
-        shared_context.station_point[0]
-        + reverse_axis_unit[0] * shared_context.station_to_apex_distance_meters,
-        shared_context.station_point[1]
-        + reverse_axis_unit[1] * shared_context.station_to_apex_distance_meters,
     )
     region_4_front_left_point = (
         region_4_front_center_point[0]
