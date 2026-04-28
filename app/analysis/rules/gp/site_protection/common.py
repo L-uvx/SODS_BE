@@ -2,20 +2,20 @@ from dataclasses import dataclass
 
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
-from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
-
-
 @dataclass(slots=True)
 class BoundGpSiteProtectionRegionRule(BoundObstacleRule):
     station_sub_type: str | None
     standards_rule_code: str
 
-    # 执行 GP 场地保护区最小入区判定。
-    def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
-        obstacle_shape = resolve_obstacle_shape(obstacle)
-        entered_protection_zone = obstacle_shape.intersects(
-            self.protection_zone.local_geometry
-        )
+    def build_result(
+        self,
+        *,
+        obstacle: dict[str, object],
+        is_compliant: bool,
+        message: str,
+        metrics: dict[str, float | str | bool | None],
+        standards_rule_code: str | None = None,
+    ) -> AnalysisRuleResult:
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -34,14 +34,14 @@ class BoundGpSiteProtectionRegionRule(BoundObstacleRule):
             region_code=self.protection_zone.region_code,
             region_name=self.protection_zone.region_name,
             is_applicable=True,
-            is_compliant=not entered_protection_zone,
-            message=(
-                "obstacle outside GP site protection region"
-                if not entered_protection_zone
-                else "obstacle enters GP site protection region"
+            is_compliant=is_compliant,
+            message=message,
+            metrics=metrics,
+            standards_rule_code=(
+                self.standards_rule_code
+                if standards_rule_code is None
+                else standards_rule_code
             ),
-            metrics={"enteredProtectionZone": entered_protection_zone},
-            standards_rule_code=self.standards_rule_code,
         )
 
 
