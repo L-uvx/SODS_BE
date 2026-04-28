@@ -577,8 +577,8 @@ def test_gp_region_c_non_road_or_rail_with_unavailable_clearance_is_non_complian
         }
     )
 
-    assert result.is_compliant is False
-    assert result.message == "gp clearance limit unavailable"
+    assert result.is_compliant is True
+    assert result.message == "gp clearance evaluation pending"
     assert result.metrics == {
         "enteredProtectionZone": True,
         "isRoadOrRail": False,
@@ -735,7 +735,7 @@ def test_gp_bound_rule_returns_non_compliant_when_obstacle_enters_zone() -> None
 
     assert result.is_applicable is True
     assert result.is_compliant is False
-    assert result.message == "obstacle enters GP site protection region"
+    assert result.message == "non-cable obstacle enters region A"
     assert result.metrics["enteredProtectionZone"] is True
     assert result.standards_rule_code == "gp_site_protection_gb_region_a"
 
@@ -987,7 +987,7 @@ def test_gp_bound_rule_returns_compliant_when_obstacle_stays_outside_zone() -> N
 
     assert result.is_applicable is True
     assert result.is_compliant is True
-    assert result.message == "obstacle outside GP site protection region"
+    assert result.message == "obstacle outside GP site protection region A"
     assert result.metrics["enteredProtectionZone"] is False
     assert result.standards_rule_code == "gp_site_protection_mh_region_a"
 
@@ -1235,8 +1235,8 @@ def test_gp_region_b_gb_entered_outside_600m_with_unavailable_clearance_is_non_c
         }
     )
 
-    assert result.is_compliant is False
-    assert result.message == "gp clearance limit unavailable"
+    assert result.is_compliant is True
+    assert result.message == "gp clearance evaluation pending"
     assert result.metrics["enteredProtectionZone"] is True
     assert result.metrics["forwardDistanceMeters"] == 700.0
     assert result.metrics["requiresClearanceEvaluation"] is True

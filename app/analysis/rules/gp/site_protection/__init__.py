@@ -1,3 +1,4 @@
+from app.analysis.rules.gp.site_protection.common import BoundGpSiteProtectionRegionRule
 from app.analysis.rules.gp.site_protection.helpers import (
     GpSiteProtectionParameters,
     GpSiteProtectionRegionGeometry,
@@ -12,7 +13,6 @@ from app.analysis.rules.gp.site_protection.helpers import (
     resolve_gp_site_protection_parameters,
 )
 from app.analysis.rules.gp.site_protection.region_a import (
-    BoundGpSiteProtectionRegionRule,
     GpSiteProtectionGbRegionARule,
     GpSiteProtectionMhRegionARule,
 )
