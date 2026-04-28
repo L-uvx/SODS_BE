@@ -1,4 +1,4 @@
-from shapely.geometry import MultiPolygon, Polygon, shape
+from shapely.geometry import MultiPolygon, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 
 
@@ -9,12 +9,12 @@ def ensure_multipolygon(geometry: Polygon | MultiPolygon) -> MultiPolygon:
     return MultiPolygon([geometry])
 
 
-# 解析障碍物平面形状并统一为 MultiPolygon。
-def resolve_obstacle_shape(obstacle: dict[str, object]) -> MultiPolygon:
+# 解析障碍物平面形状，当前支持 Point 与 Polygon/MultiPolygon。
+def resolve_obstacle_shape(obstacle: dict[str, object]) -> BaseGeometry:
     obstacle_shape = shape(obstacle.get("localGeometry") or obstacle["geometry"])
-    if not isinstance(obstacle_shape, (Polygon, MultiPolygon)):
-        raise TypeError("obstacle geometry must resolve to Polygon or MultiPolygon")
-    return ensure_multipolygon(obstacle_shape)
+    if not isinstance(obstacle_shape, (Point, Polygon, MultiPolygon)):
+        raise TypeError("obstacle geometry must resolve to Point, Polygon or MultiPolygon")
+    return obstacle_shape
 
 
 # 校验规则侧几何输入类型。

@@ -33,3 +33,12 @@ def test_initial_revision_creates_core_tables_and_postgis() -> None:
     assert '"progress_percent"' in revision_text
     assert '"status_message"' in revision_text
     assert '"error_message"' in revision_text
+
+
+def test_revisions_define_generic_obstacle_geometry_type() -> None:
+    revision_files = list(Path("alembic/versions").glob("*.py"))
+    revision_text = "\n".join(
+        revision_file.read_text(encoding="utf-8") for revision_file in revision_files
+    )
+
+    assert 'geometry_type="GEOMETRY"' in revision_text

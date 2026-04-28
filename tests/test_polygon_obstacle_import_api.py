@@ -255,6 +255,26 @@ def test_get_import_task_result_returns_minimal_result_payload() -> None:
     }
 
 
+def test_imported_obstacle_response_accepts_point_geometry() -> None:
+    from app.schemas.polygon_obstacle import ImportedObstacleResponse
+
+    response = ImportedObstacleResponse(
+        id=1,
+        name="点障碍物1",
+        obstacleType="point_tree",
+        topElevation=20.0,
+        sourceRowNumbers=[2],
+        boundingBox=None,
+        geometry={
+            "type": "Point",
+            "coordinates": [103.123, 30.456],
+        },
+    )
+
+    assert response.geometry.type == "Point"
+    assert response.geometry.coordinates == [103.123, 30.456]
+
+
 def test_create_import_task_persists_obstacles_to_database() -> None:
     with _create_test_client() as client:
         app.state.dispatch_import_task = _DispatchRecorder().delay

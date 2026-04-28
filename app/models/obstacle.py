@@ -21,7 +21,7 @@ class Obstacle(Base):
     top_elevation: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     geom: Mapped[Any | None] = mapped_column(
-        Geometry(geometry_type="MULTIPOLYGON", srid=4326), nullable=True
+        Geometry(geometry_type="GEOMETRY", srid=4326), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

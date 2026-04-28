@@ -1,6 +1,6 @@
 from typing import Any
 
-from shapely.geometry import MultiPolygon, Polygon, shape
+from shapely.geometry import MultiPolygon, Point, Polygon, mapping, shape
 
 from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.obstacle_categories import normalize_obstacle_type
@@ -10,7 +10,17 @@ from app.analysis.obstacle_categories import normalize_obstacle_type
 def _project_geometry(
     projector: AirportLocalProjector, geometry: dict[str, Any]
 ) -> dict[str, Any]:
-    multipolygon = shape(geometry)
+    source_geometry = shape(geometry)
+    if isinstance(source_geometry, Point):
+        x, y = projector.project_point(
+            float(source_geometry.x), float(source_geometry.y)
+        )
+        return {
+            "type": "Point",
+            "coordinates": [float(x), float(y)],
+        }
+
+    multipolygon = source_geometry
     polygons: list[Polygon] = []
     for polygon in multipolygon.geoms:
         shell = [
@@ -24,18 +34,10 @@ def _project_geometry(
         polygons.append(Polygon(shell=shell, holes=holes))
 
     projected = MultiPolygon(polygons)
+    projected_mapping = mapping(projected)
     return {
-        "type": "MultiPolygon",
-        "coordinates": [
-            [
-                [[float(x), float(y)] for x, y in polygon.exterior.coords],
-                *[
-                    [[float(x), float(y)] for x, y in ring.coords]
-                    for ring in polygon.interiors
-                ],
-            ]
-            for polygon in projected.geoms
-        ],
+        "type": projected_mapping["type"],
+        "coordinates": projected_mapping["coordinates"],
     }
 
 
@@ -46,6 +48,23 @@ def build_airport_spatial_facts(context: Any) -> dict[str, Any]:
         raise ValueError(f"airport {airport.id} is missing coordinates")
 
     projector = AirportLocalProjector(float(airport.longitude), float(airport.latitude))
+
+    stations = []
+    for station in context.stations:
+        if station.longitude is None or station.latitude is None:
+            continue
+
+        local_x, local_y = projector.project_point(
+            float(station.longitude), float(station.latitude)
+        )
+        stations.append(
+            {
+                "stationId": station.id,
+                "name": station.name,
+                "localX": float(local_x),
+                "localY": float(local_y),
+            }
+        )
 
     obstacle_items = []
     for obstacle in context.obstacles:
@@ -87,5 +106,7 @@ def build_airport_spatial_facts(context: Any) -> dict[str, Any]:
 
     return {
         "airportId": airport.id,
+        "stationCount": len(getattr(context, "stations", [])),
+        "stations": stations,
         "obstacles": obstacle_items,
     }

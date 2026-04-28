@@ -27,7 +27,7 @@ def test_obstacle_uses_json_and_geometry_columns() -> None:
 
     assert obstacle_table.c.raw_payload.type.python_type is dict
     assert obstacle_table.c.top_elevation.nullable is True
-    assert obstacle_table.c.geom.type.geometry_type == "MULTIPOLYGON"
+    assert obstacle_table.c.geom.type.geometry_type == "GEOMETRY"
     assert obstacle_table.c.geom.type.srid == 4326
 
 

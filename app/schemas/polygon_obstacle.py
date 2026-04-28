@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import File, Form, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
@@ -61,7 +61,7 @@ class ImportTaskResultResponse(BaseModel):
 
 class ImportedObstacleGeometryResponse(BaseModel):
     type: str
-    coordinates: list[list[list[list[float]]]]
+    coordinates: Any
 
 
 class ImportedObstacleResponse(BaseModel):

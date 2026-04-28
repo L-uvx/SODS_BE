@@ -1,5 +1,5 @@
 from pyproj import Transformer
-from shapely.geometry import MultiPolygon, Point, shape
+from shapely.geometry import Point, shape
 from shapely.ops import transform
 
 
@@ -23,8 +23,6 @@ def calculate_minimum_target_distance_km(
 
     for geometry in obstacle_geometries:
         obstacle_shape = shape(geometry)
-        if not isinstance(obstacle_shape, MultiPolygon):
-            obstacle_shape = MultiPolygon([obstacle_shape])
         projected_obstacle = transform(_PROJECT_TO_METERS, obstacle_shape)
 
         for longitude, latitude in station_points:

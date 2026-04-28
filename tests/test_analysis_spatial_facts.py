@@ -159,3 +159,31 @@ def test_build_airport_spatial_facts_keeps_geometry_empty_when_only_local_geomet
     assert facts["obstacles"][0]["geometry"] is None
     assert facts["obstacles"][0]["localGeometry"] == local_geometry
     assert facts["obstacles"][0]["topElevation"] == 520.0
+
+
+def test_build_airport_spatial_facts_projects_point_geometry() -> None:
+    context = SimpleNamespace(
+        airport=SimpleNamespace(id=1, longitude=103.0, latitude=30.0),
+        runways=[],
+        stations=[],
+        obstacles=[
+            SimpleNamespace(
+                id=1,
+                name="点障碍物1",
+                obstacle_type="point_tree",
+                top_elevation=20.0,
+                raw_payload={
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [103.001, 30.001],
+                    }
+                },
+            )
+        ],
+    )
+
+    facts = build_airport_spatial_facts(context)
+
+    assert facts["obstacles"][0]["geometry"]["type"] == "Point"
+    assert facts["obstacles"][0]["localGeometry"]["type"] == "Point"
+    assert len(facts["obstacles"][0]["localGeometry"]["coordinates"]) == 2

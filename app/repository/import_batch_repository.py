@@ -23,11 +23,15 @@ class ImportBatchRepository:
         self._session = session
 
     # 创建项目记录。
-    def create_project(self, project_name: str) -> Project:
-        project = Project(name=project_name)
+    def create_project(self, project_name: str, project_type: str | None = None) -> Project:
+        project = Project(name=project_name, project_type=project_type)
         self._session.add(project)
         self._session.flush()
         return project
+
+    # 根据编号获取项目记录。
+    def get_project(self, project_id: int) -> Project | None:
+        return self._session.get(Project, project_id)
 
     # 创建导入批次记录。
     def create_import_batch(

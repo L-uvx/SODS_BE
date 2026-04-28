@@ -15,6 +15,10 @@ from app.application.polygon_obstacle_excel_parser import (
     parse_polygon_obstacle_excel,
 )
 from app.application.polygon_obstacle_geometry import build_multipolygon_geometry
+from app.application.point_obstacle_excel_parser import (
+    PointObstacleExcelParseError,
+    parse_point_obstacle_excel,
+)
 from app.application.polygon_obstacle_targets import (
     calculate_minimum_target_distance_km,
 )
@@ -53,7 +57,40 @@ class PolygonObstacleImportService:
     def create_import_task(
         self, payload: ImportTaskCreateRequest
     ) -> ImportTaskStatusResponse:
-        project = self._repository.create_project(payload.project_name)
+        project = self._repository.create_project(
+            payload.project_name, project_type="polygon_obstacle"
+        )
+        task_id = f"import-batch-{project.id}"
+        source_file_path = self._store_import_file(
+            task_id=task_id,
+            file_name=payload.file_name,
+            file_bytes=payload.file_bytes,
+        )
+        import_batch = self._repository.create_import_batch(
+            task_id=task_id,
+            project_id=project.id,
+            obstacle_type=payload.obstacle_type,
+            file_name=payload.file_name,
+            source_file_path=source_file_path,
+        )
+        self._dispatch_import_task(import_batch.id)
+
+        return ImportTaskStatusResponse(
+            taskId=import_batch.id,
+            status=import_batch.status,
+            message=import_batch.status_message or "import task created",
+            progressPercent=import_batch.progress_percent,
+            projectId=project.id,
+            obstacleBatchId=import_batch.id,
+        )
+
+    # 创建新的点状障碍物导入任务。
+    def create_point_import_task(
+        self, payload: ImportTaskCreateRequest
+    ) -> ImportTaskStatusResponse:
+        project = self._repository.create_project(
+            payload.project_name, project_type="point_obstacle"
+        )
         task_id = f"import-batch-{project.id}"
         source_file_path = self._store_import_file(
             task_id=task_id,
@@ -85,55 +122,138 @@ class PolygonObstacleImportService:
             return
 
         try:
-            source_file_path = import_batch.source_file_path
-            if not source_file_path:
-                raise PolygonObstacleExcelParseError("missing import source file path")
+            project = self._repository.get_project(import_batch.project_id)
+            if project is not None and project.project_type == "point_obstacle":
+                self._run_point_import_batch(import_batch)
+            else:
+                self._run_polygon_import_batch(import_batch)
+        except (PolygonObstacleExcelParseError, PointObstacleExcelParseError) as exc:
+            self._repository.mark_import_batch_failed(task_id, str(exc))
 
-            parsed_obstacles = parse_polygon_obstacle_excel(
-                Path(source_file_path).read_bytes()
-            )
-            obstacle_payloads = []
-            for obstacle in parsed_obstacles:
-                built_geometry = build_multipolygon_geometry(obstacle)
-                obstacle_payloads.append(
-                    {
-                        "name": obstacle.name,
-                        "top_elevation": obstacle.top_elevation,
-                        "source_row_numbers": [
+    # 执行点状导入任务并写入障碍物数据。
+    def run_point_import_task(self, task_id: str) -> None:
+        self.run_import_task(task_id)
+
+    # 查询点状导入任务的当前状态。
+    def get_point_import_task_status(
+        self, task_id: str
+    ) -> ImportTaskStatusResponse | None:
+        import_batch = self._repository.get_import_batch(task_id)
+        if import_batch is None:
+            return None
+
+        project = self._repository.get_project(import_batch.project_id)
+        if project is None or project.project_type != "point_obstacle":
+            return None
+
+        return self.get_import_task_status(task_id)
+
+    # 查询点状导入任务的结果详情。
+    def get_point_import_task_result(
+        self, task_id: str
+    ) -> ImportTaskResultResponse | None:
+        import_batch = self._repository.get_import_batch(task_id)
+        if import_batch is None:
+            return None
+
+        project = self._repository.get_project(import_batch.project_id)
+        if project is None or project.project_type != "point_obstacle":
+            return None
+
+        return self.get_import_task_result(task_id)
+
+    # 执行多边形导入批次并写入障碍物数据。
+    def _run_polygon_import_batch(self, import_batch: object) -> None:
+        source_file_path = import_batch.source_file_path
+        if not source_file_path:
+            raise PolygonObstacleExcelParseError("missing import source file path")
+
+        parsed_obstacles = parse_polygon_obstacle_excel(
+            Path(source_file_path).read_bytes()
+        )
+        obstacle_payloads = []
+        for obstacle in parsed_obstacles:
+            built_geometry = build_multipolygon_geometry(obstacle)
+            obstacle_payloads.append(
+                {
+                    "name": obstacle.name,
+                    "top_elevation": obstacle.top_elevation,
+                    "source_row_numbers": [point.row_number for point in obstacle.points],
+                    "geometry_wkt": built_geometry.wkt,
+                    "raw_payload": {
+                        "sourceRowNumbers": [
                             point.row_number for point in obstacle.points
                         ],
-                        "geometry_wkt": built_geometry.wkt,
-                        "raw_payload": {
-                            "sourceRowNumbers": [
-                                point.row_number for point in obstacle.points
-                            ],
-                            "geometry": {
-                                "type": "MultiPolygon",
-                                "coordinates": built_geometry.coordinates,
-                            },
-                            "points": [
-                                {
-                                    "rowNumber": point.row_number,
-                                    "longitudeText": point.longitude_text,
-                                    "latitudeText": point.latitude_text,
-                                    "longitudeDecimal": point.longitude_decimal,
-                                    "latitudeDecimal": point.latitude_decimal,
-                                }
-                                for point in obstacle.points
+                        "geometry": {
+                            "type": "MultiPolygon",
+                            "coordinates": built_geometry.coordinates,
+                        },
+                        "points": [
+                            {
+                                "rowNumber": point.row_number,
+                                "longitudeText": point.longitude_text,
+                                "latitudeText": point.latitude_text,
+                                "longitudeDecimal": point.longitude_decimal,
+                                "latitudeDecimal": point.latitude_decimal,
+                            }
+                            for point in obstacle.points
+                        ],
+                    },
+                }
+            )
+
+        self._repository.create_obstacles(
+            project_id=import_batch.project_id,
+            obstacle_type=import_batch.import_type or "",
+            source_batch_id=import_batch.id,
+            obstacles=obstacle_payloads,
+        )
+        self._repository.mark_import_batch_succeeded(import_batch.id)
+
+    # 执行点状导入批次并写入障碍物数据。
+    def _run_point_import_batch(self, import_batch: object) -> None:
+        source_file_path = import_batch.source_file_path
+        if not source_file_path:
+            raise PointObstacleExcelParseError("missing import source file path")
+
+        parsed_obstacles = parse_point_obstacle_excel(Path(source_file_path).read_bytes())
+        obstacle_payloads = []
+        for obstacle in parsed_obstacles:
+            obstacle_payloads.append(
+                {
+                    "name": obstacle.name,
+                    "top_elevation": obstacle.top_elevation,
+                    "source_row_numbers": [obstacle.row_number],
+                    "geometry_wkt": (
+                        f"POINT ({obstacle.longitude_decimal} {obstacle.latitude_decimal})"
+                    ),
+                    "raw_payload": {
+                        "sourceRowNumbers": [obstacle.row_number],
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [
+                                obstacle.longitude_decimal,
+                                obstacle.latitude_decimal,
                             ],
                         },
-                    }
-                )
-
-            self._repository.create_obstacles(
-                project_id=import_batch.project_id,
-                obstacle_type=import_batch.import_type or "",
-                source_batch_id=import_batch.id,
-                obstacles=obstacle_payloads,
+                        "point": {
+                            "rowNumber": obstacle.row_number,
+                            "longitudeText": obstacle.longitude_text,
+                            "latitudeText": obstacle.latitude_text,
+                            "longitudeDecimal": obstacle.longitude_decimal,
+                            "latitudeDecimal": obstacle.latitude_decimal,
+                        },
+                    },
+                }
             )
-            self._repository.mark_import_batch_succeeded(task_id)
-        except PolygonObstacleExcelParseError as exc:
-            self._repository.mark_import_batch_failed(task_id, str(exc))
+
+        self._repository.create_obstacles(
+            project_id=import_batch.project_id,
+            obstacle_type=import_batch.import_type or "",
+            source_batch_id=import_batch.id,
+            obstacles=obstacle_payloads,
+        )
+        self._repository.mark_import_batch_succeeded(import_batch.id)
 
     # 查询导入任务的当前状态。
     def get_import_task_status(self, task_id: str) -> ImportTaskStatusResponse | None:
@@ -374,6 +494,8 @@ class PolygonObstacleImportService:
     # 构建单个机场的分析结果载荷。
     def _build_airport_analysis_result(self, context: object) -> dict[str, object]:
         airport_facts = build_airport_spatial_facts(context)
+        airport_facts.pop("stationCount", None)
+        airport_facts.pop("stations", None)
         airport = context.airport
         projector = AirportLocalProjector(
             float(airport.longitude), float(airport.latitude)

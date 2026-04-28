@@ -19,6 +19,7 @@ from app.schemas.polygon_obstacle import (
 
 
 router = APIRouter(prefix="/polygon-obstacle", tags=["polygon-obstacle"])
+point_router = APIRouter(prefix="/point-obstacle", tags=["point-obstacle"])
 
 
 # 返回初始化所需的机场、台站和历史障碍物数据。
@@ -45,6 +46,20 @@ def create_import_task(
 ) -> ImportTaskStatusResponse:
     service = PolygonObstacleImportService(session)
     return service.create_import_task(payload)
+
+
+# 创建点状障碍物导入任务。
+@point_router.post(
+    "/import",
+    response_model=ImportTaskStatusResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_point_import_task(
+    payload: ImportTaskCreateRequest = Depends(ImportTaskCreateRequest.as_form),
+    session: Session = Depends(get_db_session),
+) -> ImportTaskStatusResponse:
+    service = PolygonObstacleImportService(session)
+    return service.create_point_import_task(payload)
 
 
 # 查询导入任务的当前状态。
@@ -76,6 +91,42 @@ def get_import_task_result(
 ) -> ImportTaskResultResponse:
     service = PolygonObstacleImportService(session)
     result = service.get_import_task_result(task_id)
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="import task not found")
+
+    return result
+
+
+# 查询点状导入任务的当前状态。
+@point_router.get(
+    "/import/{task_id}/status",
+    response_model=ImportTaskStatusResponse,
+)
+def get_point_import_task_status(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> ImportTaskStatusResponse:
+    service = PolygonObstacleImportService(session)
+    result = service.get_point_import_task_status(task_id)
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="import task not found")
+
+    return result
+
+
+# 查询点状导入任务的结果数据。
+@point_router.get(
+    "/import/{task_id}/result",
+    response_model=ImportTaskResultResponse,
+)
+def get_point_import_task_result(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> ImportTaskResultResponse:
+    service = PolygonObstacleImportService(session)
+    result = service.get_point_import_task_result(task_id)
 
     if result is None:
         raise HTTPException(status_code=404, detail="import task not found")
