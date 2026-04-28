@@ -116,3 +116,63 @@ def test_station_rule_dispatcher_skips_unsupported_station_type() -> None:
 
     assert payload.rule_results == []
     assert payload.protection_zones == []
+
+
+def test_station_rule_dispatcher_dispatches_gp_by_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    gp_station = type(
+        "Station",
+        (),
+        {
+            "id": 103,
+            "name": "GP Station",
+            "station_type": "GP",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "II",
+            "distance_v_to_runway": 180.0,
+        },
+    )()
+    obstacle = {
+        "obstacleId": 1,
+        "name": "Obstacle A",
+        "rawObstacleType": "建筑物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "localGeometry": {
+            "type": "Point",
+            "coordinates": [0.0, -200.0],
+        },
+        "geometry": {
+            "type": "Point",
+            "coordinates": [0.0, -200.0],
+        },
+    }
+    runway_context = {
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 40.0,
+    }
+
+    payload = dispatcher.analyze_station(
+        station=gp_station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[runway_context],
+    )
+
+    assert len(payload.protection_zones) == 6
+    assert {zone.zone_code for zone in payload.protection_zones} == {
+        "gp_site_protection_gb",
+        "gp_site_protection_mh",
+    }
+    assert {result.rule_name for result in payload.rule_results} == {
+        "gp_site_protection_gb_region_a",
+        "gp_site_protection_gb_region_b",
+        "gp_site_protection_gb_region_c",
+        "gp_site_protection_mh_region_a",
+        "gp_site_protection_mh_region_b",
+        "gp_site_protection_mh_region_c",
+    }

@@ -40,6 +40,12 @@ def test_resolve_protection_zone_style_explicitly_maps_all_current_protection_zo
         ("loc_building_restriction_zone", "2"),
         ("loc_building_restriction_zone", "3"),
         ("loc_building_restriction_zone", "4"),
+        ("gp_site_protection_gb", "A"),
+        ("gp_site_protection_gb", "B"),
+        ("gp_site_protection_gb", "C"),
+        ("gp_site_protection_mh", "A"),
+        ("gp_site_protection_mh", "B"),
+        ("gp_site_protection_mh", "C"),
     }
 
     resolved_color_keys = {
@@ -87,3 +93,22 @@ def test_resolve_protection_zone_style_assigns_distinct_colors_to_loc_run_area_r
     }
 
     assert resolved_color_keys == expected_color_keys
+
+
+def test_resolve_protection_zone_style_maps_gp_regions_with_shared_standard_colors() -> None:
+    for region_code, expected_color_key in {
+        "A": "sky_blue",
+        "B": "teal_green",
+        "C": "danger_red",
+    }.items():
+        gb_style = resolve_protection_zone_style(
+            zone_code="gp_site_protection_gb",
+            region_code=region_code,
+        )
+        mh_style = resolve_protection_zone_style(
+            zone_code="gp_site_protection_mh",
+            region_code=region_code,
+        )
+
+        assert gb_style["colorKey"] == expected_color_key
+        assert mh_style["colorKey"] == expected_color_key

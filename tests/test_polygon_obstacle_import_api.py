@@ -2399,6 +2399,103 @@ def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_st
     assert ("NDB", "multipolygon") in protection_zone_shapes
 
 
+def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Runway(
+                    id=201,
+                    airport_id=1,
+                    run_number="18",
+                    name="Runway 18/36",
+                    longitude=103.975864,
+                    latitude=30.501481,
+                    direction=0.0,
+                    length=600.0,
+                    width=40.0,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="GP Station",
+                    airport_id=1,
+                    station_type="GP",
+                    runway_no="18",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                    station_sub_type="II",
+                    distance_v_to_runway=180.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    payload = response.json()
+    gp_protection_zones = [
+        item
+        for item in payload["protectionZones"]
+        if item["zoneCode"] in {"gp_site_protection_gb", "gp_site_protection_mh"}
+    ]
+
+    assert len(gp_protection_zones) == 6
+    assert {item["zoneCode"] for item in gp_protection_zones} == {
+        "gp_site_protection_gb",
+        "gp_site_protection_mh",
+    }
+    assert {
+        item["zoneCode"]: {
+            zone["regionCode"]
+            for zone in gp_protection_zones
+            if zone["zoneCode"] == item["zoneCode"]
+        }
+        for item in gp_protection_zones
+    } == {
+        "gp_site_protection_gb": {"A", "B", "C"},
+        "gp_site_protection_mh": {"A", "B", "C"},
+    }
+    assert all(item["stationType"] == "GP" for item in gp_protection_zones)
+    assert all(item["geometry"]["shapeType"] == "multipolygon" for item in gp_protection_zones)
+    assert all(item["style"]["colorKey"] for item in gp_protection_zones)
+    assert all(item["style"]["fill"].startswith("rgba(") for item in gp_protection_zones)
+    assert all(item["style"]["stroke"].startswith("rgba(") for item in gp_protection_zones)
+
+
 def test_build_airport_analysis_result_returns_only_internal_fields_still_in_use() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)

@@ -114,9 +114,59 @@ def test_build_rule_standards_returns_loc_run_area_sensitive_mapping() -> None:
     )
 
 
+def test_build_rule_standards_returns_gp_gb_region_a_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="GP",
+        rule_name="gp_site_protection_gb_region_a",
+        region_code="A",
+    )
+
+    assert standards.gb == AnalysisStandardReference(
+        code="GB_ILSGP_GB场地保护区_A",
+        text=load_standard_config_entries()["GB_ILSGP_GB场地保护区_A"],
+    )
+    assert standards.mh is None
+
+
+def test_build_rule_standards_returns_gp_mh_cable_region_a_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="GP",
+        rule_name="gp_site_protection_mh_region_a_cable",
+        region_code="A",
+    )
+
+    assert standards.gb is None
+    assert standards.mh == AnalysisStandardReference(
+        code="MH_ILSGP_场地保护区_A线缆",
+        text=load_standard_config_entries()["MH_ILSGP_场地保护区_A线缆"],
+    )
+
+
+def test_build_rule_standards_returns_gp_mh_region_b_by_station_sub_type() -> None:
+    subtype_to_code = {
+        "I": "MH_ILSGP_场地保护区_B_Ⅰ",
+        "II": "MH_ILSGP_场地保护区_B_Ⅱ",
+        "III": "MH_ILSGP_场地保护区_B_Ⅲ",
+    }
+
+    for station_sub_type, expected_code in subtype_to_code.items():
+        standards = build_rule_standards(
+            station_type="GP",
+            rule_name=f"gp_site_protection_mh_region_b_{station_sub_type.lower()}",
+            region_code="B",
+        )
+
+        assert standards.gb is None
+        assert standards.mh == AnalysisStandardReference(
+            code=expected_code,
+            text=load_standard_config_entries()[expected_code],
+        )
+
+
 def test_standard_mappings_are_registered_by_station_type() -> None:
     assert "NDB" in _STANDARD_KEYS_BY_STATION_TYPE
     assert "LOC" in _STANDARD_KEYS_BY_STATION_TYPE
+    assert "GP" in _STANDARD_KEYS_BY_STATION_TYPE
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["NDB"]["ndb_minimum_distance_50m"][0]
         == "GB_NDB_50m最小间距区域_50"
@@ -148,4 +198,12 @@ def test_standard_mappings_are_registered_by_station_type() -> None:
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_run_area_protection_sensitive"][1]
         == "MH_ILSLOC_运行保护区_敏感区"
+    )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_site_protection_gb_region_a"][0]
+        == "GB_ILSGP_GB场地保护区_A"
+    )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_site_protection_mh_region_b_ii"][1]
+        == "MH_ILSGP_场地保护区_B_Ⅱ"
     )

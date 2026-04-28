@@ -69,11 +69,55 @@ _LOC_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
     ),
 }
 
+_GP_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
+    "gp_site_protection_gb_region_a_cable": (
+        "GB_ILSGP_GB场地保护区_A线缆",
+        None,
+    ),
+    "gp_site_protection_gb_region_a": (
+        "GB_ILSGP_GB场地保护区_A",
+        None,
+    ),
+    "gp_site_protection_gb_region_b": (
+        "GB_ILSGP_GB场地保护区_B",
+        None,
+    ),
+    "gp_site_protection_gb_region_c": (
+        "GB_ILSGP_GB场地保护区_C",
+        None,
+    ),
+    "gp_site_protection_mh_region_a_cable": (
+        None,
+        "MH_ILSGP_场地保护区_A线缆",
+    ),
+    "gp_site_protection_mh_region_a": (
+        None,
+        "MH_ILSGP_场地保护区_A",
+    ),
+    "gp_site_protection_mh_region_b_i": (
+        None,
+        "MH_ILSGP_场地保护区_B_Ⅰ",
+    ),
+    "gp_site_protection_mh_region_b_ii": (
+        None,
+        "MH_ILSGP_场地保护区_B_Ⅱ",
+    ),
+    "gp_site_protection_mh_region_b_iii": (
+        None,
+        "MH_ILSGP_场地保护区_B_Ⅲ",
+    ),
+    "gp_site_protection_mh_region_c": (
+        None,
+        "MH_ILSGP_场地保护区_C",
+    ),
+}
+
 _STANDARD_KEYS_BY_STATION_TYPE: dict[
     str, dict[str, tuple[str | None, str | None]]
 ] = {
     "NDB": _NDB_STANDARD_KEYS,
     "LOC": _LOC_STANDARD_KEYS,
+    "GP": _GP_STANDARD_KEYS,
 }
 
 
