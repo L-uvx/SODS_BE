@@ -296,6 +296,56 @@ def test_gp_judgement_returns_none_when_obstacle_stays_outside_zone() -> None:
     assert distance is None
 
 
+def test_gp_judgement_calculates_min_forward_distance_for_partial_linestring_intersection() -> None:
+    helpers = importlib.import_module("app.analysis.rules.gp.site_protection.helpers")
+    judgement = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.judgement"
+    )
+    shared_context = helpers.build_gp_site_protection_shared_context(
+        station=_make_gp_station(distance_v_to_runway=180.0),
+        station_point=(0.0, 0.0),
+        runway_context={
+            "runNumber": "18",
+            "directionDegrees": 0.0,
+            "widthMeters": 40.0,
+            "lengthMeters": 600.0,
+            "localCenterPoint": (0.0, -600.0),
+        },
+        standard_version="GB",
+    )
+    region_geometry = helpers.build_gp_site_protection_region_b_geometry(shared_context)
+
+    distance = judgement.calculate_gp_zone_intersection_min_forward_distance_meters(
+        obstacle_geometry={
+            "type": "LineString",
+            "coordinates": [
+                [60.0, -700.0],
+                [60.0, -500.0],
+            ],
+        },
+        zone_geometry=region_geometry.local_geometry,
+        shared_context=shared_context,
+    )
+
+    assert distance == 500.0
+
+
+def test_gp_clearance_helper_returns_none_by_default() -> None:
+    clearance = importlib.import_module("app.analysis.rules.gp.clearance")
+
+    assert (
+        clearance.calculate_gp_clearance_limit_height_meters(
+            runway_context={"runNumber": "18"},
+            obstacle={
+                "obstacleId": 900,
+                "name": "Test Obstacle",
+                "topElevation": 510.0,
+            },
+        )
+        is None
+    )
+
+
 def test_gp_region_a_binder_builds_gb_zone_spec() -> None:
     region_a_module = importlib.import_module(
         "app.analysis.rules.gp.site_protection.region_a"
@@ -386,6 +436,249 @@ def test_gp_region_c_binder_builds_mh_zone_spec() -> None:
     assert bound_rule.protection_zone.rule_code == "gp_site_protection_mh_region_c"
 
 
+def test_gp_region_c_road_entering_region_is_non_compliant() -> None:
+    region_c_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_c"
+    )
+
+    bound_rule = region_c_module.GpSiteProtectionGbRegionCRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 21,
+            "name": "Road In Region C",
+            "rawObstacleType": "道路",
+            "globalObstacleCategory": "road",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "road or rail obstacle enters GP region C"
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "isRoadOrRail": True,
+        "requiresClearanceEvaluation": False,
+    }
+    assert result.standards_rule_code == "gp_site_protection_gb_region_c"
+
+
+def test_gp_region_c_electrified_rail_entering_region_is_non_compliant() -> None:
+    region_c_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_c"
+    )
+
+    bound_rule = region_c_module.GpSiteProtectionGbRegionCRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 22,
+            "name": "Electrified Rail In Region C",
+            "rawObstacleType": "电气化铁路",
+            "globalObstacleCategory": "railway_electrified",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "road or rail obstacle enters GP region C"
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "isRoadOrRail": True,
+        "requiresClearanceEvaluation": False,
+    }
+
+
+def test_gp_region_c_non_electrified_rail_entering_region_is_non_compliant() -> None:
+    region_c_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_c"
+    )
+
+    bound_rule = region_c_module.GpSiteProtectionMhRegionCRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 23,
+            "name": "Non-Electrified Rail In Region C",
+            "rawObstacleType": "非电气化铁路",
+            "globalObstacleCategory": "railway_non_electrified",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "road or rail obstacle enters GP region C"
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "isRoadOrRail": True,
+        "requiresClearanceEvaluation": False,
+    }
+    assert result.standards_rule_code == "gp_site_protection_mh_region_c"
+
+
+def test_gp_region_c_non_road_or_rail_with_unavailable_clearance_is_non_compliant() -> None:
+    region_c_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_c"
+    )
+
+    bound_rule = region_c_module.GpSiteProtectionMhRegionCRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 24,
+            "name": "Building In Region C",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "gp clearance limit unavailable"
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "isRoadOrRail": False,
+        "requiresClearanceEvaluation": True,
+    }
+    assert result.standards_rule_code == "gp_site_protection_mh_region_c"
+
+
+def test_gp_region_c_non_road_or_rail_with_available_clearance_can_be_compliant(
+    monkeypatch,
+) -> None:
+    region_c_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_c"
+    )
+
+    monkeypatch.setattr(
+        region_c_module,
+        "calculate_gp_clearance_limit_height_meters",
+        lambda **_: 520.0,
+    )
+
+    bound_rule = region_c_module.GpSiteProtectionMhRegionCRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 25,
+            "name": "Building In Region C Below Limit",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is True
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "isRoadOrRail": False,
+        "requiresClearanceEvaluation": True,
+        "clearanceLimitHeightMeters": 520.0,
+        "overHeightMeters": -10.0,
+    }
+
+
+def test_gp_region_c_non_road_or_rail_with_available_clearance_can_be_non_compliant(
+    monkeypatch,
+) -> None:
+    region_c_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_c"
+    )
+
+    monkeypatch.setattr(
+        region_c_module,
+        "calculate_gp_clearance_limit_height_meters",
+        lambda **_: 520.0,
+    )
+
+    bound_rule = region_c_module.GpSiteProtectionMhRegionCRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 26,
+            "name": "Building In Region C Above Limit",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 530.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -100.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "isRoadOrRail": False,
+        "requiresClearanceEvaluation": True,
+        "clearanceLimitHeightMeters": 520.0,
+        "overHeightMeters": 10.0,
+    }
+
+
 def test_gp_rule_profile_returns_dual_standard_protection_zones() -> None:
     profile_module = importlib.import_module("app.analysis.rules.gp.profile")
 
@@ -462,7 +755,7 @@ def test_gp_bound_rule_returns_cable_specific_standards_rule_code_in_region_a() 
             "obstacleId": 3,
             "name": "Cable Obstacle",
             "rawObstacleType": "高压输电线",
-            "globalObstacleCategory": "power_line_high_voltage_overhead",
+            "globalObstacleCategory": "power_or_communication_cable",
             "topElevation": 510.0,
             "localGeometry": {
                 "type": "Point",
@@ -476,6 +769,192 @@ def test_gp_bound_rule_returns_cable_specific_standards_rule_code_in_region_a() 
     )
 
     assert result.standards_rule_code == "gp_site_protection_gb_region_a_cable"
+
+
+def test_gp_region_a_cable_below_station_altitude_is_compliant() -> None:
+    region_a_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_a"
+    )
+
+    bound_rule = region_a_module.GpSiteProtectionGbRegionARule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 5,
+            "name": "Cable Below Station",
+            "rawObstacleType": "通信线",
+            "globalObstacleCategory": "power_or_communication_cable",
+            "topElevation": 499.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [0.0, -200.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [0.0, -200.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is True
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "isCable": True,
+        "baseHeightMeters": 500.0,
+        "allowedHeightMeters": 500.0,
+        "topElevationMeters": 499.0,
+    }
+    assert result.standards_rule_code == "gp_site_protection_gb_region_a_cable"
+
+
+def test_gp_region_a_cable_at_or_above_station_altitude_is_non_compliant() -> None:
+    region_a_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_a"
+    )
+
+    bound_rule = region_a_module.GpSiteProtectionGbRegionARule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 6,
+            "name": "Cable Above Station",
+            "rawObstacleType": "通信线",
+            "globalObstacleCategory": "power_or_communication_cable",
+            "topElevation": 500.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [0.0, -200.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [0.0, -200.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "isCable": True,
+        "baseHeightMeters": 500.0,
+        "allowedHeightMeters": 500.0,
+        "topElevationMeters": 500.0,
+    }
+    assert result.standards_rule_code == "gp_site_protection_gb_region_a_cable"
+
+
+def test_gp_region_a_non_cable_entering_region_is_non_compliant() -> None:
+    region_a_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_a"
+    )
+
+    bound_rule = region_a_module.GpSiteProtectionGbRegionARule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 7,
+            "name": "Building In Region A",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [0.0, -200.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [0.0, -200.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.metrics == {
+        "enteredProtectionZone": True,
+        "isCable": False,
+        "baseHeightMeters": 500.0,
+        "topElevationMeters": 510.0,
+    }
+    assert result.standards_rule_code == "gp_site_protection_gb_region_a"
+
+
+def test_gp_region_a_non_cable_outside_region_is_compliant() -> None:
+    region_a_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_a"
+    )
+
+    bound_rule = region_a_module.GpSiteProtectionMhRegionARule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 8,
+            "name": "Building Outside Region A",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [50.0, 200.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [50.0, 200.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is True
+    assert result.metrics == {
+        "enteredProtectionZone": False,
+        "isCable": False,
+        "baseHeightMeters": 500.0,
+        "topElevationMeters": 510.0,
+    }
+    assert result.standards_rule_code == "gp_site_protection_mh_region_a"
+
+
+def test_gp_region_b_does_not_inherit_region_a_cable_exception() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionGbRegionBRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 15,
+            "name": "Cable In Region B",
+            "rawObstacleType": "电力线缆和通信线缆",
+            "globalObstacleCategory": "power_or_communication_cable",
+            "topElevation": 490.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.standards_rule_code == "gp_site_protection_gb_region_b"
 
 
 def test_gp_bound_rule_returns_compliant_when_obstacle_stays_outside_zone() -> None:
@@ -555,6 +1034,300 @@ def test_gp_region_b_rule_returns_mh_subtype_specific_standards_rule_code() -> N
     )
 
     assert result.standards_rule_code == "gp_site_protection_mh_region_b_ii"
+
+
+def test_gp_region_b_gb_entered_within_600m_is_non_compliant() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionGbRegionBRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 16,
+            "name": "Building Within 600m",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "obstacle within GP region B forward 600m"
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["forwardDistanceMeters"] == 500.0
+    assert result.metrics["requiresClearanceEvaluation"] is False
+
+
+def test_gp_region_b_mh_i_entered_is_non_compliant() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionMhRegionBRule().bind(
+        station=_make_gp_station(station_sub_type="I"),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 17,
+            "name": "MH I Building",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "obstacle enters GP MH region B subtype I"
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["stationSubType"] == "I"
+
+
+def test_gp_region_b_mh_ii_ring_road_within_600m_is_non_compliant() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionMhRegionBRule().bind(
+        station=_make_gp_station(station_sub_type="II"),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 18,
+            "name": "MH II Ring Road Within 600m",
+            "rawObstacleType": "机场环场路",
+            "globalObstacleCategory": "airport_ring_road",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "airport ring road within GP MH region B forward 600m"
+    assert result.metrics["isAirportRingRoad"] is True
+    assert result.metrics["forwardDistanceMeters"] == 500.0
+
+
+def test_gp_region_b_mh_ii_ring_road_outside_600m_is_compliant() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionMhRegionBRule().bind(
+        station=_make_gp_station(station_sub_type="II"),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 19,
+            "name": "MH II Ring Road Outside 600m",
+            "rawObstacleType": "机场环场路",
+            "globalObstacleCategory": "airport_ring_road",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -700.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -700.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is True
+    assert result.message == "obstacle outside GP site protection region B"
+    assert result.metrics["isAirportRingRoad"] is True
+    assert result.metrics["forwardDistanceMeters"] is None
+
+
+def test_gp_region_b_mh_iii_non_ring_road_entered_is_non_compliant() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionMhRegionBRule().bind(
+        station=_make_gp_station(station_sub_type="III"),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 20,
+            "name": "MH III Building",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "non-ring-road obstacle enters GP MH region B"
+    assert result.metrics["isAirportRingRoad"] is False
+    assert result.metrics["stationSubType"] == "III"
+
+
+def test_gp_region_b_gb_entered_outside_600m_with_unavailable_clearance_is_non_compliant() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionGbRegionBRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 21,
+            "name": "GB Building Outside 600m",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -700.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -700.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "gp clearance limit unavailable"
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["forwardDistanceMeters"] == 700.0
+    assert result.metrics["requiresClearanceEvaluation"] is True
+
+
+def test_gp_region_b_gb_entered_outside_600m_with_available_clearance_can_be_compliant(
+    monkeypatch,
+) -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    monkeypatch.setattr(
+        region_b_module,
+        "calculate_gp_clearance_limit_height_meters",
+        lambda **_: 520.0,
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionGbRegionBRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 22,
+            "name": "GB Building Outside 600m Below Limit",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -700.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -700.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is True
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["forwardDistanceMeters"] == 700.0
+    assert result.metrics["requiresClearanceEvaluation"] is True
+    assert result.metrics["clearanceLimitHeightMeters"] == 520.0
+    assert result.metrics["overHeightMeters"] == -10.0
+
+
+def test_gp_region_b_gb_entered_outside_600m_with_available_clearance_can_be_non_compliant(
+    monkeypatch,
+) -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    monkeypatch.setattr(
+        region_b_module,
+        "calculate_gp_clearance_limit_height_meters",
+        lambda **_: 520.0,
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionGbRegionBRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 23,
+            "name": "GB Building Outside 600m Above Limit",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 530.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -700.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -700.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["forwardDistanceMeters"] == 700.0
+    assert result.metrics["requiresClearanceEvaluation"] is True
+    assert result.metrics["clearanceLimitHeightMeters"] == 520.0
+    assert result.metrics["overHeightMeters"] == 10.0
 
 
 def _make_gp_shared_context(*, standard_version: str):

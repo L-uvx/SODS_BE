@@ -28,6 +28,7 @@ class GpSiteProtectionSharedContext:
     normal_unit: tuple[float, float]
     side_sign: float
     edge_offset_v_meters: float
+    runway_context: dict[str, object]
     parameters: GpSiteProtectionParameters
 
 
@@ -110,6 +111,7 @@ def build_gp_site_protection_shared_context(
         normal_unit=normal_unit,
         side_sign=side_sign,
         edge_offset_v_meters=edge_offset_v_meters,
+        runway_context=runway_context,
         parameters=parameters,
     )
 
