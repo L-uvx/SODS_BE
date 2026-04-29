@@ -4,13 +4,14 @@ from app.analysis.rules.ndb.common import (
     NdbRule,
     build_ndb_conical_protection_zone,
 )
+from app.analysis.protection_zone_style import resolve_protection_zone_name
 
 
 class NdbConicalClearance3DegRule(NdbRule):
     rule_code = "ndb_conical_clearance_3deg"
     rule_name = "ndb_conical_clearance_3deg"
     zone_code = "ndb_conical_clearance_3deg"
-    zone_name = "NDB 3 degree conical clearance zone"
+    zone_name = resolve_protection_zone_name(zone_code=zone_code)
 
     def __init__(self) -> None:
         self.inner_radius_meters = float(NDB_CONICAL_CLEARANCE["inner_radius_m"])

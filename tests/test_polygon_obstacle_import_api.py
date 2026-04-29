@@ -1026,89 +1026,6 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
     assert payload["protectionZones"] == []
 
 
-def test_get_analysis_task_result_backfills_style_for_legacy_protection_zone_payload() -> (
-    None
-):
-    with _create_test_client() as client:
-        app.state.dispatch_import_task = _DispatchRecorder().delay
-        runtime.dispatch_import_task = app.state.dispatch_import_task
-        app.state.dispatch_analysis_task = _DispatchRecorder().delay
-        runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
-        create_import_response = client.post(
-            "/polygon-obstacle/import",
-            data={
-                "projectName": "Wuhan Demo",
-                "obstacleType": "building",
-            },
-            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
-        )
-        import_task_id = create_import_response.json()["taskId"]
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(Airport(id=1, name="Airport A", longitude=104.123456, latitude=30.123456))
-            session.commit()
-
-        create_analysis_response = client.post(
-            "/polygon-obstacle/analysis",
-            json={
-                "importTaskId": import_task_id,
-                "targetIds": [1],
-            },
-        )
-        analysis_task_id = create_analysis_response.json()["analysisTaskId"]
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            analysis_task = session.get(AnalysisTask, analysis_task_id)
-            assert analysis_task is not None
-            analysis_task.status = "succeeded"
-            analysis_task.result_payload = {
-                "selectedTargets": [{"id": 1, "name": "Airport A", "category": "机场"}],
-                "obstacleCount": 0,
-                "summary": "legacy payload",
-                "ruleResults": [],
-                "protectionZones": [
-                    {
-                        "id": "airport-1-station-101-zone-loc_building_restriction_zone-region-3",
-                        "airportId": 1,
-                        "airportName": "Airport A",
-                        "stationId": 101,
-                        "stationName": "LOC Station",
-                        "stationType": "LOC",
-                        "ruleCode": "loc_building_restriction_zone_region_3",
-                        "ruleName": "loc_building_restriction_zone_region_3",
-                        "zoneCode": "loc_building_restriction_zone",
-                        "zoneName": "building restriction zone",
-                        "regionCode": "3",
-                        "regionName": "3",
-                        "geometry": {
-                            "shapeType": "multipolygon",
-                            "coordinates": [[[[104.1234, 30.1234], [104.1235, 30.1234], [104.1235, 30.1235], [104.1234, 30.1235], [104.1234, 30.1234]]]],
-                        },
-                        "vertical": {
-                            "mode": "flat",
-                            "baseReference": "station",
-                            "baseHeightMeters": 500.0,
-                        },
-                        "properties": {
-                            "label": "LOC Station building restriction zone 3"
-                        },
-                        "renderGeometry": None,
-                    }
-                ],
-            }
-            session.commit()
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    protection_zone = response.json()["protectionZones"][0]
-    assert protection_zone["style"] == {
-        "colorKey": "danger_red",
-        "fill": "rgba(245, 108, 108, 0.25)",
-        "stroke": "rgba(245, 108, 108, 0.9)",
-    }
-
-
 def test_get_analysis_task_result_omits_spatial_facts_after_worker_runs() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)
@@ -1275,7 +1192,7 @@ def test_get_analysis_task_result_returns_protection_zones() -> None:
     assert protection_zone["ruleCode"] == "ndb_minimum_distance_50m"
     assert protection_zone["ruleName"] == "ndb_minimum_distance_50m"
     assert protection_zone["zoneCode"] == "ndb_minimum_distance_50m"
-    assert protection_zone["zoneName"] == "NDB 50m minimum distance zone"
+    assert protection_zone["zoneName"] == "NDB 50米最小间距"
     assert protection_zone["regionCode"] == "default"
     assert protection_zone["regionName"] == "default"
     assert protection_zone["geometry"]["shapeType"] == "multipolygon"
@@ -1293,7 +1210,7 @@ def test_get_analysis_task_result_returns_protection_zones() -> None:
         "stroke": "rgba(96, 165, 250, 0.9)",
     }
     assert protection_zone["properties"] == {
-        "label": "NDB Station NDB 50m minimum distance zone default"
+        "label": "NDB Station NDB 50米最小间距 default"
     }
     assert protection_zone["renderGeometry"] is None
 
@@ -1310,7 +1227,7 @@ def test_analysis_protection_zone_response_rejects_legacy_circle_geometry() -> N
             ruleCode="ndb_minimum_distance_50m",
             ruleName="ndb_minimum_distance_50m",
             zoneCode="ndb_minimum_distance_50m",
-            zoneName="NDB 50m minimum distance zone",
+            zoneName="NDB 50米最小间距",
             regionCode="default",
             regionName="default",
             geometry={
@@ -1327,7 +1244,7 @@ def test_analysis_protection_zone_response_rejects_legacy_circle_geometry() -> N
                 "baseHeightMeters": 500.0,
             },
             properties={
-                "label": "NDB Station NDB 50m minimum distance zone default"
+                "label": "NDB Station NDB 50米最小间距 default"
             },
             renderGeometry=None,
         )
@@ -2120,7 +2037,7 @@ def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_3
         if item["ruleName"] == "loc_building_restriction_zone_region_3"
     )
     assert loc_rule["zoneCode"] == "loc_building_restriction_zone"
-    assert loc_rule["zoneName"] == "building restriction zone"
+    assert loc_rule["zoneName"] == "LOC 建筑物限制区"
     assert loc_rule["regionCode"] == "3"
     assert loc_rule["standards"] == {
         "gb": None,
@@ -2137,7 +2054,7 @@ def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_3
         if item["ruleCode"] == "loc_building_restriction_zone_region_3"
     )
     assert protection_zone["zoneCode"] == "loc_building_restriction_zone"
-    assert protection_zone["zoneName"] == "building restriction zone"
+    assert protection_zone["zoneName"] == "LOC 建筑物限制区"
     assert protection_zone["regionCode"] == "3"
     assert protection_zone["geometry"]["shapeType"] == "multipolygon"
     assert protection_zone["vertical"]["mode"] == "analytic_surface"
@@ -2265,7 +2182,7 @@ def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_4
         if item["ruleName"] == "loc_building_restriction_zone_region_4"
     )
     assert loc_rule["zoneCode"] == "loc_building_restriction_zone"
-    assert loc_rule["zoneName"] == "building restriction zone"
+    assert loc_rule["zoneName"] == "LOC 建筑物限制区"
     assert loc_rule["regionCode"] == "4"
     assert loc_rule["standards"] == {
         "gb": None,
@@ -2278,7 +2195,7 @@ def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_4
         if item["ruleCode"] == "loc_building_restriction_zone_region_4"
     )
     assert protection_zone["zoneCode"] == "loc_building_restriction_zone"
-    assert protection_zone["zoneName"] == "building restriction zone"
+    assert protection_zone["zoneName"] == "LOC 建筑物限制区"
     assert protection_zone["regionCode"] == "4"
     assert protection_zone["geometry"]["shapeType"] == "multipolygon"
     assert protection_zone["vertical"] == {
@@ -2606,90 +2523,6 @@ def test_get_analysis_task_result_returns_gp_1deg_front_reference_line_surface()
         "halfAngleDegrees": 8.0,
         "radiusMeters": 18520.0,
     }
-
-
-def test_get_analysis_task_result_backfills_station_point_for_legacy_gp_front_reference_line_payload() -> None:
-    with _create_test_client() as client:
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                AnalysisTask(
-                    id="analysis-task-1",
-                    import_batch_id="import-batch-1",
-                    selected_target_ids=[1],
-                    status="succeeded",
-                    progress_percent=100,
-                    status_message="analysis completed",
-                    result_payload={
-                        "selectedTargets": [],
-                        "obstacleCount": 0,
-                        "summary": "legacy gp payload",
-                        "ruleResults": [],
-                        "protectionZones": [
-                            {
-                                "id": "airport-1-station-101-zone-gp-elevation-restriction-1deg-region-default",
-                                "airportId": 1,
-                                "airportName": "Airport A",
-                                "stationId": 101,
-                                "stationName": "GP Station",
-                                "stationType": "GP",
-                                "ruleCode": "gp_elevation_restriction_1deg",
-                                "ruleName": "gp_elevation_restriction_1deg",
-                                "zoneCode": "gp_elevation_restriction_1deg",
-                                "zoneName": "GP 1 degree elevation restriction zone",
-                                "regionCode": "default",
-                                "regionName": "default",
-                                "geometry": {
-                                    "shapeType": "multipolygon",
-                                    "coordinates": []
-                                },
-                                "vertical": {
-                                    "mode": "analytic_surface",
-                                    "baseReference": "station",
-                                    "baseHeightMeters": 500.0,
-                                    "surface": {
-                                        "type": "distance_parameterized",
-                                        "distanceSource": {
-                                            "kind": "front_reference_line",
-                                            "centerPoint": [103.975864, 30.503643],
-                                            "leftPoint": [103.976371, 30.503643],
-                                            "rightPoint": [103.975357, 30.503643]
-                                        },
-                                        "distanceMetric": "axial_from_reference_line",
-                                        "planarControl": {
-                                            "frontOffsetMeters": 360.0,
-                                            "halfAngleDegrees": 8.0,
-                                            "radiusMeters": 18520.0
-                                        },
-                                        "clampRange": {
-                                            "startMeters": 0.0,
-                                            "endMeters": 18160.0
-                                        },
-                                        "heightModel": {
-                                            "type": "angle_linear_rise",
-                                            "angleDegrees": 1.0,
-                                            "distanceOffsetMeters": 0.0
-                                        }
-                                    }
-                                },
-                                "properties": {
-                                    "label": "GP Station GP 1 degree elevation restriction zone default"
-                                },
-                                "renderGeometry": None
-                            }
-                        ]
-                    },
-                )
-            )
-            session.commit()
-
-        response = client.get("/polygon-obstacle/analysis/analysis-task-1/result")
-
-    assert response.status_code == 200
-    protection_zone = response.json()["protectionZones"][0]
-    assert protection_zone["vertical"]["surface"]["distanceSource"]["stationPoint"] == [
-        103.975864,
-        30.503643,
-    ]
 
 
 def test_build_airport_analysis_result_returns_only_internal_fields_still_in_use() -> None:

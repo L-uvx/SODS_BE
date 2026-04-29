@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from shapely.geometry import Point
 from shapely.geometry.base import BaseGeometry
 
+from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import ObstacleRule
 from app.analysis.rules.geometry_evaluation import evaluate_geometry_metric
@@ -71,7 +72,7 @@ class GpElevationRestriction1DegRule(ObstacleRule):
     rule_code = "gp_elevation_restriction_1deg"
     rule_name = "gp_elevation_restriction_1deg"
     zone_code = "gp_elevation_restriction_1deg"
-    zone_name = "GP 1 degree elevation restriction zone"
+    zone_name = resolve_protection_zone_name(zone_code=zone_code)
 
     # 绑定 GP 1 度仰角限制区。
     def bind(

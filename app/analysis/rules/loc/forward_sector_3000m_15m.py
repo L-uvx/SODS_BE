@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from shapely.geometry import Polygon
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
+from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.loc.config import LOC_FORWARD_SECTOR_3000M_15M
@@ -67,7 +68,7 @@ class LocForwardSector3000m15mRule(ObstacleRule):
     rule_code = "loc_forward_sector_3000m_15m"
     rule_name = "loc_forward_sector_3000m_15m"
     zone_code = "loc_forward_sector_3000m_15m"
-    zone_name = "LOC forward sector 3000m 15m"
+    zone_name = resolve_protection_zone_name(zone_code=zone_code)
     SUPPORTED_CATEGORIES = {
         "building_general",
         "power_line_high_voltage_overhead",

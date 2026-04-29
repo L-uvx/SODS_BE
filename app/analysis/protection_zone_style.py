@@ -63,6 +63,22 @@ PROTECTION_ZONE_COLOR_PALETTE = {
 
 DEFAULT_PROTECTION_ZONE_COLOR_KEY = "default_blue"
 
+PROTECTION_ZONE_DISPLAY_NAME_MAPPING = {
+    "ndb_minimum_distance_50m":         "NDB 50米最小间距",
+    "ndb_minimum_distance_150m":        "NDB 150米最小间距",
+    "ndb_minimum_distance_300m":        "NDB 300米最小间距",
+    "ndb_minimum_distance_500m":        "NDB 500米最小间距",
+    "ndb_conical_clearance_3deg":       "NDB 50 米外 3°区域",
+    "loc_site_protection":              "LOC 场地保护区",
+    "loc_forward_sector_3000m_15m":     "LOC 前方±10°3000m区域",
+    "loc_run_area_protection":          "LOC 运行保护区",
+    "loc_building_restriction_zone":    "LOC 建筑物限制区",
+    "gp_site_protection_gb":            "GP 场地保护区（GB）",
+    "gp_site_protection_mh":            "GP 场地保护区（MH）",
+    "gp_run_area_protection":           "GP 运行保护区",
+    "gp_elevation_restriction_1deg":    "GP 1°仰角限制区域",
+}
+
 PROTECTION_ZONE_REGION_COLOR_MAPPING = {
     ("ndb_minimum_distance_50m", "default"): "sky_blue",
     ("ndb_minimum_distance_150m", "default"): "teal_green",
@@ -97,3 +113,11 @@ def resolve_protection_zone_style(*, zone_code: str, region_code: str) -> dict[s
         DEFAULT_PROTECTION_ZONE_COLOR_KEY,
     )
     return dict(PROTECTION_ZONE_COLOR_PALETTE[color_key])
+
+
+def resolve_protection_zone_name(*, zone_code: str, fallback: str | None = None) -> str:
+    if zone_code in PROTECTION_ZONE_DISPLAY_NAME_MAPPING:
+        return PROTECTION_ZONE_DISPLAY_NAME_MAPPING[zone_code]
+    if fallback is not None:
+        return fallback
+    return zone_code

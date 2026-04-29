@@ -1,11 +1,14 @@
+from app.analysis.protection_zone_style import resolve_protection_zone_name
+
+
 GP_SITE_PROTECTION_STANDARD_CONFIG = {
     "GB": {
         "zone_code": "gp_site_protection_gb",
-        "zone_name": "GP site protection (GB)",
+        "zone_name": resolve_protection_zone_name(zone_code="gp_site_protection_gb"),
     },
     "MH": {
         "zone_code": "gp_site_protection_mh",
-        "zone_name": "GP site protection (MH)",
+        "zone_name": resolve_protection_zone_name(zone_code="gp_site_protection_mh"),
     },
 }
 

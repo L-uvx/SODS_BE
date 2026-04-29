@@ -1,4 +1,7 @@
-from app.analysis.protection_zone_style import resolve_protection_zone_style
+from app.analysis.protection_zone_style import (
+    resolve_protection_zone_name,
+    resolve_protection_zone_style,
+)
 
 
 def test_resolve_protection_zone_style_returns_mapped_palette_item() -> None:
@@ -112,3 +115,18 @@ def test_resolve_protection_zone_style_maps_gp_regions_with_shared_standard_colo
 
         assert gb_style["colorKey"] == expected_color_key
         assert mh_style["colorKey"] == expected_color_key
+
+
+def test_resolve_protection_zone_name_returns_configured_chinese_names() -> None:
+    assert (
+        resolve_protection_zone_name(zone_code="ndb_minimum_distance_50m")
+        == "NDB 50米最小间距保护区"
+    )
+    assert (
+        resolve_protection_zone_name(zone_code="loc_run_area_protection")
+        == "LOC运行保护区"
+    )
+    assert (
+        resolve_protection_zone_name(zone_code="gp_site_protection_gb")
+        == "GP场地保护区（国标）"
+    )

@@ -5,6 +5,7 @@ from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
+from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import ensure_multipolygon, resolve_obstacle_shape
@@ -77,7 +78,7 @@ class LocSiteProtectionRule(ObstacleRule):
     rule_code = "loc_site_protection"
     rule_name = "loc_site_protection"
     zone_code = "loc_site_protection"
-    zone_name = "LOC site protection zone"
+    zone_name = resolve_protection_zone_name(zone_code=zone_code)
 
     def __init__(self, *, circle_step_degrees: float | None = None) -> None:
         resolved_circle_step_degrees = float(

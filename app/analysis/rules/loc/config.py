@@ -1,3 +1,6 @@
+from app.analysis.protection_zone_style import resolve_protection_zone_name
+
+
 LOC_SITE_PROTECTION = {
     "circle_radius_m": 75.0,
     "rectangle_width_m": 120.0,
@@ -12,7 +15,7 @@ LOC_FORWARD_SECTOR_3000M_15M = {
 
 LOC_BUILDING_RESTRICTION_ZONE = {
     "zone_code": "loc_building_restriction_zone",
-    "zone_name": "building restriction zone",
+    "zone_name": resolve_protection_zone_name(zone_code="loc_building_restriction_zone"),
     "root_half_width_m": 500.0,
     "region_1_2_forward_length_m": 500.0,
     "region_1_2_outer_offset_m": 1500.0,

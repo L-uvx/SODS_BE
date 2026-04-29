@@ -3,13 +3,14 @@ from app.analysis.rules.ndb.common import (
     NdbRule,
     build_ndb_circle_protection_zone,
 )
+from app.analysis.protection_zone_style import resolve_protection_zone_name
 
 
 class NdbMinimumDistance500mRule(NdbRule):
     rule_code = "ndb_minimum_distance_500m"
     rule_name = "ndb_minimum_distance_500m"
     zone_code = "ndb_minimum_distance_500m"
-    zone_name = "NDB 500m minimum distance zone"
+    zone_name = resolve_protection_zone_name(zone_code=zone_code)
     radius_meters = 500.0
 
     # 绑定单个 NDB 台站的 500 米最小间距保护区。

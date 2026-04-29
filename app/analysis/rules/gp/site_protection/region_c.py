@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -131,14 +132,14 @@ class GpSiteProtectionGbRegionCRule(_GpSiteProtectionRegionCRuleBase):
     rule_code = "gp_site_protection_gb_region_c"
     rule_name = "gp_site_protection_gb_region_c"
     zone_code = "gp_site_protection_gb"
-    zone_name = "GP site protection (GB)"
+    zone_name = resolve_protection_zone_name(zone_code=zone_code)
 
 
 class GpSiteProtectionMhRegionCRule(_GpSiteProtectionRegionCRuleBase):
     rule_code = "gp_site_protection_mh_region_c"
     rule_name = "gp_site_protection_mh_region_c"
     zone_code = "gp_site_protection_mh"
-    zone_name = "GP site protection (MH)"
+    zone_name = resolve_protection_zone_name(zone_code=zone_code)
 
 
 __all__ = [

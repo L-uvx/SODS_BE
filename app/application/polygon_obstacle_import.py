@@ -1059,10 +1059,6 @@ class PolygonObstacleImportService:
             return None
 
         result_payload = analysis_task.result_payload or {}
-        protection_zones = [
-            self._build_compatible_protection_zone_result_payload(item)
-            for item in result_payload.get("protectionZones", [])
-        ]
         return AnalysisTaskResultResponse(
             analysisTaskId=analysis_task.id,
             status=analysis_task.status,
@@ -1078,33 +1074,11 @@ class PolygonObstacleImportService:
                 AnalysisRuleResultResponse(**item)
                 for item in result_payload.get("ruleResults", [])
             ],
-            protectionZones=[AnalysisProtectionZoneResponse(**item) for item in protection_zones],
+            protectionZones=[
+                AnalysisProtectionZoneResponse(**item)
+                for item in result_payload.get("protectionZones", [])
+            ],
         )
-
-    # 为旧版保护区结果补齐缺失的 style 字段。
-    def _build_compatible_protection_zone_result_payload(
-        self,
-        payload: dict[str, object],
-    ) -> dict[str, object]:
-        compatible_payload = dict(payload)
-        if "style" not in compatible_payload:
-            compatible_payload["style"] = resolve_protection_zone_style(
-                zone_code=str(compatible_payload.get("zoneCode") or ""),
-                region_code=str(compatible_payload.get("regionCode") or ""),
-            )
-        vertical = compatible_payload.get("vertical")
-        if isinstance(vertical, dict):
-            surface = vertical.get("surface")
-            if isinstance(surface, dict):
-                distance_source = surface.get("distanceSource")
-                if (
-                    isinstance(distance_source, dict)
-                    and distance_source.get("kind") == "front_reference_line"
-                    and "stationPoint" not in distance_source
-                    and isinstance(distance_source.get("centerPoint"), list)
-                ):
-                    distance_source["stationPoint"] = list(distance_source["centerPoint"])
-        return compatible_payload
 
     # 投递分析异步任务到运行时调度器。
     def _dispatch_analysis_task(self, task_id: str) -> None:

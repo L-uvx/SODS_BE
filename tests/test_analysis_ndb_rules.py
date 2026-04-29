@@ -172,9 +172,9 @@ def test_ndb_rule_classes_expose_name_and_zone_name() -> None:
     conical_rule = NdbConicalClearance3DegRule()
 
     assert minimum_rule.rule_name == "ndb_minimum_distance_50m"
-    assert minimum_rule.zone_name == "NDB 50m minimum distance zone"
+    assert minimum_rule.zone_name == "NDB 50米最小间距"
     assert conical_rule.rule_name == "ndb_conical_clearance_3deg"
-    assert conical_rule.zone_name == "NDB 3 degree conical clearance zone"
+    assert conical_rule.zone_name == "NDB 50 米外 3°区域"
 
 
 def test_ndb_minimum_distance_rules_return_uniform_results() -> None:

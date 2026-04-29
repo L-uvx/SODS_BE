@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -57,7 +58,7 @@ class GpRunAreaProtectionRegionBRule(ObstacleRule):
     rule_code = "gp_run_area_protection_region_b"
     rule_name = "gp_run_area_protection_region_b"
     zone_code = "gp_run_area_protection"
-    zone_name = "GP run area protection zone"
+    zone_name = resolve_protection_zone_name(zone_code=zone_code)
 
     # 绑定 GP 运行保护区第 B 区。
     def bind(
