@@ -163,12 +163,14 @@ def test_station_rule_dispatcher_dispatches_gp_by_station_type() -> None:
         runways=[runway_context],
     )
 
-    assert len(payload.protection_zones) == 6
+    assert len(payload.protection_zones) == 7
     assert {zone.zone_code for zone in payload.protection_zones} == {
+        "gp_elevation_restriction_1deg",
         "gp_site_protection_gb",
         "gp_site_protection_mh",
     }
     assert {result.rule_name for result in payload.rule_results} == {
+        "gp_elevation_restriction_1deg",
         "gp_site_protection_gb_region_a",
         "gp_site_protection_gb_region_b",
         "gp_site_protection_gb_region_c",

@@ -42,6 +42,7 @@ import app.analysis.rules.loc.building_restriction.region_4 as loc_region_4_modu
 import app.analysis.rules.loc.building_restriction as loc_building_restriction_module
 import app.analysis.rules.loc.profile as loc_profile_module
 import app.analysis.rules.loc.run_area_protection as loc_run_area_protection_module
+from app.analysis.rules.geometry_evaluation import evaluate_geometry_metric
 from app.application.polygon_obstacle_import import PolygonObstacleImportService
 
 
@@ -2863,6 +2864,23 @@ def test_loc_building_restriction_zone_region_3_helper_handles_boundary_only_int
     )
 
     assert worst_allowed_height_meters == pytest.approx(500.0)
+
+
+def test_loc_region_3_shared_geometry_helper_returns_expected_min_metric() -> None:
+    result = evaluate_geometry_metric(
+        geometry=Polygon(
+            [
+                (0.0, 0.0),
+                (10.0, 10.0),
+                (20.0, 0.0),
+                (0.0, 0.0),
+            ]
+        ),
+        point_metric=lambda point: point.y,
+        collect_point_candidates=False,
+    )
+
+    assert result.min_metric == pytest.approx(0.0)
 
 
 def test_loc_rule_profile_returns_active_region_1_to_region_4_zone_specs() -> None:

@@ -2,6 +2,10 @@ from dataclasses import dataclass
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
+from app.analysis.rules.gp.elevation_restriction import (
+    GpElevationRestriction1DegRule,
+    build_gp_1deg_shared_context,
+)
 from app.analysis.rules.gp.site_protection import (
     GpSiteProtectionGbRegionARule,
     GpSiteProtectionGbRegionBRule,
@@ -22,6 +26,7 @@ class GpStationAnalysisPayload:
 class GpRuleProfile:
     # 初始化 GP 最小规则集合。
     def __init__(self) -> None:
+        self._elevation_restriction_rules = [GpElevationRestriction1DegRule()]
         self._gb_rules = [
             GpSiteProtectionGbRegionARule(),
             GpSiteProtectionGbRegionBRule(),
@@ -58,7 +63,19 @@ class GpRuleProfile:
             runway_context=runway_context,
             standard_version="MH",
         )
+        elevation_restriction_shared_context = build_gp_1deg_shared_context(
+            station=station,
+            station_point=station_point,
+            runway_context=runway_context,
+        )
 
+        elevation_restriction_bound_rules = [
+            rule.bind(
+                station=station,
+                shared_context=elevation_restriction_shared_context,
+            )
+            for rule in self._elevation_restriction_rules
+        ]
         gb_bound_rules = [
             rule.bind(station=station, shared_context=gb_shared_context)
             for rule in self._gb_rules
@@ -67,7 +84,11 @@ class GpRuleProfile:
             rule.bind(station=station, shared_context=mh_shared_context)
             for rule in self._mh_rules
         ]
-        bound_rules = [*gb_bound_rules, *mh_bound_rules]
+        bound_rules = [
+            *elevation_restriction_bound_rules,
+            *gb_bound_rules,
+            *mh_bound_rules,
+        ]
 
         results: list[AnalysisRuleResult] = []
         for obstacle in obstacles:

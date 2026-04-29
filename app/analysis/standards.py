@@ -110,6 +110,10 @@ _GP_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
         None,
         "MH_ILSGP_场地保护区_C",
     ),
+    "gp_elevation_restriction_1deg": (
+        None,
+        "MH_ILSGP_1°仰角限制区域",
+    ),
 }
 
 _STANDARD_KEYS_BY_STATION_TYPE: dict[

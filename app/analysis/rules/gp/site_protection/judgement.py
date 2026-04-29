@@ -1,6 +1,6 @@
 from shapely.geometry import MultiPolygon, shape
-from shapely.geometry.base import BaseGeometry
 
+from app.analysis.rules.geometry_evaluation import evaluate_geometry_metric
 from app.analysis.rules.gp.site_protection.helpers import (
     GpSiteProtectionSharedContext,
 )
@@ -36,45 +36,16 @@ def calculate_gp_zone_intersection_min_forward_distance_meters(
     shared_context: GpSiteProtectionSharedContext,
 ) -> float | None:
     obstacle = shape(obstacle_geometry)
-    intersection = zone_geometry.intersection(obstacle)
-    if intersection.is_empty:
-        return None
-
-    candidate_points = _collect_projection_candidate_points(intersection)
-    if not candidate_points:
-        representative_point = intersection.representative_point()
-        candidate_points = [(representative_point.x, representative_point.y)]
-
     station_x, station_y = shared_context.station_point
     axis_x, axis_y = shared_context.axis_unit
-    return min(
-        (point_x - station_x) * axis_x + (point_y - station_y) * axis_y
-        for point_x, point_y in candidate_points
+    evaluation = evaluate_geometry_metric(
+        obstacle_geometry=obstacle,
+        protection_zone_geometry=zone_geometry,
+        point_metric=lambda point: (point.x - station_x) * axis_x
+        + (point.y - station_y) * axis_y,
+        collect_point_candidates=True,
     )
-
-
-def _collect_projection_candidate_points(
-    geometry: BaseGeometry,
-) -> list[tuple[float, float]]:
-    geometry_type = geometry.geom_type
-
-    if geometry_type == "Point":
-        return [(float(geometry.x), float(geometry.y))]
-
-    if geometry_type == "LineString":
-        return [(float(x), float(y)) for x, y in geometry.coords]
-
-    if geometry_type == "Polygon":
-        return [(float(x), float(y)) for x, y in geometry.exterior.coords]
-
-    geoms = getattr(geometry, "geoms", None)
-    if geoms is None:
-        return []
-
-    candidate_points: list[tuple[float, float]] = []
-    for child_geometry in geoms:
-        candidate_points.extend(_collect_projection_candidate_points(child_geometry))
-    return candidate_points
+    return evaluation.min_metric
 
 
 __all__ = [

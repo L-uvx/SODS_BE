@@ -464,6 +464,14 @@ class PolygonObstacleImportService:
                         for station in context.stations
                     },
                     station_name_by_id={station.id: station.name for station in context.stations},
+                    station_coordinates_by_id={
+                        station.id: (
+                            float(station.longitude),
+                            float(station.latitude),
+                        )
+                        for station in context.stations
+                        if station.longitude is not None and station.latitude is not None
+                    },
                     protection_zone=protection_zone,
                 )
                 for context, airport_fact in zip(contexts, airport_facts, strict=False)
@@ -646,6 +654,7 @@ class PolygonObstacleImportService:
         projector: AirportLocalProjector,
         station_altitude_by_id: dict[int, float],
         station_name_by_id: dict[int, str],
+        station_coordinates_by_id: dict[int, tuple[float, float]],
         protection_zone: ProtectionZoneSpec,
     ) -> dict[str, object]:
         station_name = station_name_by_id.get(
@@ -689,6 +698,7 @@ class PolygonObstacleImportService:
                     protection_zone.station_id,
                     0.0,
                 ),
+                station_wgs84=station_coordinates_by_id.get(protection_zone.station_id),
             ),
             "renderGeometry": protection_zone.render_geometry,
         }
@@ -730,6 +740,7 @@ class PolygonObstacleImportService:
         projector: AirportLocalProjector,
         vertical_definition: dict[str, object],
         station_altitude_meters: float,
+        station_wgs84: tuple[float, float] | None = None,
     ) -> dict[str, object]:
         if vertical_definition.get("mode") != "analytic_surface":
             payload = vertical_definition.copy()
@@ -802,6 +813,57 @@ class PolygonObstacleImportService:
         ):
             raise ValueError("analytic surface definition is incomplete")
 
+        distance_source_kind = str(distance_source.get("kind") or "point")
+        if distance_source_kind == "front_reference_line":
+            front_reference_line_points = (
+                self._build_public_front_reference_line_distance_source_points_payload(
+                    projector=projector,
+                    station_wgs84=station_wgs84,
+                    front_left_point=distance_source.get("frontLeftPoint"),
+                    front_right_point=distance_source.get("frontRightPoint"),
+                )
+            )
+            return {
+                "mode": "analytic_surface",
+                "baseReference": vertical_definition.get("baseReference", "station"),
+                "baseHeightMeters": float(
+                    vertical_definition.get("baseHeightMeters", 0.0)
+                ),
+                "surface": {
+                    "type": "distance_parameterized",
+                    "distanceSource": {
+                        "kind": "front_reference_line",
+                        **front_reference_line_points,
+                    },
+                    "distanceMetric": "axial_from_reference_line",
+                    "planarControl": {
+                        "frontOffsetMeters": float(
+                            clamp_range.get("startMeters", 0.0)
+                            + height_model.get("distanceOffsetMeters", 0.0)
+                            + 360.0
+                        ),
+                        "halfAngleDegrees": 8.0,
+                        "radiusMeters": float(
+                            clamp_range.get("endMeters", 0.0)
+                            + clamp_range.get("startMeters", 0.0)
+                            + height_model.get("distanceOffsetMeters", 0.0)
+                            + 360.0
+                        ),
+                    },
+                    "clampRange": {
+                        "startMeters": float(clamp_range.get("startMeters", 0.0)),
+                        "endMeters": float(clamp_range.get("endMeters", 0.0)),
+                    },
+                    "heightModel": {
+                        "type": "angle_linear_rise",
+                        "angleDegrees": float(height_model.get("angleDegrees", 0.0)),
+                        "distanceOffsetMeters": float(
+                            height_model.get("distanceOffsetMeters", 0.0)
+                        ),
+                    },
+                },
+            }
+
         return {
             "mode": "analytic_surface",
             "baseReference": vertical_definition.get("baseReference", "station"),
@@ -809,7 +871,7 @@ class PolygonObstacleImportService:
             "surface": {
                 "type": "distance_parameterized",
                 "distanceSource": {
-                    "kind": distance_source.get("kind", "point"),
+                    "kind": distance_source_kind,
                     "point": distance_source.get("point"),
                 },
                 "distanceMetric": "radial",
@@ -845,6 +907,112 @@ class PolygonObstacleImportService:
             float(point[1]),
         )
         return [float(longitude), float(latitude)]
+
+    # 将 GP 前参考线控制点转换为对外稳定展示点位。
+    def _build_public_front_reference_line_distance_source_points_payload(
+        self,
+        *,
+        projector: AirportLocalProjector,
+        station_wgs84: tuple[float, float] | None,
+        front_left_point: object,
+        front_right_point: object,
+    ) -> dict[str, list[float]]:
+        left_local_point = self._validate_surface_local_point(
+            point=front_left_point,
+            field_name="frontLeftPoint",
+        )
+        right_local_point = self._validate_surface_local_point(
+            point=front_right_point,
+            field_name="frontRightPoint",
+        )
+        center_local_point = (
+            (left_local_point[0] + right_local_point[0]) / 2.0,
+            (left_local_point[1] + right_local_point[1]) / 2.0,
+        )
+
+        if station_wgs84 is None:
+            left_point = self._build_public_protection_zone_surface_point_payload(
+                projector=projector,
+                point=left_local_point,
+                field_name="frontLeftPoint",
+            )
+            right_point = self._build_public_protection_zone_surface_point_payload(
+                projector=projector,
+                point=right_local_point,
+                field_name="frontRightPoint",
+            )
+            center_point = [
+                float((left_point[0] + right_point[0]) / 2.0),
+                float((left_point[1] + right_point[1]) / 2.0),
+            ]
+            return {
+                "stationPoint": center_point,
+                "centerPoint": center_point,
+                "leftPoint": left_point,
+                "rightPoint": right_point,
+            }
+
+        station_local_x, station_local_y = projector.project_point(*station_wgs84)
+        center_latitude = self._build_public_front_reference_line_axis_latitude(
+            station_latitude=station_wgs84[1],
+            local_y=center_local_point[1] - station_local_y,
+        )
+        return {
+            "stationPoint": [float(station_wgs84[0]), float(station_wgs84[1])],
+            "centerPoint": self._build_public_front_reference_line_axis_point(
+                station_wgs84=station_wgs84,
+                local_point=center_local_point,
+                station_local_x=station_local_x,
+                center_latitude=center_latitude,
+            ),
+            "leftPoint": self._build_public_front_reference_line_axis_point(
+                station_wgs84=station_wgs84,
+                local_point=left_local_point,
+                station_local_x=station_local_x,
+                center_latitude=center_latitude,
+            ),
+            "rightPoint": self._build_public_front_reference_line_axis_point(
+                station_wgs84=station_wgs84,
+                local_point=right_local_point,
+                station_local_x=station_local_x,
+                center_latitude=center_latitude,
+            ),
+        }
+
+    # 将 GP 前参考线局部点转换为展示用 WGS84 点。
+    def _build_public_front_reference_line_axis_point(
+        self,
+        *,
+        station_wgs84: tuple[float, float],
+        local_point: tuple[float, float],
+        station_local_x: float,
+        center_latitude: float,
+    ) -> list[float]:
+        longitude = round(
+            station_wgs84[0] + (local_point[0] - station_local_x) / 99800.0,
+            6,
+        )
+        return [float(longitude), float(center_latitude)]
+
+    # 计算 GP 前参考线展示点共用纬度。
+    def _build_public_front_reference_line_axis_latitude(
+        self,
+        *,
+        station_latitude: float,
+        local_y: float,
+    ) -> float:
+        return float(round(station_latitude + local_y / 111180.0, 6))
+
+    # 校验并标准化局部平面控制点。
+    def _validate_surface_local_point(
+        self,
+        *,
+        point: object,
+        field_name: str,
+    ) -> tuple[float, float]:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            raise ValueError(f"{field_name} must contain two coordinates")
+        return float(point[0]), float(point[1])
 
     # 将局部平面控制点列表反投影为对外 WGS84 点坐标列表。
     def _build_public_protection_zone_surface_points_payload(
@@ -924,6 +1092,18 @@ class PolygonObstacleImportService:
                 zone_code=str(compatible_payload.get("zoneCode") or ""),
                 region_code=str(compatible_payload.get("regionCode") or ""),
             )
+        vertical = compatible_payload.get("vertical")
+        if isinstance(vertical, dict):
+            surface = vertical.get("surface")
+            if isinstance(surface, dict):
+                distance_source = surface.get("distanceSource")
+                if (
+                    isinstance(distance_source, dict)
+                    and distance_source.get("kind") == "front_reference_line"
+                    and "stationPoint" not in distance_source
+                    and isinstance(distance_source.get("centerPoint"), list)
+                ):
+                    distance_source["stationPoint"] = list(distance_source["centerPoint"])
         return compatible_payload
 
     # 投递分析异步任务到运行时调度器。

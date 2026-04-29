@@ -81,6 +81,7 @@ PROTECTION_ZONE_REGION_COLOR_MAPPING = {
     ("gp_site_protection_mh", "A"): "sky_blue",
     ("gp_site_protection_mh", "B"): "teal_green",
     ("gp_site_protection_mh", "C"): "danger_red",
+    ("gp_elevation_restriction_1deg", "default"): "amber_orange",
     ("loc_building_restriction_zone", "1"): "lime_green",
     ("loc_building_restriction_zone", "2"): "lime_green",
     ("loc_building_restriction_zone", "3"): "danger_red",

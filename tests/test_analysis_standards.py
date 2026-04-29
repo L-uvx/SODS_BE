@@ -163,6 +163,20 @@ def test_build_rule_standards_returns_gp_mh_region_b_by_station_sub_type() -> No
         )
 
 
+def test_build_rule_standards_returns_gp_1deg_mh_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="GP",
+        rule_name="gp_elevation_restriction_1deg",
+        region_code="default",
+    )
+
+    assert standards.gb is None
+    assert standards.mh == AnalysisStandardReference(
+        code="MH_ILSGP_1°仰角限制区域",
+        text=load_standard_config_entries()["MH_ILSGP_1°仰角限制区域"],
+    )
+
+
 def test_standard_mappings_are_registered_by_station_type() -> None:
     assert "NDB" in _STANDARD_KEYS_BY_STATION_TYPE
     assert "LOC" in _STANDARD_KEYS_BY_STATION_TYPE
@@ -206,4 +220,8 @@ def test_standard_mappings_are_registered_by_station_type() -> None:
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_site_protection_mh_region_b_ii"][1]
         == "MH_ILSGP_场地保护区_B_Ⅱ"
+    )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_elevation_restriction_1deg"][1]
+        == "MH_ILSGP_1°仰角限制区域"
     )

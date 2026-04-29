@@ -268,7 +268,26 @@ class AnalysisProtectionZoneHeightFunctionResponse(BaseModel):
 
 class AnalysisProtectionZoneDistanceSourceResponse(BaseModel):
     kind: str
+
+
+class AnalysisProtectionZonePointDistanceSourceResponse(
+    AnalysisProtectionZoneDistanceSourceResponse
+):
     point: list[float]
+
+
+class AnalysisProtectionZoneFrontReferenceLineDistanceSourceResponse(
+    AnalysisProtectionZoneDistanceSourceResponse
+):
+    station_point: list[float] = Field(alias="stationPoint")
+    center_point: list[float] = Field(alias="centerPoint")
+    left_point: list[float] = Field(alias="leftPoint")
+    right_point: list[float] = Field(alias="rightPoint")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
 
 
 class AnalysisProtectionZoneClampRangeResponse(BaseModel):
@@ -295,14 +314,49 @@ class AnalysisProtectionZoneHeightModelResponse(BaseModel):
     )
 
 
+class AnalysisProtectionZonePlanarControlResponse(BaseModel):
+    front_offset_meters: float = Field(alias="frontOffsetMeters")
+    half_angle_degrees: float = Field(alias="halfAngleDegrees")
+    radius_meters: float = Field(alias="radiusMeters")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
 class AnalysisProtectionZoneSurfaceResponse(BaseModel):
     type: str
-    distance_source: AnalysisProtectionZoneDistanceSourceResponse = Field(
+    distance_source: AnalysisProtectionZonePointDistanceSourceResponse = Field(
         alias="distanceSource"
     )
     distance_metric: str = Field(alias="distanceMetric")
     clamp_range: AnalysisProtectionZoneClampRangeResponse = Field(alias="clampRange")
     height_model: AnalysisProtectionZoneHeightModelResponse = Field(alias="heightModel")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class AnalysisProtectionZoneFrontReferenceLineSurfaceResponse(BaseModel):
+    type: str
+    distance_source: AnalysisProtectionZoneFrontReferenceLineDistanceSourceResponse = Field(
+        alias="distanceSource"
+    )
+    distance_metric: str = Field(alias="distanceMetric")
+    planar_control: AnalysisProtectionZonePlanarControlResponse = Field(
+        alias="planarControl"
+    )
+    clamp_range: AnalysisProtectionZoneClampRangeResponse | None = Field(
+        alias="clampRange",
+        default=None,
+    )
+    height_model: AnalysisProtectionZoneHeightModelResponse | None = Field(
+        alias="heightModel",
+        default=None,
+    )
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -355,6 +409,7 @@ class AnalysisProtectionZoneSurfaceAnalyticVerticalResponse(BaseModel):
     base_height_meters: float = Field(alias="baseHeightMeters")
     surface: (
         AnalysisProtectionZoneSurfaceResponse
+        | AnalysisProtectionZoneFrontReferenceLineSurfaceResponse
         | AnalysisProtectionZoneLocBuildingRestrictionZoneRegion3SurfaceResponse
     )
 

@@ -2496,6 +2496,180 @@ def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() ->
     assert all(item["style"]["stroke"].startswith("rgba(") for item in gp_protection_zones)
 
 
+def test_get_analysis_task_result_returns_gp_1deg_front_reference_line_surface() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Runway(
+                    id=201,
+                    airport_id=1,
+                    run_number="18",
+                    name="Runway 18/36",
+                    longitude=103.975864,
+                    latitude=30.501481,
+                    direction=0.0,
+                    length=600.0,
+                    width=40.0,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="GP Station",
+                    airport_id=1,
+                    station_type="GP",
+                    runway_no="18",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                    station_sub_type="II",
+                    distance_v_to_runway=180.0,
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    payload = response.json()
+    protection_zone = next(
+        item
+        for item in payload["protectionZones"]
+        if item["zoneCode"] == "gp_elevation_restriction_1deg"
+    )
+    assert protection_zone["vertical"]["surface"]["distanceSource"] == {
+        "kind": "front_reference_line",
+        "stationPoint": [103.975864, 30.506881],
+        "centerPoint": [103.975864, 30.503643],
+        "leftPoint": [103.976371, 30.503643],
+        "rightPoint": [103.975357, 30.503643],
+    }
+    assert protection_zone["vertical"]["surface"]["distanceMetric"] == (
+        "axial_from_reference_line"
+    )
+    assert protection_zone["vertical"]["surface"]["planarControl"] == {
+        "frontOffsetMeters": 360.0,
+        "halfAngleDegrees": 8.0,
+        "radiusMeters": 18520.0,
+    }
+
+
+def test_get_analysis_task_result_backfills_station_point_for_legacy_gp_front_reference_line_payload() -> None:
+    with _create_test_client() as client:
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                AnalysisTask(
+                    id="analysis-task-1",
+                    import_batch_id="import-batch-1",
+                    selected_target_ids=[1],
+                    status="succeeded",
+                    progress_percent=100,
+                    status_message="analysis completed",
+                    result_payload={
+                        "selectedTargets": [],
+                        "obstacleCount": 0,
+                        "summary": "legacy gp payload",
+                        "ruleResults": [],
+                        "protectionZones": [
+                            {
+                                "id": "airport-1-station-101-zone-gp-elevation-restriction-1deg-region-default",
+                                "airportId": 1,
+                                "airportName": "Airport A",
+                                "stationId": 101,
+                                "stationName": "GP Station",
+                                "stationType": "GP",
+                                "ruleCode": "gp_elevation_restriction_1deg",
+                                "ruleName": "gp_elevation_restriction_1deg",
+                                "zoneCode": "gp_elevation_restriction_1deg",
+                                "zoneName": "GP 1 degree elevation restriction zone",
+                                "regionCode": "default",
+                                "regionName": "default",
+                                "geometry": {
+                                    "shapeType": "multipolygon",
+                                    "coordinates": []
+                                },
+                                "vertical": {
+                                    "mode": "analytic_surface",
+                                    "baseReference": "station",
+                                    "baseHeightMeters": 500.0,
+                                    "surface": {
+                                        "type": "distance_parameterized",
+                                        "distanceSource": {
+                                            "kind": "front_reference_line",
+                                            "centerPoint": [103.975864, 30.503643],
+                                            "leftPoint": [103.976371, 30.503643],
+                                            "rightPoint": [103.975357, 30.503643]
+                                        },
+                                        "distanceMetric": "axial_from_reference_line",
+                                        "planarControl": {
+                                            "frontOffsetMeters": 360.0,
+                                            "halfAngleDegrees": 8.0,
+                                            "radiusMeters": 18520.0
+                                        },
+                                        "clampRange": {
+                                            "startMeters": 0.0,
+                                            "endMeters": 18160.0
+                                        },
+                                        "heightModel": {
+                                            "type": "angle_linear_rise",
+                                            "angleDegrees": 1.0,
+                                            "distanceOffsetMeters": 0.0
+                                        }
+                                    }
+                                },
+                                "properties": {
+                                    "label": "GP Station GP 1 degree elevation restriction zone default"
+                                },
+                                "renderGeometry": None
+                            }
+                        ]
+                    },
+                )
+            )
+            session.commit()
+
+        response = client.get("/polygon-obstacle/analysis/analysis-task-1/result")
+
+    assert response.status_code == 200
+    protection_zone = response.json()["protectionZones"][0]
+    assert protection_zone["vertical"]["surface"]["distanceSource"]["stationPoint"] == [
+        103.975864,
+        30.503643,
+    ]
+
+
 def test_build_airport_analysis_result_returns_only_internal_fields_still_in_use() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)

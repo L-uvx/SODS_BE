@@ -2,17 +2,12 @@ import math
 from dataclasses import dataclass
 
 from shapely.geometry import (
-    GeometryCollection,
-    LineString,
-    MultiLineString,
-    MultiPoint,
     MultiPolygon,
-    Point,
     Polygon,
 )
-from shapely.geometry.base import BaseGeometry
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
+from app.analysis.rules.geometry_evaluation import evaluate_geometry_metric
 from app.analysis.rules.geometry_helpers import ensure_multipolygon
 from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
 
@@ -253,123 +248,28 @@ def calculate_region_3_worst_allowed_height_meters(
     obstacle_geometry: MultiPolygon,
     station_altitude_meters: float,
 ) -> float | None:
-    intersection = obstacle_geometry.intersection(zone_geometry.local_geometry)
-    if intersection.is_empty:
-        return None
-
     apex_point = zone_geometry.apex_point
-    candidate_points: list[tuple[float, float]] = []
-    candidate_points.extend(_collect_geometry_candidate_points(intersection, apex_point))
+    arc_radius_reference_meters = max(
+        math.hypot(
+            arc_point[0] - apex_point[0],
+            arc_point[1] - apex_point[1],
+        )
+        for arc_point in zone_geometry.arc_points
+    )
 
-    allowed_heights = [
-        station_altitude_meters
+    evaluation = evaluate_geometry_metric(
+        obstacle_geometry=obstacle_geometry,
+        protection_zone_geometry=zone_geometry.local_geometry,
+        point_metric=lambda point: station_altitude_meters
         + zone_geometry.arc_height_offset_meters
         * min(
-            math.hypot(point[0] - apex_point[0], point[1] - apex_point[1])
-            / max(
-                math.hypot(
-                    arc_point[0] - apex_point[0],
-                    arc_point[1] - apex_point[1],
-                )
-                for arc_point in zone_geometry.arc_points
-            ),
+            math.hypot(point.x - apex_point[0], point.y - apex_point[1])
+            / arc_radius_reference_meters,
             1.0,
-        )
-        for point in candidate_points
-    ]
-    if not allowed_heights:
-        return None
-    return min(allowed_heights)
-
-
-def _collect_geometry_candidate_points(
-    geometry: BaseGeometry,
-    apex_point: tuple[float, float],
-) -> list[tuple[float, float]]:
-    if geometry.is_empty:
-        return []
-    if isinstance(geometry, Polygon):
-        return _collect_polygon_candidate_points(geometry, apex_point)
-    if isinstance(geometry, MultiPolygon):
-        candidate_points: list[tuple[float, float]] = []
-        for polygon in geometry.geoms:
-            candidate_points.extend(_collect_polygon_candidate_points(polygon, apex_point))
-        return candidate_points
-    if isinstance(geometry, LineString):
-        return _collect_line_candidate_points(geometry, apex_point)
-    if isinstance(geometry, MultiLineString):
-        candidate_points = []
-        for line in geometry.geoms:
-            candidate_points.extend(_collect_line_candidate_points(line, apex_point))
-        return candidate_points
-    if isinstance(geometry, Point):
-        return [(float(geometry.x), float(geometry.y))]
-    if isinstance(geometry, MultiPoint):
-        return [(float(point.x), float(point.y)) for point in geometry.geoms]
-    if isinstance(geometry, GeometryCollection):
-        candidate_points = []
-        for part in geometry.geoms:
-            candidate_points.extend(_collect_geometry_candidate_points(part, apex_point))
-        return candidate_points
-    return []
-
-
-def _collect_polygon_candidate_points(
-    polygon: Polygon,
-    apex_point: tuple[float, float],
-) -> list[tuple[float, float]]:
-    candidate_points: list[tuple[float, float]] = []
-    candidate_points.extend(_collect_ring_candidate_points(polygon.exterior, apex_point))
-    for ring in polygon.interiors:
-        candidate_points.extend(_collect_ring_candidate_points(ring, apex_point))
-    return candidate_points
-
-
-def _collect_line_candidate_points(
-    line: LineString,
-    apex_point: tuple[float, float],
-) -> list[tuple[float, float]]:
-    coordinates = [(float(x), float(y)) for x, y in line.coords]
-    return _collect_segment_projection_candidate_points(
-        coordinates=coordinates,
-        apex_point=apex_point,
-        closed=False,
+        ),
+        collect_point_candidates=True,
     )
-
-
-def _collect_ring_candidate_points(
-    ring: LineString,
-    apex_point: tuple[float, float],
-) -> list[tuple[float, float]]:
-    coordinates = [(float(x), float(y)) for x, y in ring.coords[:-1]]
-    return _collect_segment_projection_candidate_points(
-        coordinates=coordinates,
-        apex_point=apex_point,
-        closed=True,
-    )
-
-
-def _collect_segment_projection_candidate_points(
-    *,
-    coordinates: list[tuple[float, float]],
-    apex_point: tuple[float, float],
-    closed: bool,
-) -> list[tuple[float, float]]:
-    candidate_points = list(coordinates)
-    if len(coordinates) < 2:
-        return candidate_points
-
-    apex = Point(apex_point)
-    end_coordinates = coordinates[1:] + coordinates[:1] if closed else coordinates[1:]
-    for start_point, end_point in zip(coordinates, end_coordinates):
-        segment = LineString([start_point, end_point])
-        projected_distance = segment.project(apex)
-        projected_point = segment.interpolate(projected_distance)
-        if projected_point.intersects(segment):
-            candidate_points.append(
-                (float(projected_point.x), float(projected_point.y))
-            )
-    return candidate_points
+    return evaluation.min_metric
 
 
 def _resolve_alpha_degrees(
