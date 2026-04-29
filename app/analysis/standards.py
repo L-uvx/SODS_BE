@@ -114,6 +114,14 @@ _GP_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
         None,
         "MH_ILSGP_1°仰角限制区域",
     ),
+    "gp_run_area_protection_critical": (
+        None,
+        "MH_ILSGP_运行保护区_临界",
+    ),
+    "gp_run_area_protection_sensitive": (
+        None,
+        "MH_ILSGP_运行保护区_敏感",
+    ),
 }
 
 _STANDARD_KEYS_BY_STATION_TYPE: dict[

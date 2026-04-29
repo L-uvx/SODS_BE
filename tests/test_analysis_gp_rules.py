@@ -105,6 +105,17 @@ def test_gp_1deg_style_mapping_uses_explicit_color() -> None:
     )["colorKey"] == "amber_orange"
 
 
+def test_gp_run_area_style_mapping_uses_explicit_region_colors() -> None:
+    assert resolve_protection_zone_style(
+        zone_code="gp_run_area_protection",
+        region_code="A",
+    )["colorKey"] == "danger_red"
+    assert resolve_protection_zone_style(
+        zone_code="gp_run_area_protection",
+        region_code="B",
+    )["colorKey"] == "teal_green"
+
+
 def test_gp_shared_context_uses_reverse_runway_direction_as_forward_axis() -> None:
     helpers = importlib.import_module("app.analysis.rules.gp.site_protection.helpers")
     shared_context = helpers.build_gp_site_protection_shared_context(
@@ -779,6 +790,190 @@ def test_gp_rule_profile_returns_dual_standard_protection_zones() -> None:
         "B",
         "C",
         "default",
+    }
+
+
+def test_gp_rule_profile_returns_run_area_protection_zones_for_mobile_obstacle_categories() -> None:
+    profile_module = importlib.import_module("app.analysis.rules.gp.profile")
+
+    payload = profile_module.GpRuleProfile().analyze(
+        station=_make_gp_station(),
+        obstacles=[
+            {
+                "obstacleId": 901,
+                "name": "Run Area Vehicle",
+                "rawObstacleType": "车辆",
+                "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
+                "topElevation": 510.0,
+                "localGeometry": {"type": "Point", "coordinates": [0.0, -100.0]},
+                "geometry": {"type": "Point", "coordinates": [0.0, -100.0]},
+            }
+        ],
+        station_point=(0.0, 0.0),
+        runways=[
+            {
+                "runNumber": "18",
+                "directionDegrees": 0.0,
+                "widthMeters": 40.0,
+                "lengthMeters": 600.0,
+                "localCenterPoint": (0.0, -600.0),
+                "maximumAirworthiness": 1,
+            }
+        ],
+    )
+
+    run_area_zone_codes = {
+        zone.rule_code
+        for zone in payload.protection_zones
+        if zone.zone_code == "gp_run_area_protection"
+    }
+    run_area_rule_codes = {
+        result.rule_code
+        for result in payload.rule_results
+        if result.zone_code == "gp_run_area_protection"
+    }
+
+    assert run_area_zone_codes == {
+        "gp_run_area_protection_region_a",
+        "gp_run_area_protection_region_b",
+    }
+    assert run_area_rule_codes == {
+        "gp_run_area_protection_region_a",
+        "gp_run_area_protection_region_b",
+    }
+
+
+def test_gp_run_area_region_a_rule_uses_critical_area_semantics() -> None:
+    region_a_module = importlib.import_module(
+        "app.analysis.rules.gp.run_area_protection.region_a"
+    )
+    helpers = importlib.import_module(
+        "app.analysis.rules.gp.run_area_protection.helpers"
+    )
+    shared_context = helpers.build_gp_run_area_shared_context(
+        station=_make_gp_station(),
+        station_point=(0.0, 0.0),
+        runway_context={
+            "runNumber": "18",
+            "directionDegrees": 0.0,
+            "widthMeters": 40.0,
+            "lengthMeters": 600.0,
+            "localCenterPoint": (0.0, -600.0),
+            "maximumAirworthiness": 1,
+        },
+    )
+
+    assert shared_context is not None
+    bound_rule = region_a_module.GpRunAreaProtectionRegionARule().bind(
+        station=_make_gp_station(),
+        shared_context=shared_context,
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 902,
+            "name": "Run Area Vehicle A",
+            "rawObstacleType": "车辆",
+            "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
+            "topElevation": 510.0,
+            "localGeometry": {"type": "Point", "coordinates": [0.0, -100.0]},
+            "geometry": {"type": "Point", "coordinates": [0.0, -100.0]},
+        }
+    )
+
+    assert result.metrics["areaType"] == "critical"
+    assert result.standards_rule_code == "gp_run_area_protection_critical"
+
+
+def test_gp_run_area_region_b_rule_uses_sensitive_area_semantics() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.run_area_protection.region_b"
+    )
+    helpers = importlib.import_module(
+        "app.analysis.rules.gp.run_area_protection.helpers"
+    )
+    shared_context = helpers.build_gp_run_area_shared_context(
+        station=_make_gp_station(),
+        station_point=(0.0, 0.0),
+        runway_context={
+            "runNumber": "18",
+            "directionDegrees": 0.0,
+            "widthMeters": 40.0,
+            "lengthMeters": 600.0,
+            "localCenterPoint": (0.0, -600.0),
+            "maximumAirworthiness": 1,
+        },
+    )
+
+    assert shared_context is not None
+    bound_rule = region_b_module.GpRunAreaProtectionRegionBRule().bind(
+        station=_make_gp_station(),
+        shared_context=shared_context,
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 903,
+            "name": "Run Area Vehicle B",
+            "rawObstacleType": "车辆",
+            "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
+            "topElevation": 510.0,
+            "localGeometry": {"type": "Point", "coordinates": [0.0, -310.0]},
+            "geometry": {"type": "Point", "coordinates": [0.0, -310.0]},
+        }
+    )
+
+    assert result.metrics["areaType"] == "sensitive"
+    assert result.standards_rule_code == "gp_run_area_protection_sensitive"
+
+
+def test_gp_rule_profile_skips_run_area_results_for_unrelated_obstacles_in_mixed_batch() -> None:
+    profile_module = importlib.import_module("app.analysis.rules.gp.profile")
+
+    payload = profile_module.GpRuleProfile().analyze(
+        station=_make_gp_station(),
+        obstacles=[
+            {
+                "obstacleId": 904,
+                "name": "Run Area Vehicle Mixed",
+                "rawObstacleType": "车辆",
+                "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
+                "topElevation": 510.0,
+                "localGeometry": {"type": "Point", "coordinates": [0.0, -100.0]},
+                "geometry": {"type": "Point", "coordinates": [0.0, -100.0]},
+            },
+            {
+                "obstacleId": 905,
+                "name": "Building Mixed",
+                "rawObstacleType": "建筑物",
+                "globalObstacleCategory": "building_general",
+                "topElevation": 520.0,
+                "localGeometry": {"type": "Point", "coordinates": [0.0, -100.0]},
+                "geometry": {"type": "Point", "coordinates": [0.0, -100.0]},
+            },
+        ],
+        station_point=(0.0, 0.0),
+        runways=[
+            {
+                "runNumber": "18",
+                "directionDegrees": 0.0,
+                "widthMeters": 40.0,
+                "lengthMeters": 600.0,
+                "localCenterPoint": (0.0, -600.0),
+                "maximumAirworthiness": 1,
+            }
+        ],
+    )
+
+    mixed_batch_run_area_results = [
+        result
+        for result in payload.rule_results
+        if result.zone_code == "gp_run_area_protection"
+    ]
+
+    assert {(result.obstacle_id, result.rule_code) for result in mixed_batch_run_area_results} == {
+        (904, "gp_run_area_protection_region_a"),
+        (904, "gp_run_area_protection_region_b"),
     }
 
 

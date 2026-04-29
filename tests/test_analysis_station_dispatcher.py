@@ -136,8 +136,8 @@ def test_station_rule_dispatcher_dispatches_gp_by_station_type() -> None:
     obstacle = {
         "obstacleId": 1,
         "name": "Obstacle A",
-        "rawObstacleType": "建筑物",
-        "globalObstacleCategory": "building_general",
+        "rawObstacleType": "车辆/航空器/机械",
+        "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
         "topElevation": 520.0,
         "localGeometry": {
             "type": "Point",
@@ -154,6 +154,7 @@ def test_station_rule_dispatcher_dispatches_gp_by_station_type() -> None:
         "directionDegrees": 0.0,
         "lengthMeters": 600.0,
         "widthMeters": 40.0,
+        "maximumAirworthiness": 1,
     }
 
     payload = dispatcher.analyze_station(
@@ -163,11 +164,12 @@ def test_station_rule_dispatcher_dispatches_gp_by_station_type() -> None:
         runways=[runway_context],
     )
 
-    assert len(payload.protection_zones) == 7
+    assert len(payload.protection_zones) == 9
     assert {zone.zone_code for zone in payload.protection_zones} == {
         "gp_elevation_restriction_1deg",
         "gp_site_protection_gb",
         "gp_site_protection_mh",
+        "gp_run_area_protection",
     }
     assert {result.rule_name for result in payload.rule_results} == {
         "gp_elevation_restriction_1deg",
@@ -177,4 +179,6 @@ def test_station_rule_dispatcher_dispatches_gp_by_station_type() -> None:
         "gp_site_protection_mh_region_a",
         "gp_site_protection_mh_region_b",
         "gp_site_protection_mh_region_c",
+        "gp_run_area_protection_region_a",
+        "gp_run_area_protection_region_b",
     }

@@ -2425,6 +2425,7 @@ def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() ->
                     length=600.0,
                     width=40.0,
                     altitude=500.0,
+                    maximum_airworthiness=1,
                 )
             )
             session.add(
@@ -2454,7 +2455,7 @@ def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() ->
                     "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
                 ),
                 {
-                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_type": "车辆/航空器/机械",
                     "obstacle_id": obstacle,
                 },
             )
@@ -2470,13 +2471,19 @@ def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() ->
     gp_protection_zones = [
         item
         for item in payload["protectionZones"]
-        if item["zoneCode"] in {"gp_site_protection_gb", "gp_site_protection_mh"}
+        if item["zoneCode"]
+        in {
+            "gp_site_protection_gb",
+            "gp_site_protection_mh",
+            "gp_run_area_protection",
+        }
     ]
 
-    assert len(gp_protection_zones) == 6
+    assert len(gp_protection_zones) == 8
     assert {item["zoneCode"] for item in gp_protection_zones} == {
         "gp_site_protection_gb",
         "gp_site_protection_mh",
+        "gp_run_area_protection",
     }
     assert {
         item["zoneCode"]: {
@@ -2488,12 +2495,27 @@ def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() ->
     } == {
         "gp_site_protection_gb": {"A", "B", "C"},
         "gp_site_protection_mh": {"A", "B", "C"},
+        "gp_run_area_protection": {"A", "B"},
     }
     assert all(item["stationType"] == "GP" for item in gp_protection_zones)
     assert all(item["geometry"]["shapeType"] == "multipolygon" for item in gp_protection_zones)
     assert all(item["style"]["colorKey"] for item in gp_protection_zones)
     assert all(item["style"]["fill"].startswith("rgba(") for item in gp_protection_zones)
     assert all(item["style"]["stroke"].startswith("rgba(") for item in gp_protection_zones)
+
+    gp_run_area_rules = [
+        item
+        for item in payload["ruleResults"]
+        if item["zoneCode"] == "gp_run_area_protection"
+    ]
+    assert {item["ruleCode"] for item in gp_run_area_rules} == {
+        "gp_run_area_protection_region_a",
+        "gp_run_area_protection_region_b",
+    }
+    assert {item["standards"]["mh"]["code"] for item in gp_run_area_rules} == {
+        "MH_ILSGP_运行保护区_临界",
+        "MH_ILSGP_运行保护区_敏感",
+    }
 
 
 def test_get_analysis_task_result_returns_gp_1deg_front_reference_line_surface() -> None:
