@@ -22,7 +22,7 @@ def test_resolve_protection_zone_style_returns_default_palette_item_when_mapping
     )
 
     assert style["colorKey"] == "default_blue"
-    assert style["fill"] == "rgba(64, 158, 255, 0.25)"
+    assert style["fill"] == "rgba(64, 158, 255, 0.5)"
     assert style["stroke"] == "rgba(64, 158, 255, 0.9)"
 
 
@@ -49,6 +49,7 @@ def test_resolve_protection_zone_style_explicitly_maps_all_current_protection_zo
         ("gp_site_protection_mh", "A"),
         ("gp_site_protection_mh", "B"),
         ("gp_site_protection_mh", "C"),
+        ("vor_reflector_mask_area", "default"),
     }
 
     resolved_color_keys = {
@@ -120,13 +121,13 @@ def test_resolve_protection_zone_style_maps_gp_regions_with_shared_standard_colo
 def test_resolve_protection_zone_name_returns_configured_chinese_names() -> None:
     assert (
         resolve_protection_zone_name(zone_code="ndb_minimum_distance_50m")
-        == "NDB 50米最小间距保护区"
+        == "NDB 50米最小间距"
     )
     assert (
         resolve_protection_zone_name(zone_code="loc_run_area_protection")
-        == "LOC运行保护区"
+        == "LOC 运行保护区"
     )
     assert (
         resolve_protection_zone_name(zone_code="gp_site_protection_gb")
-        == "GP场地保护区（国标）"
+        == "GP 场地保护区（GB）"
     )
