@@ -1,62 +1,62 @@
 PROTECTION_ZONE_COLOR_PALETTE = {
     "default_blue": {
         "colorKey": "default_blue",
-        "fill": "rgba(64, 158, 255, 0.25)",
+        "fill": "rgba(64, 158, 255, 0.5)",
         "stroke": "rgba(64, 158, 255, 0.9)",
     },
     "sky_blue": {
         "colorKey": "sky_blue",
-        "fill": "rgba(96, 165, 250, 0.25)",
+        "fill": "rgba(96, 165, 250, 0.5)",
         "stroke": "rgba(96, 165, 250, 0.9)",
     },
     "teal_green": {
         "colorKey": "teal_green",
-        "fill": "rgba(45, 212, 191, 0.25)",
+        "fill": "rgba(45, 212, 191, 0.5)",
         "stroke": "rgba(45, 212, 191, 0.9)",
     },
     "amber_orange": {
         "colorKey": "amber_orange",
-        "fill": "rgba(251, 191, 36, 0.25)",
+        "fill": "rgba(251, 191, 36, 0.5)",
         "stroke": "rgba(251, 191, 36, 0.9)",
     },
     "violet_purple": {
         "colorKey": "violet_purple",
-        "fill": "rgba(167, 139, 250, 0.25)",
+        "fill": "rgba(167, 139, 250, 0.5)",
         "stroke": "rgba(167, 139, 250, 0.9)",
     },
     "danger_red": {
         "colorKey": "danger_red",
-        "fill": "rgba(245, 108, 108, 0.25)",
+        "fill": "rgba(245, 108, 108, 0.5)",
         "stroke": "rgba(245, 108, 108, 0.9)",
     },
     "lime_green": {
         "colorKey": "lime_green",
-        "fill": "rgba(163, 230, 53, 0.25)",
+        "fill": "rgba(163, 230, 53, 0.5)",
         "stroke": "rgba(163, 230, 53, 0.9)",
     },
     "cyan_blue": {
         "colorKey": "cyan_blue",
-        "fill": "rgba(34, 211, 238, 0.25)",
+        "fill": "rgba(34, 211, 238, 0.5)",
         "stroke": "rgba(34, 211, 238, 0.9)",
     },
     "slate_gray": {
         "colorKey": "slate_gray",
-        "fill": "rgba(148, 163, 184, 0.25)",
+        "fill": "rgba(148, 163, 184, 0.5)",
         "stroke": "rgba(148, 163, 184, 0.9)",
     },
     "emerald_green": {
         "colorKey": "emerald_green",
-        "fill": "rgba(16, 185, 129, 0.25)",
+        "fill": "rgba(16, 185, 129, 0.5)",
         "stroke": "rgba(16, 185, 129, 0.9)",
     },
     "pink_rose": {
         "colorKey": "pink_rose",
-        "fill": "rgba(244, 114, 182, 0.25)",
+        "fill": "rgba(244, 114, 182, 0.5)",
         "stroke": "rgba(244, 114, 182, 0.9)",
     },
     "indigo_blue": {
         "colorKey": "indigo_blue",
-        "fill": "rgba(99, 102, 241, 0.25)",
+        "fill": "rgba(99, 102, 241, 0.5)",
         "stroke": "rgba(99, 102, 241, 0.9)",
     },
 }
@@ -77,7 +77,7 @@ PROTECTION_ZONE_DISPLAY_NAME_MAPPING = {
     "gp_site_protection_mh":            "GP 场地保护区（MH）",
     "gp_run_area_protection":           "GP 运行保护区",
     "gp_elevation_restriction_1deg":    "GP 1°仰角限制区域",
-    "vor_reflector_mask_area":          "VOR 反射网遮蔽区域",
+    "vor_reflector_mask_area":          "VOR 100米内阴影区",
 }
 
 PROTECTION_ZONE_REGION_COLOR_MAPPING = {
@@ -105,7 +105,7 @@ PROTECTION_ZONE_REGION_COLOR_MAPPING = {
     ("loc_building_restriction_zone", "2"): "lime_green",
     ("loc_building_restriction_zone", "3"): "danger_red",
     ("loc_building_restriction_zone", "4"): "cyan_blue",
-    ("vor_reflector_mask_area", "default"): "slate_gray",
+    ("vor_reflector_mask_area", "default"): "danger_red",
 }
 
 
