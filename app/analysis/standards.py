@@ -124,12 +124,20 @@ _GP_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
     ),
 }
 
+_VOR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
+    "vor_reflector_mask_area": (
+        None,
+        "MH_VORDME_100米内阴影区",
+    ),
+}
+
 _STANDARD_KEYS_BY_STATION_TYPE: dict[
     str, dict[str, tuple[str | None, str | None]]
 ] = {
     "NDB": _NDB_STANDARD_KEYS,
     "LOC": _LOC_STANDARD_KEYS,
     "GP": _GP_STANDARD_KEYS,
+    "VOR": _VOR_STANDARD_KEYS,
 }
 
 
