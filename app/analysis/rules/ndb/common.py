@@ -1,13 +1,12 @@
 import math
 from dataclasses import dataclass
 
-from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
-from shapely.geometry import Point, shape
+from shapely.geometry import Point
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
-from app.analysis.rules.geometry_helpers import ensure_multipolygon, resolve_obstacle_shape
+from app.analysis.rules.geometry_helpers import build_circle_polygon, ensure_multipolygon, resolve_obstacle_shape
 from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
 
 
@@ -140,7 +139,7 @@ def build_ndb_circle_protection_zone(
     radius_meters: float,
 ) -> ProtectionZoneSpec:
     protection_zone = ensure_multipolygon(
-        _build_circle_polygon(
+        build_circle_polygon(
             center_point=station_point,
             radius_meters=radius_meters,
         )
@@ -177,11 +176,11 @@ def build_ndb_conical_protection_zone(
     outer_radius_meters: float,
     elevation_angle_degrees: float,
 ) -> ProtectionZoneSpec:
-    outer_zone = _build_circle_polygon(
+    outer_zone = build_circle_polygon(
         center_point=station_point,
         radius_meters=outer_radius_meters,
     )
-    inner_zone = _build_circle_polygon(
+    inner_zone = build_circle_polygon(
         center_point=station_point,
         radius_meters=inner_radius_meters,
     )
@@ -226,22 +225,3 @@ def build_ndb_conical_protection_zone(
         },
     )
 
-
-# 按共享圆形步长构建圆形 polygon。
-def _build_circle_polygon(
-    *, center_point: tuple[float, float], radius_meters: float
-):
-    step_degrees = float(PROTECTION_ZONE_BUILDER_DISCRETIZATION["circle_step_degrees"])
-    points: list[tuple[float, float]] = []
-    degrees = 0.0
-    while degrees < 360.0:
-        radians = math.radians(degrees)
-        points.append(
-            (
-                center_point[0] + math.cos(radians) * radius_meters,
-                center_point[1] + math.sin(radians) * radius_meters,
-            )
-        )
-        degrees += step_degrees
-    points.append(points[0])
-    return shape({"type": "Polygon", "coordinates": [points]})
