@@ -38,14 +38,16 @@ class VorReflectorMaskAreaRule(VorRule):
 
         angle = math.atan(delta / h2)
         rt = math.tan(angle) * h1 + half_d
-        outer_radius = min(rt, 100.0)
+        shadow_radius = min(rt, 100.0)
+        zone_outer_radius = 100.0
 
-        if half_d >= outer_radius:
+        if half_d >= shadow_radius:
             return None
 
         slope = -h2 / delta
         intercept = h1 - slope * half_d
         base_height = altitude + h1
+        elevation_angle = math.degrees(math.atan(slope))
 
         protection_zone = build_vor_ring_protection_zone(
             station_id=int(station.id),
@@ -58,10 +60,11 @@ class VorReflectorMaskAreaRule(VorRule):
             region_name="default",
             station_point=station_point,
             inner_radius_m=half_d,
-            outer_radius_m=outer_radius,
+            outer_radius_m=zone_outer_radius,
             base_height_meters=base_height,
-            slope_meters_per_meter=slope,
-            start_distance_meters=half_d,
+            elevation_angle_degrees=elevation_angle,
+            distance_offset_meters=half_d,
+            clamp_end_meters=shadow_radius,
             longitude=float(station.longitude) if station.longitude is not None else None,
             latitude=float(station.latitude) if station.latitude is not None else None,
         )
@@ -69,7 +72,7 @@ class VorReflectorMaskAreaRule(VorRule):
         return BoundVorReflectorMaskAreaRule(
             protection_zone=protection_zone,
             station_point=station_point,
-            outer_radius_m=outer_radius,
+            shadow_radius_m=shadow_radius,
             slope=slope,
             intercept=intercept,
             altitude=altitude,
@@ -79,7 +82,7 @@ class VorReflectorMaskAreaRule(VorRule):
 @dataclass(slots=True)
 class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
     station_point: tuple[float, float]
-    outer_radius_m: float
+    shadow_radius_m: float
     slope: float
     intercept: float
     altitude: float
@@ -91,7 +94,7 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
 
         station_pt = Point(self.station_point)
         max_distance = float(shape.hausdorff_distance(station_pt))
-        x = min(max_distance, self.outer_radius_m)
+        x = min(max_distance, self.shadow_radius_m)
         allowed_h = self.slope * x + self.intercept + self.altitude
 
         raw_top = obstacle.get("topElevation")
@@ -127,7 +130,7 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
                 "clampedDistanceMeters": x,
                 "allowedHeightMeters": allowed_h,
                 "topElevationMeters": top_elevation,
-                "outerRadiusMeters": self.outer_radius_m,
+                "shadowRadiusMeters": self.shadow_radius_m,
             },
             standards_rule_code=self.protection_zone.rule_code,
         )

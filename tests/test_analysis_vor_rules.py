@@ -107,11 +107,7 @@ def test_analyze_outside_ring_is_compliant():
     rule = VorReflectorMaskAreaRule()
     bound = rule.bind(station=station, station_point=station_point)
 
-    d = station.reflection_diameter
-    rt_calc = math.tan(math.atan((d/2 - station.b_to_center_distance) / station.b_antenna_h)) * station.reflection_net_hag + d/2
-    outer = min(rt_calc, 100.0)
-    far_radius = outer + 50.0
-
+    far_radius = 150.0  # 远超 100m 环带外径
     obstacle_point = Point(station_point[0] + far_radius, station_point[1])
     obstacle = _make_obstacle(
         geometry={"type": "Point", "coordinates": [obstacle_point.x, obstacle_point.y]},
@@ -175,7 +171,44 @@ def test_analyze_inside_ring_height_exceeded():
     assert "exceeds" in result.message
 
 
-# —— analyze 度量字段 —————————————————————————————
+# —— analyze 超出阴影外缘但在 100m 环带内 ——————————
+
+
+def test_analyze_beyond_shadow_radius_within_100m():
+    station = _make_station()
+    station_point = (0.0, 0.0)
+    rule = VorReflectorMaskAreaRule()
+    bound = rule.bind(station=station, station_point=station_point)
+
+    d = station.reflection_diameter
+    r = station.b_to_center_distance
+    h1 = station.reflection_net_hag
+    h2 = station.b_antenna_h
+    alt = station.altitude
+    delta = max(d/2 - r, 0.001)
+    slope = -h2 / delta
+    intercept = h1 - slope * d/2
+    rt_calc = math.tan(math.atan((d/2 - r) / h2)) * h1 + d/2
+    shadow_radius = min(rt_calc, 100.0)
+
+    # 障碍物在 80m 处，超出阴影外缘 shadow_radius≈45m，但在 100m 环带内
+    obstacle_radius = 80.0
+    obstacle_point = Point(station_point[0] + obstacle_radius, station_point[1])
+
+    # x 应被夹到 shadow_radius，限高为 H(shadow_radius)
+    allowed_at_shadow = slope * shadow_radius + intercept + alt
+
+    # 障碍物超限应失败
+    obstacle = _make_obstacle(
+        geometry={"type": "Point", "coordinates": [obstacle_point.x, obstacle_point.y]},
+        local_geometry={"type": "Point", "coordinates": [obstacle_point.x, obstacle_point.y]},
+        top_elevation=allowed_at_shadow + 5.0,
+    )
+    result = bound.analyze(obstacle)
+    assert result.is_compliant is False
+    assert "exceeds" in result.message
+    # x 应被夹到 shadow_radius
+    assert result.metrics["clampedDistanceMeters"] == pytest.approx(shadow_radius)
 
 
 def test_analyze_metrics_populated():
@@ -197,6 +230,7 @@ def test_analyze_metrics_populated():
     assert "clampedDistanceMeters" in result.metrics
     assert "allowedHeightMeters" in result.metrics
     assert "topElevationMeters" in result.metrics
+    assert "shadowRadiusMeters" in result.metrics
 
 
 # —— build_vor_ring_protection_zone ——————————————
@@ -214,10 +248,11 @@ def test_ring_protection_zone_is_annular():
         region_name="default",
         station_point=(0.0, 0.0),
         inner_radius_m=10.0,
-        outer_radius_m=50.0,
+        outer_radius_m=100.0,
         base_height_meters=15.0,
-        slope_meters_per_meter=-0.1,
-        start_distance_meters=10.0,
+        elevation_angle_degrees=-2.0,
+        distance_offset_meters=10.0,
+        clamp_end_meters=50.0,
         longitude=120.0,
         latitude=30.0,
     )
@@ -226,5 +261,6 @@ def test_ring_protection_zone_is_annular():
     surface = spec.vertical_definition["surface"]
     assert surface["clampRange"]["startMeters"] == 10.0
     assert surface["clampRange"]["endMeters"] == 50.0
-    assert surface["heightModel"]["type"] == "linear_ramp"
-    assert surface["heightModel"]["slopeMetersPerMeter"] == -0.1
+    assert surface["heightModel"]["type"] == "angle_linear_rise"
+    assert surface["heightModel"]["angleDegrees"] == -2.0
+    assert surface["heightModel"]["distanceOffsetMeters"] == 10.0

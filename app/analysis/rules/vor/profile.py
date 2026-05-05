@@ -34,7 +34,6 @@ class VorRuleProfile:
             return VorStationAnalysisPayload(
                 rule_results=[], protection_zones=[]
             )
-
         results: list[AnalysisRuleResult] = []
         protection_zones = [bound_rule.protection_zone]
         for obstacle in obstacles:

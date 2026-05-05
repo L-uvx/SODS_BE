@@ -11,7 +11,7 @@ class VorRule(ObstacleRule):
         raise NotImplementedError
 
 
-# 构建 VOR 环带保护区规格。
+# 构建 VOR 环带保护区规格，垂向复用 NDB angle_linear_rise 模型。
 def build_vor_ring_protection_zone(
     *,
     station_id: int,
@@ -26,8 +26,9 @@ def build_vor_ring_protection_zone(
     inner_radius_m: float,
     outer_radius_m: float,
     base_height_meters: float,
-    slope_meters_per_meter: float,
-    start_distance_meters: float,
+    elevation_angle_degrees: float,
+    distance_offset_meters: float,
+    clamp_end_meters: float,
     longitude: float | None,
     latitude: float | None,
 ) -> ProtectionZoneSpec:
@@ -62,13 +63,12 @@ def build_vor_ring_protection_zone(
                 "distanceMetric": "radial",
                 "clampRange": {
                     "startMeters": float(inner_radius_m),
-                    "endMeters": float(outer_radius_m),
+                    "endMeters": float(clamp_end_meters),
                 },
                 "heightModel": {
-                    "type": "linear_ramp",
-                    "baseHeightMeters": float(base_height_meters),
-                    "slopeMetersPerMeter": float(slope_meters_per_meter),
-                    "startDistanceMeters": float(start_distance_meters),
+                    "type": "angle_linear_rise",
+                    "angleDegrees": float(elevation_angle_degrees),
+                    "distanceOffsetMeters": float(distance_offset_meters),
                 },
             },
         },
