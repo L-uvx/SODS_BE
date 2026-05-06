@@ -8,18 +8,6 @@ from app.analysis.rules.vor.common import (
     build_vor_circle_protection_zone,
 )
 
-# C# 100m 规则跳过的障碍物类型：高压线 + 铁路
-_SKIP_CATEGORIES = frozenset({
-    "power_line_high_voltage_35kv_below",
-    "power_line_high_voltage_35kv",
-    "power_line_high_voltage_110kv",
-    "power_line_high_voltage_220kv",
-    "power_line_high_voltage_330kv",
-    "power_line_high_voltage_500kv_and_above",
-    "railway_electrified",
-    "railway_non_electrified",
-})
-
 
 class Vor100mDatumPlaneRule(VorRule):
     rule_code = "vor_100m_datum_plane"

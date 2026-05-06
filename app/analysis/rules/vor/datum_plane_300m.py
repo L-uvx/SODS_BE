@@ -14,10 +14,6 @@ class Vor300mDatumPlaneRule(VorRule):
     zone_code = "vor_300m_datum_plane"
     zone_name = resolve_protection_zone_name(zone_code="vor_300m_datum_plane")
     radius_meters = 300.0
-    _MATCHED_CATEGORIES = frozenset({
-        "railway_electrified",
-        "railway_non_electrified",
-    })
 
     # 绑定单个 VOR 台站的 300 米基准面保护区（铁路）。
     def bind(self, *, station, station_point):

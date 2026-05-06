@@ -14,12 +14,6 @@ class Vor500mDatumPlaneRule(VorRule):
     zone_code = "vor_500m_datum_plane"
     zone_name = resolve_protection_zone_name(zone_code="vor_500m_datum_plane")
     radius_meters = 500.0
-    _MATCHED_CATEGORIES = frozenset({
-        "power_line_high_voltage_110kv",
-        "power_line_high_voltage_220kv",
-        "power_line_high_voltage_330kv",
-        "power_line_high_voltage_500kv_and_above",
-    })
 
     # 绑定单个 VOR 台站的 500 米基准面保护区（110kV+ 高压线）。
     def bind(self, *, station, station_point):

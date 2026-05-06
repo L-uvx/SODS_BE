@@ -14,7 +14,6 @@ class Vor200mDatumPlaneHighVoltageRule(VorRule):
     zone_code = "vor_200m_datum_plane"
     zone_name = resolve_protection_zone_name(zone_code="vor_200m_datum_plane")
     radius_meters = 200.0
-    _MATCHED_CATEGORY = "power_line_high_voltage_35kv"
 
     # 绑定单个 VOR 台站的 200 米基准面保护区（35kV 高压线）。
     def bind(self, *, station, station_point):
