@@ -78,6 +78,10 @@ PROTECTION_ZONE_DISPLAY_NAME_MAPPING = {
     "gp_run_area_protection":           "GP 运行保护区",
     "gp_elevation_restriction_1deg":    "GP 1°仰角限制区域",
     "vor_reflector_mask_area":          "VOR 100米内阴影区",
+    "vor_100m_datum_plane":             "VOR 100米基准面",
+    "vor_200m_datum_plane":             "VOR 200米基准面",
+    "vor_300m_datum_plane":             "VOR 300米基准面",
+    "vor_500m_datum_plane":             "VOR 500米基准面",
 }
 
 PROTECTION_ZONE_REGION_COLOR_MAPPING = {
@@ -106,6 +110,10 @@ PROTECTION_ZONE_REGION_COLOR_MAPPING = {
     ("loc_building_restriction_zone", "3"): "danger_red",
     ("loc_building_restriction_zone", "4"): "cyan_blue",
     ("vor_reflector_mask_area", "default"): "danger_red",
+    ("vor_100m_datum_plane", "default"): "sky_blue",
+    ("vor_200m_datum_plane", "default"): "teal_green",
+    ("vor_300m_datum_plane", "default"): "amber_orange",
+    ("vor_500m_datum_plane", "default"): "violet_purple",
 }
 
 

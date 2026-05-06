@@ -211,7 +211,7 @@ def test_dispatcher_handles_vor_station() -> None:
         runways=[],
     )
     assert payload.rule_results == []
-    assert len(payload.protection_zones) == 1
+    assert len(payload.protection_zones) == 6
 
 
 def test_dispatcher_vor_with_obstacle() -> None:
@@ -250,5 +250,5 @@ def test_dispatcher_vor_with_obstacle() -> None:
         station_point=(0.0, 0.0),
         runways=[],
     )
-    assert len(payload.rule_results) == 1
-    assert len(payload.protection_zones) == 1
+    assert len(payload.rule_results) == 3
+    assert len(payload.protection_zones) == 6

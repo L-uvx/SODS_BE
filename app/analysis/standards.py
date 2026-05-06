@@ -129,6 +129,26 @@ _VOR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
         None,
         "MH_VORDME_100米内阴影区",
     ),
+    "vor_100m_datum_plane": (
+        "GB_VORDME_100米基准面",
+        "MH_VORDME_100米基准面",
+    ),
+    "vor_200m_datum_plane": (
+        "GB_VORDME_200米基准面",
+        "MH_VORDME_200米基准面",
+    ),
+    "vor_200m_datum_plane_high_voltage": (
+        "GB_VORDME_200米基准面",
+        "MH_VORDME_200米基准面_高压线",
+    ),
+    "vor_300m_datum_plane": (
+        "GB_VORDME_300米基准面",
+        "MH_VORDME_300米基准面",
+    ),
+    "vor_500m_datum_plane": (
+        "GB_VORDME_500米基准面",
+        "MH_VORDME_500米基准面",
+    ),
 }
 
 _STANDARD_KEYS_BY_STATION_TYPE: dict[
