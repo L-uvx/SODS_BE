@@ -9,7 +9,12 @@ NDB_SUPPORTED_CATEGORIES = {
     "railway_non_electrified",
     "power_line_low_voltage_overhead",
     "power_or_communication_cable",
-    "power_line_high_voltage_overhead",
+    "power_line_high_voltage_35kv_below",
+    "power_line_high_voltage_35kv",
+    "power_line_high_voltage_110kv",
+    "power_line_high_voltage_220kv",
+    "power_line_high_voltage_330kv",
+    "power_line_high_voltage_500kv_and_above",
     "hill",
     "embankment",
 }
@@ -27,7 +32,12 @@ NDB_MINIMUM_SEPARATION_METERS = {
     "power_or_communication_cable": 150.0,
     "hill": 300.0,
     "embankment": 300.0,
-    "power_line_high_voltage_overhead": 500.0,
+    "power_line_high_voltage_35kv_below": 150.0,
+    "power_line_high_voltage_35kv": 150.0,
+    "power_line_high_voltage_110kv": 500.0,
+    "power_line_high_voltage_220kv": 500.0,
+    "power_line_high_voltage_330kv": 500.0,
+    "power_line_high_voltage_500kv_and_above": 500.0,
 }
 
 NDB_CONICAL_CLEARANCE = {

@@ -158,7 +158,7 @@ def test_bound_rule_keeps_protection_zone_and_returns_result_without_zone_defini
 def test_ndb_minimum_separation_uses_expected_defaults() -> None:
     assert NDB_MINIMUM_SEPARATION_METERS["building_general"] == 50.0
     assert NDB_MINIMUM_SEPARATION_METERS["hill"] == 300.0
-    assert NDB_MINIMUM_SEPARATION_METERS["power_line_high_voltage_overhead"] == 500.0
+    assert NDB_MINIMUM_SEPARATION_METERS["power_line_high_voltage_110kv"] == 500.0
 
 
 def test_ndb_conical_clearance_defaults_are_defined() -> None:
@@ -214,8 +214,8 @@ def test_ndb_minimum_distance_rules_return_uniform_results() -> None:
     ).analyze(
         {
             **obstacle,
-            "rawObstacleType": "高压架空输电线路",
-            "globalObstacleCategory": "power_line_high_voltage_overhead",
+            "rawObstacleType": "高压架空输电线路(110kV)",
+            "globalObstacleCategory": "power_line_high_voltage_110kv",
         }
     )
 

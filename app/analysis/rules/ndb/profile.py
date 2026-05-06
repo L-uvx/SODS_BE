@@ -31,7 +31,12 @@ class NdbRuleProfile:
             "power_or_communication_cable": NdbMinimumDistance150mRule(),
             "hill": NdbMinimumDistance300mRule(),
             "embankment": NdbMinimumDistance300mRule(),
-            "power_line_high_voltage_overhead": NdbMinimumDistance500mRule(),
+            "power_line_high_voltage_35kv_below": NdbMinimumDistance150mRule(),
+            "power_line_high_voltage_35kv": NdbMinimumDistance150mRule(),
+            "power_line_high_voltage_110kv": NdbMinimumDistance500mRule(),
+            "power_line_high_voltage_220kv": NdbMinimumDistance500mRule(),
+            "power_line_high_voltage_330kv": NdbMinimumDistance500mRule(),
+            "power_line_high_voltage_500kv_and_above": NdbMinimumDistance500mRule(),
         }
         self._conical_rule = NdbConicalClearance3DegRule()
 
