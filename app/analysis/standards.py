@@ -133,9 +133,17 @@ _VOR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
         "GB_VORDME_100米基准面",
         "MH_VORDME_100米基准面",
     ),
+    "vor_100_200_1_5_deg": (
+        "GB_VORDME_100米至200米1.5°仰角",
+        "MH_VORDME_100米至200米1.5°仰角",
+    ),
     "vor_200m_datum_plane": (
         "GB_VORDME_200米基准面",
         "MH_VORDME_200米基准面",
+    ),
+    "vor_200_300_1_5_deg": (
+        "GB_VORDME_200米至300米1.5°仰角",
+        "MH_VORDME_200米至300米1.5°仰角",
     ),
     "vor_200m_datum_plane_high_voltage": (
         "GB_VORDME_200米基准面",
@@ -144,6 +152,10 @@ _VOR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
     "vor_300m_datum_plane": (
         "GB_VORDME_300米基准面",
         "MH_VORDME_300米基准面",
+    ),
+    "vor_300_outside_2_5_deg": (
+        "GB_VORDME_300米外2.5°仰角",
+        "MH_VORDME_300米外2.5°仰角",
     ),
     "vor_500m_datum_plane": (
         "GB_VORDME_500米基准面",
