@@ -1,30 +1,26 @@
-# app/analysis/rules/vor/datum_plane_100m.py
+# app/analysis/rules/vor/datum_plane/_300m.py
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rules.vor.common import (
     BoundVorDatumPlaneRule,
     VorRule,
-    _compute_shadow_radius,
     _ensure_datum_plane_params,
     build_vor_circle_protection_zone,
 )
 
 
-class Vor100mDatumPlaneRule(VorRule):
-    rule_code = "vor_100m_datum_plane"
-    rule_name = "vor_100m_datum_plane"
-    zone_code = "vor_100m_datum_plane"
-    zone_name = resolve_protection_zone_name(zone_code="vor_100m_datum_plane")
-    radius_meters = 100.0
+class Vor300mDatumPlaneRule(VorRule):
+    rule_code = "vor_300m_datum_plane"
+    rule_name = "vor_300m_datum_plane"
+    zone_code = "vor_300m_datum_plane"
+    zone_name = resolve_protection_zone_name(zone_code="vor_300m_datum_plane")
+    radius_meters = 300.0
 
-    # 绑定单个 VOR 台站的 100 米基准面保护区。
     def bind(self, *, station, station_point):
         params = _ensure_datum_plane_params(station)
         if params is None:
             return None
         altitude, h1 = params
         benchmark_height = altitude + h1
-        shadow_radius = _compute_shadow_radius(station)
-        half_d = float(station.reflection_diameter or 0) / 2.0
 
         protection_zone = build_vor_circle_protection_zone(
             station_id=int(station.id),
@@ -45,6 +41,4 @@ class Vor100mDatumPlaneRule(VorRule):
             station_point=station_point,
             benchmark_height=benchmark_height,
             radius_meters=self.radius_meters,
-            shadow_radius=shadow_radius,
-            _half_d=half_d,
         )

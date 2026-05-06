@@ -1,4 +1,4 @@
-# app/analysis/rules/vor/datum_plane_200m.py
+# app/analysis/rules/vor/datum_plane/_500m.py
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rules.vor.common import (
     BoundVorDatumPlaneRule,
@@ -8,14 +8,13 @@ from app.analysis.rules.vor.common import (
 )
 
 
-class Vor200mDatumPlaneRule(VorRule):
-    rule_code = "vor_200m_datum_plane"
-    rule_name = "vor_200m_datum_plane"
-    zone_code = "vor_200m_datum_plane"
-    zone_name = resolve_protection_zone_name(zone_code="vor_200m_datum_plane")
-    radius_meters = 200.0
+class Vor500mDatumPlaneRule(VorRule):
+    rule_code = "vor_500m_datum_plane"
+    rule_name = "vor_500m_datum_plane"
+    zone_code = "vor_500m_datum_plane"
+    zone_name = resolve_protection_zone_name(zone_code="vor_500m_datum_plane")
+    radius_meters = 500.0
 
-    # 绑定单个 VOR 台站的 200 米基准面保护区（通用）。
     def bind(self, *, station, station_point):
         params = _ensure_datum_plane_params(station)
         if params is None:
@@ -42,5 +41,4 @@ class Vor200mDatumPlaneRule(VorRule):
             station_point=station_point,
             benchmark_height=benchmark_height,
             radius_meters=self.radius_meters,
-            min_distance_gate_meters=100.0,
         )

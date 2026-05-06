@@ -1,4 +1,4 @@
-# app/analysis/rules/vor/datum_plane_500m.py
+# app/analysis/rules/vor/datum_plane/_200m_high_voltage.py
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rules.vor.common import (
     BoundVorDatumPlaneRule,
@@ -8,14 +8,13 @@ from app.analysis.rules.vor.common import (
 )
 
 
-class Vor500mDatumPlaneRule(VorRule):
-    rule_code = "vor_500m_datum_plane"
-    rule_name = "vor_500m_datum_plane"
-    zone_code = "vor_500m_datum_plane"
-    zone_name = resolve_protection_zone_name(zone_code="vor_500m_datum_plane")
-    radius_meters = 500.0
+class Vor200mDatumPlaneHighVoltageRule(VorRule):
+    rule_code = "vor_200m_datum_plane_high_voltage"
+    rule_name = "vor_200m_datum_plane_high_voltage"
+    zone_code = "vor_200m_datum_plane"
+    zone_name = resolve_protection_zone_name(zone_code="vor_200m_datum_plane")
+    radius_meters = 200.0
 
-    # 绑定单个 VOR 台站的 500 米基准面保护区（110kV+ 高压线）。
     def bind(self, *, station, station_point):
         params = _ensure_datum_plane_params(station)
         if params is None:

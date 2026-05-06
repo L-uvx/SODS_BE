@@ -5,7 +5,6 @@ from app.analysis.rules.geometry_helpers import build_circle_polygon, ensure_mul
 from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
 import math
 from dataclasses import dataclass
-from shapely.geometry import Point
 from app.analysis.rule_result import AnalysisRuleResult
 
 
@@ -153,81 +152,14 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
     station_point: tuple[float, float]
     benchmark_height: float
     radius_meters: float
-    shadow_radius: float | None = None
-    _half_d: float = 0.0
-    min_distance_gate_meters: float | None = None
 
     # 执行已绑定的 VOR 基准面高度判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         shape = resolve_obstacle_shape(obstacle)
-        station_pt = Point(self.station_point)
-        actual_distance = float(shape.distance(station_pt))
         entered = shape.intersects(self.protection_zone.local_geometry)
 
         raw_top = obstacle.get("topElevation")
         top_elevation = float(raw_top if raw_top is not None else 0.0)
-
-        # 距离门槛预过滤（仅 200m 通用规则使用）
-        if (
-            self.min_distance_gate_meters is not None
-            and actual_distance <= self.min_distance_gate_meters
-        ):
-            return AnalysisRuleResult(
-                station_id=self.protection_zone.station_id,
-                station_type=self.protection_zone.station_type,
-                obstacle_id=int(obstacle["obstacleId"]),
-                obstacle_name=str(obstacle["name"]),
-                raw_obstacle_type=obstacle["rawObstacleType"],
-                global_obstacle_category=str(obstacle["globalObstacleCategory"]),
-                rule_code=self.protection_zone.rule_code,
-                rule_name=self.protection_zone.rule_name,
-                zone_code=self.protection_zone.zone_code,
-                zone_name=self.protection_zone.zone_name,
-                region_code=self.protection_zone.region_code,
-                region_name=self.protection_zone.region_name,
-                is_applicable=True,
-                is_compliant=True,
-                message="obstacle within inner radius, skipped",
-                metrics={
-                    "enteredProtectionZone": True,
-                    "actualDistanceMeters": actual_distance,
-                    "benchmarkHeightMeters": self.benchmark_height,
-                },
-                standards_rule_code=self.protection_zone.rule_code,
-            )
-
-        # 阴影区预过滤（仅 100m 规则使用）
-        if (
-            self.shadow_radius is not None
-            and actual_distance > 0
-            and actual_distance < self.shadow_radius
-            and self._half_d > 0
-            and actual_distance > self._half_d
-        ):
-            return AnalysisRuleResult(
-                station_id=self.protection_zone.station_id,
-                station_type=self.protection_zone.station_type,
-                obstacle_id=int(obstacle["obstacleId"]),
-                obstacle_name=str(obstacle["name"]),
-                raw_obstacle_type=obstacle["rawObstacleType"],
-                global_obstacle_category=str(obstacle["globalObstacleCategory"]),
-                rule_code=self.protection_zone.rule_code,
-                rule_name=self.protection_zone.rule_name,
-                zone_code=self.protection_zone.zone_code,
-                zone_name=self.protection_zone.zone_name,
-                region_code=self.protection_zone.region_code,
-                region_name=self.protection_zone.region_name,
-                is_applicable=True,
-                is_compliant=True,
-                message="obstacle within reflector shadow zone, skipped",
-                metrics={
-                    "enteredProtectionZone": entered,
-                    "actualDistanceMeters": actual_distance,
-                    "shadowRadiusMeters": self.shadow_radius,
-                    "benchmarkHeightMeters": self.benchmark_height,
-                },
-                standards_rule_code=self.protection_zone.rule_code,
-            )
 
         is_compliant = top_elevation <= self.benchmark_height or not entered
         if not entered:
@@ -255,7 +187,6 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
             message=message,
             metrics={
                 "enteredProtectionZone": entered,
-                "actualDistanceMeters": actual_distance,
                 "benchmarkHeightMeters": self.benchmark_height,
                 "topElevationMeters": top_elevation,
             },
