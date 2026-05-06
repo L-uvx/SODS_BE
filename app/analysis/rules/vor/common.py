@@ -155,6 +155,7 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
     radius_meters: float
     shadow_radius: float | None = None
     _half_d: float = 0.0
+    min_distance_gate_meters: float | None = None
 
     # 执行已绑定的 VOR 基准面高度判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
@@ -165,6 +166,35 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
 
         raw_top = obstacle.get("topElevation")
         top_elevation = float(raw_top if raw_top is not None else 0.0)
+
+        # 距离门槛预过滤（仅 200m 通用规则使用）
+        if (
+            self.min_distance_gate_meters is not None
+            and actual_distance <= self.min_distance_gate_meters
+        ):
+            return AnalysisRuleResult(
+                station_id=self.protection_zone.station_id,
+                station_type=self.protection_zone.station_type,
+                obstacle_id=int(obstacle["obstacleId"]),
+                obstacle_name=str(obstacle["name"]),
+                raw_obstacle_type=obstacle["rawObstacleType"],
+                global_obstacle_category=str(obstacle["globalObstacleCategory"]),
+                rule_code=self.protection_zone.rule_code,
+                rule_name=self.protection_zone.rule_name,
+                zone_code=self.protection_zone.zone_code,
+                zone_name=self.protection_zone.zone_name,
+                region_code=self.protection_zone.region_code,
+                region_name=self.protection_zone.region_name,
+                is_applicable=True,
+                is_compliant=True,
+                message="obstacle within inner radius, skipped",
+                metrics={
+                    "enteredProtectionZone": True,
+                    "actualDistanceMeters": actual_distance,
+                    "benchmarkHeightMeters": self.benchmark_height,
+                },
+                standards_rule_code=self.protection_zone.rule_code,
+            )
 
         # 阴影区预过滤（仅 100m 规则使用）
         if (
