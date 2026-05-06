@@ -69,6 +69,17 @@ _LOC_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
     ),
 }
 
+_MB_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
+    "mb_site_protection_region_i_iii": (
+        "GB_MB_指点信标保护区_Ⅰ_Ⅲ",
+        "MH_MB_指点信标保护区_Ⅰ_Ⅲ",
+    ),
+    "mb_site_protection_region_ii_iv": (
+        "GB_MB_指点信标保护区_Ⅱ_Ⅳ",
+        "MH_MB_指点信标保护区_Ⅱ_Ⅳ",
+    ),
+}
+
 _GP_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
     "gp_site_protection_gb_region_a_cable": (
         "GB_ILSGP_GB场地保护区_A线缆",
@@ -168,6 +179,7 @@ _STANDARD_KEYS_BY_STATION_TYPE: dict[
 ] = {
     "NDB": _NDB_STANDARD_KEYS,
     "LOC": _LOC_STANDARD_KEYS,
+    "MB": _MB_STANDARD_KEYS,
     "GP": _GP_STANDARD_KEYS,
     "VOR": _VOR_STANDARD_KEYS,
 }

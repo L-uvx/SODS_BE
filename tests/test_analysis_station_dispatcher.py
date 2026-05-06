@@ -184,6 +184,46 @@ def test_station_rule_dispatcher_dispatches_gp_by_station_type() -> None:
     }
 
 
+def test_station_rule_dispatcher_dispatches_mb_by_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    mb_station = type(
+        "Station",
+        (),
+        {
+            "id": 104,
+            "name": "MB Station",
+            "station_type": "MB",
+            "longitude": 120.0,
+            "latitude": 30.0,
+            "altitude": 500.0,
+            "runway_no": "18",
+        },
+    )()
+    runway_context = {
+        "runNumber": "18",
+        "directionDegrees": 180.0,
+    }
+
+    payload = dispatcher.analyze_station(
+        station=mb_station,
+        obstacles=[],
+        station_point=(0.0, 0.0),
+        runways=[runway_context],
+    )
+
+    assert payload.rule_results == []
+    assert len(payload.protection_zones) == 4
+    assert [zone.region_code for zone in payload.protection_zones] == [
+        "I",
+        "II",
+        "III",
+        "IV",
+    ]
+    assert {zone.zone_code for zone in payload.protection_zones} == {
+        "mb_site_protection",
+    }
+
+
 def test_dispatcher_handles_vor_station() -> None:
     """dispatcher 按 station_type="VOR" 分发，无障碍物时返回空 rule_results 与绑定保护区。"""
     dispatcher = StationAnalysisDispatcher()
@@ -201,6 +241,7 @@ def test_dispatcher_handles_vor_station() -> None:
             "reflection_diameter": 30.0,
             "b_antenna_h": 2.0,
             "reflection_net_hag": 5.0,
+            "coverage_radius": 1800.0,
         },
     )()
 
@@ -211,7 +252,11 @@ def test_dispatcher_handles_vor_station() -> None:
         runways=[],
     )
     assert payload.rule_results == []
-    assert len(payload.protection_zones) == 1
+    assert len(payload.protection_zones) == 2
+    assert {zone.rule_code for zone in payload.protection_zones} == {
+        "vor_reflector_mask_area",
+        "vor_300_outside_2_5_deg",
+    }
 
 
 def test_dispatcher_vor_with_obstacle() -> None:
@@ -231,6 +276,7 @@ def test_dispatcher_vor_with_obstacle() -> None:
             "reflection_diameter": 30.0,
             "b_antenna_h": 2.0,
             "reflection_net_hag": 5.0,
+            "coverage_radius": 1800.0,
         },
     )()
 
@@ -250,5 +296,19 @@ def test_dispatcher_vor_with_obstacle() -> None:
         station_point=(0.0, 0.0),
         runways=[],
     )
-    assert len(payload.rule_results) == 3
-    assert len(payload.protection_zones) == 3
+    assert len(payload.rule_results) == 5
+    assert len(payload.protection_zones) == 5
+    assert {result.rule_code for result in payload.rule_results} == {
+        "vor_reflector_mask_area",
+        "vor_100m_datum_plane",
+        "vor_200m_datum_plane",
+        "vor_200_300_1_5_deg",
+        "vor_300_outside_2_5_deg",
+    }
+    assert {zone.rule_code for zone in payload.protection_zones} == {
+        "vor_reflector_mask_area",
+        "vor_100m_datum_plane",
+        "vor_200m_datum_plane",
+        "vor_200_300_1_5_deg",
+        "vor_300_outside_2_5_deg",
+    }

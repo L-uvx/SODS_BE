@@ -4,6 +4,7 @@ from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.gp import GpRuleProfile
 from app.analysis.rules.loc import LocRuleProfile
+from app.analysis.rules.mb import MbRuleProfile
 from app.analysis.rules.ndb import NdbRuleProfile
 from app.analysis.rules.vor import VorRuleProfile
 
@@ -19,6 +20,7 @@ class StationAnalysisDispatcher:
     def __init__(self) -> None:
         self._ndb_profile = NdbRuleProfile()
         self._loc_profile = LocRuleProfile()
+        self._mb_profile = MbRuleProfile()
         self._gp_profile = GpRuleProfile()
         self._vor_profile = VorRuleProfile()
 
@@ -48,6 +50,18 @@ class StationAnalysisDispatcher:
                 station=station,
                 obstacles=obstacles,
                 station_point=station_point,
+            )
+            return StationAnalysisPayload(
+                rule_results=payload.rule_results,
+                protection_zones=payload.protection_zones,
+            )
+
+        if station.station_type == "MB":
+            payload = self._mb_profile.analyze(
+                station=station,
+                obstacles=obstacles,
+                station_point=station_point,
+                runways=runways,
             )
             return StationAnalysisPayload(
                 rule_results=payload.rule_results,
