@@ -1,18 +1,33 @@
 # app/analysis/rules/vor/datum_plane/_100m.py
+import math
 from dataclasses import dataclass
 
 from shapely.geometry import Point
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
-from app.analysis.rules.vor.common import (
+from app.analysis.rules.vor.common import VorRule, _float_or_none
+from app.analysis.rules.vor.datum_plane._base import (
     BoundVorDatumPlaneRule,
-    VorRule,
-    _compute_shadow_radius,
     _ensure_datum_plane_params,
     build_vor_circle_protection_zone,
 )
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
+
+
+# 计算反射网阴影区外缘半径 rt。
+def _compute_shadow_radius(station: object) -> float | None:
+    d_val = _float_or_none(station.reflection_diameter)
+    r_val = _float_or_none(station.b_to_center_distance)
+    h2_val = _float_or_none(station.b_antenna_h)
+    h1_val = _float_or_none(station.reflection_net_hag)
+    if any(v is None for v in (d_val, r_val, h2_val, h1_val)):
+        return None
+    half_d = d_val / 2.0
+    delta = max(half_d - r_val, 0.001)
+    angle = math.atan(delta / h2_val)
+    rt = math.tan(angle) * h1_val + half_d
+    return min(rt, 100.0)
 
 
 class Vor100mDatumPlaneRule(VorRule):

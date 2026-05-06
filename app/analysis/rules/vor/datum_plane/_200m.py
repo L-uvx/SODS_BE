@@ -5,9 +5,9 @@ from shapely.geometry import Point
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
-from app.analysis.rules.vor.common import (
+from app.analysis.rules.vor.common import VorRule
+from app.analysis.rules.vor.datum_plane._base import (
     BoundVorDatumPlaneRule,
-    VorRule,
     _ensure_datum_plane_params,
     build_vor_circle_protection_zone,
 )
