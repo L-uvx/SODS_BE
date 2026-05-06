@@ -8,7 +8,7 @@ from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
-from app.analysis.rules.vor.common import VorRule, build_vor_ring_protection_zone
+from app.analysis.rules.vor.common import VorRule, _float_or_none, build_vor_ring_protection_zone
 
 
 class VorReflectorMaskAreaRule(VorRule):
@@ -134,9 +134,3 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
             },
             standards_rule_code=self.protection_zone.rule_code,
         )
-
-
-def _float_or_none(value: object) -> float | None:
-    if value is None:
-        return None
-    return float(value)

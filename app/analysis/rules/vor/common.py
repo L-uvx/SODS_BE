@@ -79,13 +79,16 @@ def build_vor_ring_protection_zone(
     )
 
 
+def _float_or_none(value: object) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
 # 校验基准面规则所需的台站海拔与反射网离地高度参数。
 def _ensure_datum_plane_params(station: object) -> tuple[float, float] | None:
-    try:
-        altitude = float(station.altitude)
-        h1 = float(station.reflection_net_hag)
-    except (TypeError, ValueError):
-        return None
+    altitude = _float_or_none(station.altitude)
+    h1 = _float_or_none(station.reflection_net_hag)
     if altitude is None or h1 is None:
         return None
     return (altitude, h1)
@@ -104,12 +107,6 @@ def _compute_shadow_radius(station: object) -> float | None:
     angle = math.atan(delta / h2_val)
     rt = math.tan(angle) * h1_val + half_d
     return min(rt, 100.0)
-
-
-def _float_or_none(value: object) -> float | None:
-    if value is None:
-        return None
-    return float(value)
 
 
 # 构建 VOR 整圆 + flat 垂向的保护区规格。
@@ -166,7 +163,8 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
         actual_distance = float(shape.distance(station_pt))
         entered = shape.intersects(self.protection_zone.local_geometry)
 
-        top_elevation = float(obstacle.get("topElevation", 0.0) or 0.0)
+        raw_top = obstacle.get("topElevation")
+        top_elevation = float(raw_top if raw_top is not None else 0.0)
 
         # 阴影区预过滤（仅 100m 规则使用）
         if (
