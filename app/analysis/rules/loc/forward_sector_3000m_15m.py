@@ -71,7 +71,12 @@ class LocForwardSector3000m15mRule(ObstacleRule):
     zone_name = resolve_protection_zone_name(zone_code=zone_code)
     SUPPORTED_CATEGORIES = {
         "building_general",
-        "power_line_high_voltage_overhead",
+        "power_line_high_voltage_35kv_below",
+        "power_line_high_voltage_35kv",
+        "power_line_high_voltage_110kv",
+        "power_line_high_voltage_220kv",
+        "power_line_high_voltage_330kv",
+        "power_line_high_voltage_500kv_and_above",
         "building_hangar",
         "building_terminal",
     }
