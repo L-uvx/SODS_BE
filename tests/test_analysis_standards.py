@@ -312,6 +312,48 @@ def test_build_rule_standards_returns_radar_a_mh_mapping() -> None:
     )
 
 
+def test_build_rule_standards_returns_weather_radar_450m_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="WeatherRadar",
+        rule_name="weather_radar_minimum_distance_450m",
+        region_code="default",
+    )
+
+    assert standards.gb is None
+    assert standards.mh == AnalysisStandardReference(
+        code="QX_2016_WeatherRadar_450_防护间距",
+        text=load_standard_config_entries()["QX_2016_WeatherRadar_450_防护间距"],
+    )
+
+
+def test_build_rule_standards_returns_weather_radar_1deg_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="WeatherRadar",
+        rule_name="weather_radar_elevation_angle_1deg",
+        region_code="default",
+    )
+
+    assert standards.gb is None
+    assert standards.mh == AnalysisStandardReference(
+        code="QX_2016_WeatherRadar_雷达探测⽅向1°仰角",
+        text=load_standard_config_entries()["QX_2016_WeatherRadar_雷达探测⽅向1°仰角"],
+    )
+
+
+def test_build_rule_standards_returns_wind_radar_15deg_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="WindRadar",
+        rule_name="wind_radar_elevation_angle_15deg",
+        region_code="default",
+    )
+
+    assert standards.gb is None
+    assert standards.mh == AnalysisStandardReference(
+        code="QX_2016_WindRadar_探测系统天线15°仰角",
+        text=load_standard_config_entries()["QX_2016_WindRadar_探测系统天线15°仰角"],
+    )
+
+
 def test_build_rule_standards_returns_radar_c_mapping() -> None:
     standards = build_rule_standards(
         station_type="RADAR",

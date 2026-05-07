@@ -142,6 +142,14 @@ def test_resolve_protection_zone_name_returns_configured_chinese_names() -> None
         resolve_protection_zone_name(zone_code="gp_site_protection_gb")
         == "GP 场地保护区（GB）"
     )
+    assert (
+        resolve_protection_zone_name(zone_code="weather_radar_elevation_angle_1deg")
+        == "天气雷达 1°仰角限制区域"
+    )
+    assert (
+        resolve_protection_zone_name(zone_code="wind_radar_elevation_angle_15deg")
+        == "风温雷达 15°仰角限制区域"
+    )
 
 
 def test_resolve_protection_zone_style_maps_radar_zones_to_stable_palette_keys() -> None:
@@ -170,12 +178,31 @@ def test_resolve_protection_zone_name_returns_radar_zone_names() -> None:
     )
     assert (
         resolve_protection_zone_name(zone_code="radar_rotating_reflector_zone_16km")
-        == "Radar 16KM rotating reflector zone"
+        == "Radar 16公里保护区"
     )
     assert (
         resolve_protection_zone_name(zone_code="surface_detection_radar_runway_triangle")
         == "场监雷达跑道三角区域"
     )
+
+
+def test_resolve_protection_zone_style_maps_weather_and_wind_radar_zones() -> None:
+    assert resolve_protection_zone_style(
+        zone_code="weather_radar_minimum_distance_450m",
+        region_code="default",
+    )["colorKey"] != "default_blue"
+    assert resolve_protection_zone_style(
+        zone_code="weather_radar_minimum_distance_800m",
+        region_code="default",
+    )["colorKey"] != "default_blue"
+    assert resolve_protection_zone_style(
+        zone_code="weather_radar_elevation_angle_1deg",
+        region_code="default",
+    )["colorKey"] != "default_blue"
+    assert resolve_protection_zone_style(
+        zone_code="wind_radar_elevation_angle_15deg",
+        region_code="default",
+    )["colorKey"] != "default_blue"
 
 
 def test_resolve_protection_zone_style_returns_radar_a_style() -> None:

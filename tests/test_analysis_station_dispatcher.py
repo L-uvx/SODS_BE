@@ -375,6 +375,105 @@ def test_station_rule_dispatcher_dispatches_radar_by_station_type() -> None:
     }
 
 
+def test_station_rule_dispatcher_dispatches_weather_radar_by_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 106,
+            "name": "Weather Radar Station",
+            "station_type": "WeatherRadar",
+            "longitude": 120.0,
+            "latitude": 30.0,
+            "altitude": 10.0,
+            "antenna_hag": 20.0,
+            "coverage_radius": 1800.0,
+        },
+    )()
+    obstacles = [
+        {
+            "obstacleId": 1,
+            "name": "Building A",
+            "rawObstacleType": "建筑物/构筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 60.0,
+            "localGeometry": {"type": "Point", "coordinates": [1000.0, 0.0]},
+            "geometry": {"type": "Point", "coordinates": [120.0, 30.0]},
+        },
+        {
+            "obstacleId": 2,
+            "name": "FM A",
+            "rawObstacleType": "调频广播",
+            "globalObstacleCategory": "fm_broadcast",
+            "topElevation": 20.0,
+            "localGeometry": {"type": "Point", "coordinates": [700.0, 0.0]},
+            "geometry": {"type": "Point", "coordinates": [120.1, 30.1]},
+        },
+    ]
+
+    payload = dispatcher.analyze_station(
+        station=station,
+        obstacles=obstacles,
+        station_point=(0.0, 0.0),
+        runways=[],
+    )
+
+    assert {result.rule_code for result in payload.rule_results} == {
+        "weather_radar_minimum_distance_450m",
+        "weather_radar_elevation_angle_1deg",
+        "weather_radar_minimum_distance_800m",
+    }
+    assert {zone.zone_code for zone in payload.protection_zones} == {
+        "weather_radar_minimum_distance_450m",
+        "weather_radar_minimum_distance_800m",
+        "weather_radar_elevation_angle_1deg",
+    }
+
+
+def test_station_rule_dispatcher_dispatches_wind_radar_by_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 107,
+            "name": "Wind Radar Station",
+            "station_type": "WindRadar",
+            "longitude": 120.0,
+            "latitude": 30.0,
+            "altitude": 10.0,
+            "antenna_hag": 20.0,
+            "coverage_radius": 1800.0,
+        },
+    )()
+    obstacles = [
+        {
+            "obstacleId": 1,
+            "name": "Building A",
+            "rawObstacleType": "建筑物/构筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 400.0,
+            "localGeometry": {"type": "Point", "coordinates": [1000.0, 0.0]},
+            "geometry": {"type": "Point", "coordinates": [120.0, 30.0]},
+        }
+    ]
+
+    payload = dispatcher.analyze_station(
+        station=station,
+        obstacles=obstacles,
+        station_point=(0.0, 0.0),
+        runways=[],
+    )
+
+    assert {result.rule_code for result in payload.rule_results} == {
+        "wind_radar_elevation_angle_15deg",
+    }
+    assert {zone.zone_code for zone in payload.protection_zones} == {
+        "wind_radar_elevation_angle_15deg",
+    }
+
+
 def test_station_rule_dispatcher_dispatches_surface_detection_radar_by_station_type() -> None:
     dispatcher = StationAnalysisDispatcher()
     radar_station = type(

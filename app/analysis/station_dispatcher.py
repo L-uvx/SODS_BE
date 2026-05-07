@@ -9,6 +9,8 @@ from app.analysis.rules.ndb import NdbRuleProfile
 from app.analysis.rules.radar import RadarRuleProfile
 from app.analysis.rules.surface_detection_radar import SurfaceDetectionRadarRuleProfile
 from app.analysis.rules.vor import VorRuleProfile
+from app.analysis.rules.weather_radar import WeatherRadarRuleProfile
+from app.analysis.rules.wind_radar import WindRadarRuleProfile
 
 
 @dataclass(slots=True)
@@ -26,6 +28,8 @@ class StationAnalysisDispatcher:
         self._gp_profile = GpRuleProfile()
         self._vor_profile = VorRuleProfile()
         self._radar_profile = RadarRuleProfile()
+        self._weather_radar_profile = WeatherRadarRuleProfile()
+        self._wind_radar_profile = WindRadarRuleProfile()
         self._surface_detection_radar_profile = SurfaceDetectionRadarRuleProfile()
 
     # 按台站类型执行分析并返回规则结果与保护区集合。
@@ -95,6 +99,26 @@ class StationAnalysisDispatcher:
             )
         if station.station_type == "RADAR":
             payload = self._radar_profile.analyze(
+                station=station,
+                obstacles=obstacles,
+                station_point=station_point,
+            )
+            return StationAnalysisPayload(
+                rule_results=payload.rule_results,
+                protection_zones=payload.protection_zones,
+            )
+        if station.station_type == "WeatherRadar":
+            payload = self._weather_radar_profile.analyze(
+                station=station,
+                obstacles=obstacles,
+                station_point=station_point,
+            )
+            return StationAnalysisPayload(
+                rule_results=payload.rule_results,
+                protection_zones=payload.protection_zones,
+            )
+        if station.station_type == "WindRadar":
+            payload = self._wind_radar_profile.analyze(
                 station=station,
                 obstacles=obstacles,
                 station_point=station_point,

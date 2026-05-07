@@ -217,6 +217,28 @@ _RADAR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
     ),
 }
 
+_WEATHER_RADAR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
+    "weather_radar_minimum_distance_450m": (
+        None,
+        "QX_2016_WeatherRadar_450_防护间距",
+    ),
+    "weather_radar_minimum_distance_800m": (
+        None,
+        "QX_2016_WeatherRadar_800_防护间距",
+    ),
+    "weather_radar_elevation_angle_1deg": (
+        None,
+        "QX_2016_WeatherRadar_雷达探测⽅向1°仰角",
+    ),
+}
+
+_WIND_RADAR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
+    "wind_radar_elevation_angle_15deg": (
+        None,
+        "QX_2016_WindRadar_探测系统天线15°仰角",
+    ),
+}
+
 _STANDARD_KEYS_BY_STATION_TYPE: dict[
     str, dict[str, tuple[str | None, str | None]]
 ] = {
@@ -226,6 +248,8 @@ _STANDARD_KEYS_BY_STATION_TYPE: dict[
     "GP": _GP_STANDARD_KEYS,
     "VOR": _VOR_STANDARD_KEYS,
     "RADAR": _RADAR_STANDARD_KEYS,
+    "WeatherRadar": _WEATHER_RADAR_STANDARD_KEYS,
+    "WindRadar": _WIND_RADAR_STANDARD_KEYS,
 }
 
 

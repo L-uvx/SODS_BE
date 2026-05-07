@@ -28,6 +28,24 @@ def test_normalize_radar_equipment_power_bands() -> None:
     assert normalize_obstacle_type("农用电力设备（1kW以上）") == "agricultural_power_equipment_above_1kw"
 
 
+def test_normalize_medium_long_wave_power_bands() -> None:
+    assert normalize_obstacle_type("中波和长波发射台（小于50kW）") == "radio_emitter_medium_long_wave_50kw_below"
+    assert normalize_obstacle_type("中波和长波发射台（100-150kW）") == "radio_emitter_medium_long_wave_100_to_150kw"
+    assert normalize_obstacle_type("中波和长波发射台（大于200kW）") == "radio_emitter_medium_long_wave_above_200kw"
+
+
+def test_normalize_short_wave_power_bands() -> None:
+    assert normalize_obstacle_type("短波发射台（通信方向1/4功率角 0.5-5kW）") == "radio_emitter_short_wave_quarter_power_angle_0_5_to_5kw"
+    assert normalize_obstacle_type("短波发射台（通信方向1/4功率角 5-25kW）") == "radio_emitter_short_wave_quarter_power_angle_5_to_25kw"
+    assert normalize_obstacle_type("短波发射台（通信方向1/4功率角 25-120kW）") == "radio_emitter_short_wave_quarter_power_angle_25_to_120kw"
+    assert normalize_obstacle_type("短波发射台（通信方向1/4功率角 >120kW）") == "radio_emitter_short_wave_quarter_power_angle_above_120kw"
+    assert normalize_obstacle_type("短波发射台（通信方向1/4功率角外 0.5-5kW）") == "radio_emitter_short_wave_outside_quarter_power_angle_0_5_to_5kw"
+    assert normalize_obstacle_type("短波发射台（通信方向1/4功率角外 5-25kW）") == "radio_emitter_short_wave_outside_quarter_power_angle_5_to_25kw"
+    assert normalize_obstacle_type("短波发射台（通信方向1/4功率角外 25-120kW）") == "radio_emitter_short_wave_outside_quarter_power_angle_25_to_120kw"
+    assert normalize_obstacle_type("短波发射台（通信方向1/4功率角外 >120kW）") == "radio_emitter_short_wave_outside_quarter_power_angle_above_120kw"
+    assert normalize_obstacle_type("短波发射台（其他）") == "radio_emitter_short_wave_other"
+
+
 import pytest
 
 
