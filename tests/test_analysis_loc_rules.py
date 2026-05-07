@@ -2034,7 +2034,7 @@ def test_loc_forward_sector_rule_uses_reverse_runway_direction() -> None:
 
 def test_loc_building_restriction_zone_shared_context_resolves_apex_root_and_arc_geometry() -> None:
     assert LOC_BUILDING_RESTRICTION_ZONE["zone_code"] == "loc_building_restriction_zone"
-    assert LOC_BUILDING_RESTRICTION_ZONE["zone_name"] == "building restriction zone"
+    assert LOC_BUILDING_RESTRICTION_ZONE["zone_name"] == "LOC 建筑物限制区"
     assert "region_1_2_inner_offset_m" not in LOC_BUILDING_RESTRICTION_ZONE
     assert LOC_BUILDING_RESTRICTION_ZONE["region_1_2_forward_length_m"] == 500.0
     assert LOC_BUILDING_RESTRICTION_ZONE["region_1_2_outer_offset_m"] == 1500.0
@@ -2864,6 +2864,123 @@ def test_loc_building_restriction_zone_region_3_helper_handles_boundary_only_int
     )
 
     assert worst_allowed_height_meters == pytest.approx(500.0)
+
+
+def test_loc_building_restriction_zone_region_3_helper_keeps_root_edge_height_near_station_altitude() -> None:
+    shared_context = build_loc_building_restriction_zone_shared_context(
+        station_point=(0.0, 0.0),
+        runway_context={
+            "localCenterPoint": (0.0, 600.0),
+            "directionDegrees": 180.0,
+            "lengthMeters": 600.0,
+            "widthMeters": 45.0,
+        },
+    )
+    geometry = loc_region_3_module._build_region_3_analysis_geometry(
+        shared_context=shared_context,
+        region_3_geometry=build_loc_building_restriction_zone_region_3_geometry(
+            shared_context
+        ),
+    )
+    obstacle_geometry = MultiPolygon(
+        [
+            Polygon(
+                [
+                    (-520.0, 890.0),
+                    (520.0, 890.0),
+                    (520.0, 910.0),
+                    (-520.0, 910.0),
+                    (-520.0, 890.0),
+                ]
+            )
+        ]
+    )
+
+    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+        zone_geometry=geometry,
+        obstacle_geometry=obstacle_geometry,
+        station_altitude_meters=500.0,
+    )
+
+    assert worst_allowed_height_meters == pytest.approx(500.0, abs=0.05)
+
+
+def test_loc_building_restriction_zone_region_3_helper_lifts_outer_arc_height_near_station_plus_70m() -> None:
+    shared_context = build_loc_building_restriction_zone_shared_context(
+        station_point=(0.0, 0.0),
+        runway_context={
+            "localCenterPoint": (0.0, 600.0),
+            "directionDegrees": 180.0,
+            "lengthMeters": 600.0,
+            "widthMeters": 45.0,
+        },
+    )
+    geometry = loc_region_3_module._build_region_3_analysis_geometry(
+        shared_context=shared_context,
+        region_3_geometry=build_loc_building_restriction_zone_region_3_geometry(
+            shared_context
+        ),
+    )
+    obstacle_geometry = MultiPolygon(
+        [
+            Polygon(
+                [
+                    (-80.0, 6880.0),
+                    (80.0, 6880.0),
+                    (80.0, 6905.0),
+                    (-80.0, 6905.0),
+                    (-80.0, 6880.0),
+                ]
+            )
+        ]
+    )
+
+    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+        zone_geometry=geometry,
+        obstacle_geometry=obstacle_geometry,
+        station_altitude_meters=500.0,
+    )
+
+    assert worst_allowed_height_meters == pytest.approx(570.0, abs=0.5)
+
+
+def test_loc_building_restriction_zone_region_3_helper_uses_csharp_runway_project_formula_for_non_vertex_point() -> None:
+    shared_context = build_loc_building_restriction_zone_shared_context(
+        station_point=(0.0, 0.0),
+        runway_context={
+            "localCenterPoint": (0.0, 600.0),
+            "directionDegrees": 180.0,
+            "lengthMeters": 600.0,
+            "widthMeters": 45.0,
+        },
+    )
+    geometry = loc_region_3_module._build_region_3_analysis_geometry(
+        shared_context=shared_context,
+        region_3_geometry=build_loc_building_restriction_zone_region_3_geometry(
+            shared_context
+        ),
+    )
+    obstacle_geometry = MultiPolygon(
+        [
+            Polygon(
+                [
+                    (-1200.0, 4200.0),
+                    (-800.0, 4200.0),
+                    (-800.0, 4700.0),
+                    (-1200.0, 4700.0),
+                    (-1200.0, 4200.0),
+                ]
+            )
+        ]
+    )
+
+    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+        zone_geometry=geometry,
+        obstacle_geometry=obstacle_geometry,
+        station_altitude_meters=500.0,
+    )
+
+    assert worst_allowed_height_meters == pytest.approx(539.2, abs=0.5)
 
 
 def test_loc_region_3_shared_geometry_helper_returns_expected_min_metric() -> None:

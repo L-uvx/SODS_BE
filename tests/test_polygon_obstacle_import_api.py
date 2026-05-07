@@ -2,6 +2,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from io import BytesIO
 import json
+import math
 from pathlib import Path as SysPath
 from pathlib import Path
 
@@ -1352,7 +1353,7 @@ def test_get_analysis_task_result_returns_radial_band_analytic_surface_protectio
             "heightModel": {
                 "type": "angle_linear_rise",
                 "angleDegrees": 3.0,
-                "distanceOffsetMeters": 50.0,
+                "distanceOffsetMeters": 0.0,
             },
         },
     }
@@ -1438,6 +1439,11 @@ def test_get_analysis_task_result_returns_offset_ndb_distance_source_point() -> 
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
     assert response.status_code == 200
+    conical_rule_result = next(
+        item
+        for item in response.json()["ruleResults"]
+        if item["ruleCode"] == "ndb_conical_clearance_3deg"
+    )
     radial_band_zone = next(
         item
         for item in response.json()["protectionZones"]
@@ -1448,6 +1454,14 @@ def test_get_analysis_task_result_returns_offset_ndb_distance_source_point() -> 
     ]
 
     assert distance_source_point == [station_longitude, station_latitude]
+    assert conical_rule_result["metrics"]["actualDistanceMeters"] == pytest.approx(
+        1002.9112711944047
+    )
+    assert conical_rule_result["metrics"]["allowedHeightMeters"] == pytest.approx(
+        500.0
+        + math.tan(math.radians(3.0))
+        * conical_rule_result["metrics"]["actualDistanceMeters"]
+    )
 
 
 def test_get_analysis_task_result_centers_ndb_protection_zone_on_station_point() -> None:
@@ -2083,7 +2097,7 @@ def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_3
     )
     assert protection_zone["style"] == {
         "colorKey": "danger_red",
-        "fill": "rgba(245, 108, 108, 0.25)",
+        "fill": "rgba(245, 108, 108, 0.5)",
         "stroke": "rgba(245, 108, 108, 0.9)",
     }
     assert protection_zone["renderGeometry"] is None

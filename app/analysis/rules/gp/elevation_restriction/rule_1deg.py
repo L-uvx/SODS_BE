@@ -7,7 +7,6 @@ from shapely.geometry.base import BaseGeometry
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import ObstacleRule
-from app.analysis.rules.geometry_evaluation import evaluate_geometry_metric
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
 from app.analysis.rules.gp.elevation_restriction.common import (
     BoundGpElevationRestrictionRule,
@@ -37,16 +36,14 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
         if not entered_protection_zone:
             is_compliant = True
             message = "obstacle outside GP 1 degree elevation restriction zone"
+            obstacle_metrics = None
         else:
-            distance_after_front_edge_meters = (
-                _calculate_distance_after_front_edge_meters(
-                    obstacle_shape=obstacle_shape,
-                    protection_zone_geometry=self.protection_zone.local_geometry,
-                    shared_context=self.shared_context,
-                )
+            obstacle_metrics = _calculate_gp_1deg_obstacle_metrics(
+                obstacle_shape=obstacle_shape,
+                shared_context=self.shared_context,
             )
             limit_height_meters = base_height_meters + math.tan(math.radians(1.0)) * max(
-                distance_after_front_edge_meters,
+                obstacle_metrics.effective_forward_distance_meters,
                 0.0,
             )
             is_compliant = top_elevation_meters <= limit_height_meters
@@ -64,6 +61,21 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
                 "enteredProtectionZone": entered_protection_zone,
                 "limitHeightMeters": limit_height_meters,
                 "topElevationMeters": top_elevation_meters,
+                "actualDistanceMeters": (
+                    None
+                    if obstacle_metrics is None
+                    else obstacle_metrics.actual_distance_meters
+                ),
+                "centerDirectionDegrees": (
+                    None
+                    if obstacle_metrics is None
+                    else obstacle_metrics.center_direction_degrees
+                ),
+                "effectiveForwardDistanceMeters": (
+                    None
+                    if obstacle_metrics is None
+                    else obstacle_metrics.effective_forward_distance_meters
+                ),
             },
         )
 
@@ -130,63 +142,53 @@ class GpElevationRestriction1DegRule(ObstacleRule):
         )
 
 
-def _calculate_distance_after_front_edge_meters(
+@dataclass(slots=True)
+class Gp1DegObstacleMetrics:
+    actual_distance_meters: float
+    center_direction_degrees: float
+    effective_forward_distance_meters: float
+
+
+def _calculate_gp_1deg_obstacle_metrics(
     *,
     obstacle_shape: BaseGeometry,
-    protection_zone_geometry: BaseGeometry,
     shared_context: Gp1DegSharedContext,
-) -> float:
-    evaluation = evaluate_geometry_metric(
-        obstacle_geometry=obstacle_shape,
-        protection_zone_geometry=protection_zone_geometry,
-        point_metric=lambda point: _calculate_point_distance_after_front_edge_meters(
-            target_point=point,
-            shared_context=shared_context,
-        ),
-        collect_point_candidates=True,
+) -> Gp1DegObstacleMetrics:
+    station_point = Point(shared_context.station_point)
+    min_x, min_y, max_x, max_y = obstacle_shape.bounds
+    center_x = (min_x + max_x) / 2.0
+    center_y = (min_y + max_y) / 2.0
+    actual_distance_meters = obstacle_shape.distance(station_point)
+    center_direction_radians = math.atan2(
+        center_x - shared_context.station_point[0],
+        center_y - shared_context.station_point[1],
     )
-    if evaluation.min_metric is not None:
-        return evaluation.min_metric
-
-    fallback_evaluation = evaluate_geometry_metric(
-        geometry=obstacle_shape,
-        point_metric=lambda point: _calculate_point_distance_after_front_edge_meters(
-            target_point=point,
-            shared_context=shared_context,
-        ),
-        collect_point_candidates=True,
-    )
-    if fallback_evaluation.min_metric is None:
-        raise ValueError("gp 1deg geometry metric evaluation returned no candidates")
-    return fallback_evaluation.min_metric
-
-
-def _calculate_point_distance_after_front_edge_meters(
-    *,
-    target_point: Point,
-    shared_context: Gp1DegSharedContext,
-) -> float:
-    radial_distance_meters = math.hypot(
-        target_point.x - shared_context.station_point[0],
-        target_point.y - shared_context.station_point[1],
-    )
-    direction_radians = math.atan2(
-        target_point.x - shared_context.station_point[0],
-        target_point.y - shared_context.station_point[1],
-    )
+    center_direction_degrees = math.degrees(center_direction_radians)
     axis_heading_radians = math.atan2(
         shared_context.axis_unit[0],
         shared_context.axis_unit[1],
     )
-    angle_delta_radians = abs(direction_radians - axis_heading_radians)
+    angle_delta_radians = abs(center_direction_radians - axis_heading_radians)
     angle_delta_radians = min(
         angle_delta_radians,
         abs((2.0 * math.pi) - angle_delta_radians),
     )
-    runway_project_meters = shared_context.front_offset_meters / abs(
-        math.cos(angle_delta_radians)
+    cosine_value = abs(math.cos(angle_delta_radians))
+    runway_project_meters = (
+        math.inf
+        if cosine_value <= 1e-12
+        else shared_context.front_offset_meters / cosine_value
     )
-    return radial_distance_meters - runway_project_meters
+    return Gp1DegObstacleMetrics(
+        actual_distance_meters=actual_distance_meters,
+        center_direction_degrees=center_direction_degrees,
+        effective_forward_distance_meters=max(
+            actual_distance_meters - runway_project_meters,
+            0.0,
+        ),
+    )
+
+
 __all__ = [
     "BoundGpElevationRestriction1DegRule",
     "GpElevationRestriction1DegRule",

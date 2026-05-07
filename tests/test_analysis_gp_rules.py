@@ -1,4 +1,5 @@
 import importlib
+import math
 
 import pytest
 from shapely.geometry import LineString
@@ -1107,55 +1108,123 @@ def test_gp_1deg_geometry_outer_arc_uses_csharp_alpha_not_raw_half_angle() -> No
     assert first_arc_point[0] > 2600.0
 
 
-def test_gp_1deg_distance_after_front_edge_matches_csharp_runway_project_logic() -> None:
+def test_gp_1deg_effective_forward_distance_uses_obstacle_bounds_center_direction() -> None:
     module = importlib.import_module(
         "app.analysis.rules.gp.elevation_restriction.rule_1deg"
     )
-    point = Point(100.0, -400.0)
+    polygon = Polygon(
+        [
+            (300.0, -400.0),
+            (600.0, -1200.0),
+            (-50.0, -1000.0),
+            (300.0, -400.0),
+        ]
+    )
 
-    distance_after_front_edge = module._calculate_distance_after_front_edge_meters(
-        obstacle_shape=point,
-        protection_zone_geometry=module.build_gp_1deg_zone_geometry(
-            _make_gp_1deg_shared_context()
-        ).local_geometry,
+    metrics = module._calculate_gp_1deg_obstacle_metrics(
+        obstacle_shape=polygon,
         shared_context=_make_gp_1deg_shared_context(),
     )
 
-    assert distance_after_front_edge == pytest.approx(41.23, abs=0.5)
-
-
-def test_gp_1deg_segment_min_distance_matches_dense_sampling() -> None:
-    geometry_evaluation = importlib.import_module(
-        "app.analysis.rules.geometry_evaluation"
+    bounds_center_x = (polygon.bounds[0] + polygon.bounds[2]) / 2.0
+    bounds_center_y = (polygon.bounds[1] + polygon.bounds[3]) / 2.0
+    expected_direction_degrees = math.degrees(
+        math.atan2(bounds_center_x, bounds_center_y)
     )
+    centroid_direction_degrees = math.degrees(
+        math.atan2(polygon.centroid.x, polygon.centroid.y)
+    )
+    axis_heading_radians = math.atan2(0.0, -1.0)
+    angle_delta_radians = abs(math.radians(expected_direction_degrees) - axis_heading_radians)
+    angle_delta_radians = min(
+        angle_delta_radians,
+        abs((2.0 * math.pi) - angle_delta_radians),
+    )
+    expected_effective_forward_distance_meters = max(
+        metrics.actual_distance_meters - 360.0 / abs(math.cos(angle_delta_radians)),
+        0.0,
+    )
+
+    assert expected_direction_degrees != pytest.approx(centroid_direction_degrees, abs=0.05)
+    assert metrics.center_direction_degrees == pytest.approx(
+        expected_direction_degrees,
+        abs=0.05,
+    )
+    assert metrics.effective_forward_distance_meters == pytest.approx(
+        expected_effective_forward_distance_meters,
+        abs=0.5,
+    )
+
+
+def test_gp_1deg_effective_forward_distance_uses_obstacle_min_distance() -> None:
     rule_module = importlib.import_module(
         "app.analysis.rules.gp.elevation_restriction.rule_1deg"
     )
 
-    segment = LineString([(-300.0, -460.0), (140.0, -500.0)])
-    shared_context = _make_gp_1deg_shared_context()
-
-    expected = min(
-        rule_module._calculate_point_distance_after_front_edge_meters(
-            target_point=Point(
-                -300.0 + (140.0 + 300.0) * (index / 10000.0),
-                -460.0 + (-500.0 + 460.0) * (index / 10000.0),
-            ),
-            shared_context=shared_context,
-        )
-        for index in range(10001)
+    polygon = Polygon(
+        [
+            (250.0, -390.0),
+            (450.0, -600.0),
+            (350.0, -1000.0),
+            (150.0, -800.0),
+            (250.0, -390.0),
+        ]
     )
 
-    actual = geometry_evaluation.evaluate_geometry_metric(
-        geometry=segment,
-        point_metric=lambda point: rule_module._calculate_point_distance_after_front_edge_meters(
-            target_point=point,
-            shared_context=shared_context,
-        ),
-        collect_point_candidates=False,
-    ).min_metric
+    metrics = rule_module._calculate_gp_1deg_obstacle_metrics(
+        obstacle_shape=polygon,
+        shared_context=_make_gp_1deg_shared_context(),
+    )
 
-    assert actual == pytest.approx(expected, abs=0.02)
+    assert metrics.actual_distance_meters == pytest.approx(463.25, abs=0.05)
+    assert metrics.effective_forward_distance_meters == pytest.approx(71.35, abs=0.5)
+
+
+def test_gp_1deg_rule_uses_base_height_when_obstacle_is_inside_front_edge() -> None:
+    module = importlib.import_module(
+        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
+    )
+    helpers = importlib.import_module(
+        "app.analysis.rules.gp.elevation_restriction.helpers"
+    )
+
+    station = _make_gp_station(altitude=500.0, gp360_altitude=500.0)
+
+    bound_rule = module.GpElevationRestriction1DegRule().bind(
+        station=station,
+        shared_context=helpers.build_gp_1deg_shared_context(
+            station=station,
+            station_point=(0.0, 0.0),
+            runway_context={
+                "runNumber": "18",
+                "directionDegrees": 0.0,
+                "widthMeters": 40.0,
+                "lengthMeters": 600.0,
+                "localCenterPoint": (0.0, -600.0),
+            },
+        ),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 22,
+            "name": "Inside Front Edge",
+            "topElevation": 500.5,
+            "globalObstacleCategory": "building_general",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [-50.0, -360.0],
+            },
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [-50.0, -360.0],
+            },
+        }
+    )
+
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["limitHeightMeters"] == pytest.approx(500.0, abs=1e-6)
+    assert result.is_compliant is False
 
 
 def test_gp_1deg_rule_binder_builds_zone_spec_with_analytic_surface_vertical() -> None:

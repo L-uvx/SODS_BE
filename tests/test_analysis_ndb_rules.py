@@ -268,6 +268,134 @@ def test_ndb_conical_clearance_rule_returns_uniform_result() -> None:
     assert result.metrics["elevationAngleDegrees"] == 3.0
 
 
+def test_ndb_conical_clearance_rule_triggers_when_obstacle_partly_crosses_50m_boundary() -> None:
+    station = type("Station", (), {"id": 1, "station_type": "NDB"})()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "Boundary Crossing Obstacle",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [45.0, 0.0],
+                        [55.0, 0.0],
+                        [55.0, 10.0],
+                        [45.0, 10.0],
+                        [45.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+        "topElevation": 502.0,
+    }
+
+    result = NdbConicalClearance3DegRule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        station_altitude=500.0,
+    ).analyze(obstacle)
+
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["actualDistanceMeters"] == 45.0
+    assert result.metrics["actualElevationAngleDegrees"] == pytest.approx(
+        math.degrees(math.atan((502.0 - 500.0) / 45.0))
+    )
+
+
+def test_ndb_conical_clearance_rule_does_not_trigger_when_obstacle_only_touches_50m_boundary() -> None:
+    station = type("Station", (), {"id": 1, "station_type": "NDB"})()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "Boundary Touching Obstacle",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [50.0, 0.0],
+        },
+        "topElevation": 520.0,
+    }
+
+    result = NdbConicalClearance3DegRule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        station_altitude=500.0,
+    ).analyze(obstacle)
+
+    assert result.metrics["enteredProtectionZone"] is False
+
+
+def test_ndb_conical_clearance_vertical_definition_matches_csharp_parity_angle_model() -> None:
+    bound_rule = NdbConicalClearance3DegRule().bind(
+        station=type(
+            "Station",
+            (),
+            {
+                "id": 1,
+                "station_type": "NDB",
+                "altitude": 500.0,
+                "longitude": 104.123456,
+                "latitude": 30.123456,
+            },
+        )(),
+        station_point=(0.0, 0.0),
+        station_altitude=500.0,
+    )
+
+    surface = bound_rule.protection_zone.vertical_definition["surface"]
+
+    assert surface["clampRange"]["startMeters"] == 50.0
+    assert surface["heightModel"]["angleDegrees"] == 3.0
+    assert surface["heightModel"]["distanceOffsetMeters"] == 0.0
+
+
+def test_ndb_conical_clearance_rule_uses_actual_elevation_angle_instead_of_50m_offset_height() -> None:
+    station = type("Station", (), {"id": 1, "station_type": "NDB"})()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "Angle Semantics Obstacle",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [60.0, 0.0],
+                        [70.0, 0.0],
+                        [70.0, 10.0],
+                        [60.0, 10.0],
+                        [60.0, 0.0],
+                    ]
+                ]
+            ],
+        },
+        "topElevation": 503.0,
+    }
+
+    result = NdbConicalClearance3DegRule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        station_altitude=500.0,
+    ).analyze(obstacle)
+
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["actualDistanceMeters"] == 60.0
+    assert result.metrics["allowedHeightMeters"] == pytest.approx(
+        500.0 + math.tan(math.radians(3.0)) * 60.0
+    )
+    assert result.metrics["actualElevationAngleDegrees"] == pytest.approx(
+        math.degrees(math.atan((503.0 - 500.0) / 60.0))
+    )
+    assert result.metrics["actualElevationAngleDegrees"] < result.metrics[
+        "elevationAngleDegrees"
+    ]
+    assert result.is_compliant is True
+
+
 def test_ndb_rule_profile_returns_minimum_distance_and_conical_results() -> None:
     station = type(
         "Station",

@@ -45,8 +45,11 @@ class LocBuildingRestrictionZoneRegion3Geometry:
 
 @dataclass(slots=True)
 class LocBuildingRestrictionZoneRegion3AnalysisGeometry:
+    station_point: tuple[float, float]
     apex_point: tuple[float, float]
     arc_height_offset_meters: float
+    axis_unit: tuple[float, float]
+    station_to_apex_distance_meters: float
     arc_points: list[tuple[float, float]]
     local_geometry: MultiPolygon
 
@@ -248,28 +251,52 @@ def calculate_region_3_worst_allowed_height_meters(
     obstacle_geometry: MultiPolygon,
     station_altitude_meters: float,
 ) -> float | None:
-    apex_point = zone_geometry.apex_point
-    arc_radius_reference_meters = max(
-        math.hypot(
-            arc_point[0] - apex_point[0],
-            arc_point[1] - apex_point[1],
-        )
-        for arc_point in zone_geometry.arc_points
-    )
-
     evaluation = evaluate_geometry_metric(
         obstacle_geometry=obstacle_geometry,
         protection_zone_geometry=zone_geometry.local_geometry,
         point_metric=lambda point: station_altitude_meters
-        + zone_geometry.arc_height_offset_meters
-        * min(
-            math.hypot(point.x - apex_point[0], point.y - apex_point[1])
-            / arc_radius_reference_meters,
-            1.0,
+        + _calculate_region_3_height_offset_meters(
+            point=(point.x, point.y),
+            station_point=zone_geometry.station_point,
+            axis_unit=zone_geometry.axis_unit,
+            station_to_apex_distance_meters=zone_geometry.station_to_apex_distance_meters,
+            limit_angle_radians=math.asin(
+                zone_geometry.arc_height_offset_meters
+                / float(LOC_BUILDING_RESTRICTION_ZONE["arc_radius_offset_m"])
+            ),
         ),
         collect_point_candidates=True,
     )
     return evaluation.min_metric
+
+
+def _calculate_region_3_height_offset_meters(
+    *,
+    point: tuple[float, float],
+    station_point: tuple[float, float],
+    axis_unit: tuple[float, float],
+    station_to_apex_distance_meters: float,
+    limit_angle_radians: float,
+) -> float:
+    vector_x = point[0] - station_point[0]
+    vector_y = point[1] - station_point[1]
+    min_distance_meters = math.hypot(vector_x, vector_y)
+    if min_distance_meters == 0.0:
+        return 0.0
+
+    axis_projection_ratio = abs(
+        (vector_x * axis_unit[0] + vector_y * axis_unit[1]) / min_distance_meters
+    )
+    if axis_projection_ratio <= 0.0:
+        return 0.0
+
+    runway_project_meters = (
+        station_to_apex_distance_meters / axis_projection_ratio
+    )
+    height_offset_meters = (
+        min_distance_meters - runway_project_meters
+    ) * math.tan(limit_angle_radians)
+    return max(height_offset_meters, 0.0)
 
 
 def _resolve_alpha_degrees(

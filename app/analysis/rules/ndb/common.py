@@ -1,7 +1,9 @@
 import math
 from dataclasses import dataclass
+from typing import Iterator
 
-from shapely.geometry import Point
+from shapely.geometry import LineString, Point, Polygon
+from shapely.geometry.base import BaseGeometry
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
@@ -69,8 +71,14 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
     # 执行已绑定的 NDB 锥形净空判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         obstacle_shape = resolve_obstacle_shape(obstacle)
-        entered_protection_zone = obstacle_shape.intersects(
-            self.protection_zone.local_geometry
+        entered_geometry = obstacle_shape.intersection(self.protection_zone.local_geometry)
+        entered_protection_zone = (
+            not entered_geometry.is_empty
+            and _calculate_max_distance_to_station(
+                geometry=obstacle_shape,
+                station_point=self.station_point,
+            )
+            > self.inner_radius_meters
         )
         actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         base_height_meters = float(self.station_altitude or 0.0)
@@ -78,19 +86,24 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
         top_elevation = float(
             base_height_meters if raw_top_elevation is None else raw_top_elevation
         )
+        actual_elevation_angle_degrees = 90.0
+        if actual_distance_meters > 0.0:
+            actual_elevation_angle_degrees = math.degrees(
+                math.atan(
+                    (top_elevation - base_height_meters) / actual_distance_meters
+                )
+            )
 
         allowed_height_meters = base_height_meters
         is_compliant = True
         message = "top elevation outside conical clearance band"
         if entered_protection_zone:
-            clamped_distance_meters = min(
-                max(actual_distance_meters, self.inner_radius_meters),
-                self.outer_radius_meters,
-            )
             allowed_height_meters = base_height_meters + math.tan(
                 math.radians(self.elevation_angle_degrees)
-            ) * max(clamped_distance_meters - self.inner_radius_meters, 0.0)
-            is_compliant = top_elevation <= allowed_height_meters
+            ) * actual_distance_meters
+            is_compliant = (
+                actual_elevation_angle_degrees <= self.elevation_angle_degrees
+            )
             message = (
                 "top elevation within conical clearance"
                 if is_compliant
@@ -116,6 +129,7 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
                 "actualDistanceMeters": actual_distance_meters,
+                "actualElevationAngleDegrees": actual_elevation_angle_degrees,
                 "baseHeightMeters": base_height_meters,
                 "elevationAngleDegrees": self.elevation_angle_degrees,
                 "allowedHeightMeters": allowed_height_meters,
@@ -160,6 +174,41 @@ def build_ndb_circle_protection_zone(
             "baseHeightMeters": 0.0,
         },
     )
+
+
+def _calculate_max_distance_to_station(
+    *,
+    geometry: BaseGeometry,
+    station_point: tuple[float, float],
+) -> float:
+    station_x, station_y = station_point
+    max_distance = 0.0
+    for point_x, point_y in _iter_geometry_points(geometry):
+        max_distance = max(
+            max_distance,
+            math.hypot(point_x - station_x, point_y - station_y),
+        )
+    return max_distance
+
+
+def _iter_geometry_points(geometry: BaseGeometry) -> Iterator[tuple[float, float]]:
+    if isinstance(geometry, (Point, LineString)):
+        yield from ((float(point_x), float(point_y)) for point_x, point_y in geometry.coords)
+        return
+    if isinstance(geometry, Polygon):
+        yield from (
+            (float(point_x), float(point_y))
+            for point_x, point_y in geometry.exterior.coords
+        )
+        for interior in geometry.interiors:
+            yield from (
+                (float(point_x), float(point_y))
+                for point_x, point_y in interior.coords
+            )
+        return
+    if hasattr(geometry, "geoms"):
+        for child_geometry in geometry.geoms:
+            yield from _iter_geometry_points(child_geometry)
 
 
 # 构建 NDB 锥形环带保护区规格。
@@ -219,9 +268,8 @@ def build_ndb_conical_protection_zone(
                 "heightModel": {
                     "type": "angle_linear_rise",
                     "angleDegrees": elevation_angle_degrees,
-                    "distanceOffsetMeters": inner_radius_meters,
+                    "distanceOffsetMeters": 0.0,
                 },
             },
         },
     )
-

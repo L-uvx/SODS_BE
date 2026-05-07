@@ -154,8 +154,11 @@ def _build_region_3_analysis_geometry(
     region_3_geometry: LocBuildingRestrictionZoneRegion3Geometry,
 ) -> LocBuildingRestrictionZoneRegion3AnalysisGeometry:
     return LocBuildingRestrictionZoneRegion3AnalysisGeometry(
+        station_point=shared_context.station_point,
         apex_point=shared_context.apex_point,
         arc_height_offset_meters=shared_context.arc_height_offset_meters,
+        axis_unit=shared_context.axis_unit,
+        station_to_apex_distance_meters=shared_context.station_to_apex_distance_meters,
         arc_points=region_3_geometry.arc_points,
         local_geometry=region_3_geometry.local_geometry,
     )
