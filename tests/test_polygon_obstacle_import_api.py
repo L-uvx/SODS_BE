@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path as SysPath
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
@@ -1958,6 +1959,50 @@ def test_get_analysis_task_result_returns_loc_forward_sector_zone() -> None:
     assert protection_zone["renderGeometry"] is None
 
 
+def test_public_flat_vertical_payload_keeps_station_based_height_for_station_reference() -> None:
+    from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+    service = PolygonObstacleImportService(MagicMock())
+
+    payload = service._build_public_protection_zone_vertical_payload(
+        projector=MagicMock(),
+        vertical_definition={
+            "mode": "flat",
+            "baseReference": "station",
+            "baseHeightMeters": 0.0,
+        },
+        station_altitude_meters=500.0,
+    )
+
+    assert payload == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 500.0,
+    }
+
+
+def test_public_flat_vertical_payload_uses_station_altitude_for_station_base_reference() -> None:
+    from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+    service = PolygonObstacleImportService(MagicMock())
+
+    payload = service._build_public_protection_zone_vertical_payload(
+        projector=MagicMock(),
+        vertical_definition={
+            "mode": "flat",
+            "baseReference": "station",
+            "baseHeightMeters": 0.0,
+        },
+        station_altitude_meters=500.0,
+    )
+
+    assert payload == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 500.0,
+    }
+
+
 def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_3() -> (
     None
 ):
@@ -2328,6 +2373,70 @@ def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_st
     }
     assert ("LOC", "multipolygon") in protection_zone_shapes
     assert ("NDB", "multipolygon") in protection_zone_shapes
+
+
+def test_get_analysis_task_result_returns_radar_station_vertical_payload() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(
+                Airport(
+                    id=1,
+                    name="Airport A",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                )
+            )
+            session.add(
+                Station(
+                    id=101,
+                    name="Radar Station",
+                    airport_id=1,
+                    station_type="RADAR",
+                    longitude=103.975864,
+                    latitude=30.506881,
+                    altitude=500.0,
+                    station_sub_type="PSR",
+                )
+            )
+            session.commit()
+
+            obstacle = session.execute(
+                text(
+                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
+                ),
+                {"source_batch_id": import_task_id},
+            ).scalar_one()
+            session.execute(
+                text(
+                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
+                ),
+                {
+                    "obstacle_type": "建筑物/构建物",
+                    "obstacle_id": obstacle,
+                },
+            )
+            session.commit()
+
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
+
+    assert response.status_code == 200
+    payload = response.json()
+    protection_zone = next(
+        item
+        for item in payload["protectionZones"]
+        if item["stationType"] == "RADAR"
+    )
+    assert protection_zone["vertical"] == {
+        "mode": "flat",
+        "baseReference": "station",
+        "baseHeightMeters": 500.0,
+    }
 
 
 def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() -> None:

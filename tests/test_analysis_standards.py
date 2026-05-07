@@ -282,3 +282,44 @@ def test_standard_mappings_are_registered_by_station_type() -> None:
         _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_run_area_protection_sensitive"][1]
         == "MH_ILSGP_运行保护区_敏感"
     )
+
+
+def test_build_rule_standards_returns_radar_b_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="RADAR",
+        rule_name="radar_minimum_distance_460m_standard",
+        region_code="default",
+    )
+
+    assert standards.gb is None
+    assert standards.mh == AnalysisStandardReference(
+        code="MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼",
+        text=load_standard_config_entries()["MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼"],
+    )
+
+
+def test_build_rule_standards_returns_radar_c_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="RADAR",
+        rule_name="radar_rotating_reflector_16km_standard",
+        region_code="default",
+    )
+
+    assert standards.gb is None
+    assert standards.mh == AnalysisStandardReference(
+        code="MH_PSRSSR_16KM保护区",
+        text=load_standard_config_entries()["MH_PSRSSR_16KM保护区"],
+    )
+
+
+def test_standard_mappings_register_radar_standard_codes_separately_from_rule_codes() -> None:
+    radar_standard_keys = _STANDARD_KEYS_BY_STATION_TYPE["RADAR"]
+
+    assert radar_standard_keys["radar_minimum_distance_460m_standard"] == (
+        None,
+        "MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼",
+    )
+    assert radar_standard_keys["radar_rotating_reflector_16km_standard"] == (
+        None,
+        "MH_PSRSSR_16KM保护区",
+    )

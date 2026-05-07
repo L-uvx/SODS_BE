@@ -174,6 +174,45 @@ _VOR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
     ),
 }
 
+_RADAR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
+    "radar_minimum_distance_460m_standard": (
+        None,
+        "MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼",
+    ),
+    "radar_minimum_distance_500m_standard": (
+        "AP_PSRSSR_0.5km平面防护间距要求_非电气化铁路",
+        "MH_PSRSSR_0.5km平面防护间距要求_非电气化铁路",
+    ),
+    "radar_minimum_distance_700m_standard": (
+        "AP_PSRSSR_0.7km平面防护间距要求_110kV高压变电站",
+        "MH_PSRSSR_0.7km平面防护间距要求_110到220kV高压变电站",
+    ),
+    "radar_minimum_distance_800m_standard": (
+        "AP_PSRSSR_0.8km平面防护间距要求_广播电台",
+        "MH_PSRSSR_0.8km平面防护间距要求_广播电台",
+    ),
+    "radar_minimum_distance_930m_standard": (
+        None,
+        "MH_PSRSSR_0.93km平面防护间距要求_气象雷达站",
+    ),
+    "radar_minimum_distance_1000m_standard": (
+        "AP_PSRSSR_1km平面防护间距要求_500kV高压架空输电线路",
+        "MH_PSRSSR_1km平面防护间距要求_500kV高压架空输电线路",
+    ),
+    "radar_minimum_distance_1200m_standard": (
+        "AP_PSRSSR_1.2km平面防护间距要求_500kV高压变电站",
+        "MH_PSRSSR_1.2km平面防护间距要求_500kV高压变电站",
+    ),
+    "radar_minimum_distance_1610m_standard": (
+        None,
+        "MH_PSRSSR_1.61km平面防护间距要求_机库等大型金属构建物",
+    ),
+    "radar_rotating_reflector_16km_standard": (
+        None,
+        "MH_PSRSSR_16KM保护区",
+    ),
+}
+
 _STANDARD_KEYS_BY_STATION_TYPE: dict[
     str, dict[str, tuple[str | None, str | None]]
 ] = {
@@ -182,6 +221,7 @@ _STANDARD_KEYS_BY_STATION_TYPE: dict[
     "MB": _MB_STANDARD_KEYS,
     "GP": _GP_STANDARD_KEYS,
     "VOR": _VOR_STANDARD_KEYS,
+    "RADAR": _RADAR_STANDARD_KEYS,
 }
 
 

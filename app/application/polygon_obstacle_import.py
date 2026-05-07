@@ -746,11 +746,15 @@ class PolygonObstacleImportService:
             payload = vertical_definition.copy()
             if payload.get("mode") != "flat":
                 raise ValueError("unsupported protection zone vertical mode")
-            payload["baseHeightMeters"] = float(
-                payload.get("baseHeightMeters")
-                if payload.get("baseHeightMeters") not in (None, 0, 0.0)
-                else station_altitude_meters
-            )
+            base_reference = payload.get("baseReference", "station")
+            base_height_meters = payload.get("baseHeightMeters")
+            if (
+                base_reference == "station"
+                and base_height_meters in (None, 0, 0.0)
+            ):
+                payload["baseHeightMeters"] = float(station_altitude_meters)
+            else:
+                payload["baseHeightMeters"] = float(base_height_meters or 0.0)
             return payload
 
         surface = vertical_definition.get("surface")

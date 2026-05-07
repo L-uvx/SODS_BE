@@ -1,6 +1,5 @@
 MB_SITE_PROTECTION = {
     "zone_code": "mb_site_protection",
-    "zone_name": "MB 场地保护区",
     "radius_m": 30.0,
     "regions": (
         {

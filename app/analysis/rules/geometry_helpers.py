@@ -1,7 +1,7 @@
 import math
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
-from shapely.geometry import MultiPolygon, Point, Polygon, shape
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 
 
@@ -12,11 +12,13 @@ def ensure_multipolygon(geometry: Polygon | MultiPolygon) -> MultiPolygon:
     return MultiPolygon([geometry])
 
 
-# 解析障碍物平面形状，当前支持 Point 与 Polygon/MultiPolygon。
+# 解析障碍物平面形状，当前支持 Point、LineString 与 Polygon/MultiPolygon。
 def resolve_obstacle_shape(obstacle: dict[str, object]) -> BaseGeometry:
     obstacle_shape = shape(obstacle.get("localGeometry") or obstacle["geometry"])
-    if not isinstance(obstacle_shape, (Point, Polygon, MultiPolygon)):
-        raise TypeError("obstacle geometry must resolve to Point, Polygon or MultiPolygon")
+    if not isinstance(obstacle_shape, (Point, LineString, Polygon, MultiPolygon)):
+        raise TypeError(
+            "obstacle geometry must resolve to Point, LineString, Polygon or MultiPolygon"
+        )
     return obstacle_shape
 
 

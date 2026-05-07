@@ -312,3 +312,64 @@ def test_dispatcher_vor_with_obstacle() -> None:
         "vor_200_300_1_5_deg",
         "vor_300_outside_2_5_deg",
     }
+
+
+def test_station_rule_dispatcher_dispatches_radar_by_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    radar_station = type(
+        "Station",
+        (),
+        {
+            "id": 105,
+            "name": "RADAR Station",
+            "station_type": "RADAR",
+            "longitude": 120.0,
+            "latitude": 30.0,
+            "altitude": 500.0,
+            "station_sub_type": "PSR",
+        },
+    )()
+    obstacles = [
+        {
+            "obstacleId": 1,
+            "name": "Building A",
+            "rawObstacleType": "建筑物/构筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 520.0,
+            "localGeometry": {"type": "Point", "coordinates": [300.0, 0.0]},
+            "geometry": {"type": "Point", "coordinates": [120.0, 30.0]},
+        },
+        {
+            "obstacleId": 2,
+            "name": "Reflector A",
+            "rawObstacleType": "大型旋转反射体",
+            "globalObstacleCategory": "large_rotating_reflector",
+            "topElevation": 530.0,
+            "localGeometry": {"type": "Point", "coordinates": [15000.0, 0.0]},
+            "geometry": {"type": "Point", "coordinates": [120.1, 30.1]},
+        },
+    ]
+
+    payload = dispatcher.analyze_station(
+        station=radar_station,
+        obstacles=obstacles,
+        station_point=(0.0, 0.0),
+        runways=[],
+    )
+
+    assert {result.rule_code for result in payload.rule_results} == {
+        "radar_minimum_distance_460m",
+        "radar_rotating_reflector_16km",
+    }
+    assert {result.zone_code for result in payload.rule_results} == {
+        "radar_minimum_distance_zone_460m",
+        "radar_rotating_reflector_zone_16km",
+    }
+    assert {result.standards_rule_code for result in payload.rule_results} == {
+        "radar_minimum_distance_460m_standard",
+        "radar_rotating_reflector_16km_standard",
+    }
+    assert {zone.zone_code for zone in payload.protection_zones} == {
+        "radar_minimum_distance_zone_460m",
+        "radar_rotating_reflector_zone_16km",
+    }

@@ -84,6 +84,26 @@ def test_mb_profile_builds_four_regions_when_runway_resolved() -> None:
     ]
 
 
+def test_mb_profile_resolves_zone_name_from_display_mapping(monkeypatch) -> None:
+    from app.analysis import protection_zone_style
+
+    monkeypatch.setitem(
+        protection_zone_style.PROTECTION_ZONE_DISPLAY_NAME_MAPPING,
+        "mb_site_protection",
+        "MB 映射场地保护区",
+    )
+
+    payload = _build_profile().analyze(
+        station=_build_station(),
+        obstacles=[],
+        station_point=(0.0, 0.0),
+        runways=[_build_runway()],
+    )
+
+    assert payload.protection_zones
+    assert all(zone.zone_name == "MB 映射场地保护区" for zone in payload.protection_zones)
+
+
 def test_mb_region_i_uses_20_degree_limit_with_expected_rule_code() -> None:
     profile = _build_profile()
     station = _build_station()

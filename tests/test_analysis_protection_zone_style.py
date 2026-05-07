@@ -49,6 +49,15 @@ def test_resolve_protection_zone_style_explicitly_maps_all_current_protection_zo
         ("gp_site_protection_mh", "A"),
         ("gp_site_protection_mh", "B"),
         ("gp_site_protection_mh", "C"),
+        ("radar_minimum_distance_zone_460m", "default"),
+        ("radar_minimum_distance_zone_500m", "default"),
+        ("radar_minimum_distance_zone_700m", "default"),
+        ("radar_minimum_distance_zone_800m", "default"),
+        ("radar_minimum_distance_zone_930m", "default"),
+        ("radar_minimum_distance_zone_1000m", "default"),
+        ("radar_minimum_distance_zone_1200m", "default"),
+        ("radar_minimum_distance_zone_1610m", "default"),
+        ("radar_rotating_reflector_zone_16km", "default"),
         ("vor_reflector_mask_area", "default"),
     }
 
@@ -130,4 +139,30 @@ def test_resolve_protection_zone_name_returns_configured_chinese_names() -> None
     assert (
         resolve_protection_zone_name(zone_code="gp_site_protection_gb")
         == "GP 场地保护区（GB）"
+    )
+
+
+def test_resolve_protection_zone_style_maps_radar_zones_to_stable_palette_keys() -> None:
+    assert resolve_protection_zone_style(
+        zone_code="radar_minimum_distance_zone_460m",
+        region_code="default",
+    )["colorKey"] == "sky_blue"
+    assert resolve_protection_zone_style(
+        zone_code="radar_minimum_distance_zone_1610m",
+        region_code="default",
+    )["colorKey"] == "slate_gray"
+    assert resolve_protection_zone_style(
+        zone_code="radar_rotating_reflector_zone_16km",
+        region_code="default",
+    )["colorKey"] == "danger_red"
+
+
+def test_resolve_protection_zone_name_returns_radar_zone_names() -> None:
+    assert (
+        resolve_protection_zone_name(zone_code="radar_minimum_distance_zone_460m")
+        == "Radar 460米最小间距"
+    )
+    assert (
+        resolve_protection_zone_name(zone_code="radar_rotating_reflector_zone_16km")
+        == "Radar 16KM rotating reflector zone"
     )

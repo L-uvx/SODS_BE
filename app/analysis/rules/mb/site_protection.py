@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from shapely.geometry import Point, Polygon
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
+from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import ensure_multipolygon, resolve_obstacle_shape
@@ -128,7 +129,10 @@ class MbSiteProtectionRule(ObstacleRule):
     rule_code = "mb_site_protection"
     rule_name = "mb_site_protection"
     zone_code = str(MB_SITE_PROTECTION["zone_code"])
-    zone_name = str(MB_SITE_PROTECTION["zone_name"])
+
+    # 初始化 MB 场地保护区规则。
+    def __init__(self) -> None:
+        self.zone_name = resolve_protection_zone_name(zone_code=self.zone_code)
 
     # 绑定单个 MB 分区保护区。
     def bind(
