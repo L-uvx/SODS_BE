@@ -49,6 +49,7 @@ def test_resolve_protection_zone_style_explicitly_maps_all_current_protection_zo
         ("gp_site_protection_mh", "A"),
         ("gp_site_protection_mh", "B"),
         ("gp_site_protection_mh", "C"),
+        ("radar_site_protection", "default"),
         ("radar_minimum_distance_zone_460m", "default"),
         ("radar_minimum_distance_zone_500m", "default"),
         ("radar_minimum_distance_zone_700m", "default"),
@@ -159,6 +160,10 @@ def test_resolve_protection_zone_style_maps_radar_zones_to_stable_palette_keys()
 
 def test_resolve_protection_zone_name_returns_radar_zone_names() -> None:
     assert (
+        resolve_protection_zone_name(zone_code="radar_site_protection")
+        == "Radar 场地保护区"
+    )
+    assert (
         resolve_protection_zone_name(zone_code="radar_minimum_distance_zone_460m")
         == "Radar 460米最小间距"
     )
@@ -166,3 +171,14 @@ def test_resolve_protection_zone_name_returns_radar_zone_names() -> None:
         resolve_protection_zone_name(zone_code="radar_rotating_reflector_zone_16km")
         == "Radar 16KM rotating reflector zone"
     )
+
+
+def test_resolve_protection_zone_style_returns_radar_a_style() -> None:
+    style = resolve_protection_zone_style(
+        zone_code="radar_site_protection",
+        region_code="default",
+    )
+
+    assert style["colorKey"] == "violet_purple"
+    assert style["fill"] == "rgba(167, 139, 250, 0.5)"
+    assert style["stroke"] == "rgba(167, 139, 250, 0.9)"

@@ -1,8 +1,13 @@
 from unittest.mock import MagicMock
 
+import pytest
+
+from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.rules.radar.minimum_distance import RadarMinimumDistanceRule
 from app.analysis.rules.radar.profile import RadarRuleProfile
 from app.analysis.rules.radar.rotating_reflector_16km import RadarRotatingReflector16kmRule
+from app.analysis.rules.radar.site_protection import RadarSiteProtectionRule
+from app.application.polygon_obstacle_import import PolygonObstacleImportService
 
 
 def _make_station(**overrides):
@@ -63,6 +68,27 @@ def _square_polygon_geometry(center_x, center_y, half_size):
     }
 
 
+def _find_rule_result(payload, rule_code):
+    return next(result for result in payload.rule_results if result.rule_code == rule_code)
+
+
+def _sector_band_polygon_geometry(inner_radius_m, outer_radius_m, half_angle_degrees):
+    import math
+
+    inner_y = inner_radius_m * math.tan(math.radians(half_angle_degrees))
+    outer_y = outer_radius_m * math.tan(math.radians(half_angle_degrees))
+    return {
+        "type": "Polygon",
+        "coordinates": [[
+            [inner_radius_m, -inner_y],
+            [outer_radius_m, -outer_y],
+            [outer_radius_m, outer_y],
+            [inner_radius_m, inner_y],
+            [inner_radius_m, -inner_y],
+        ]],
+    }
+
+
 def test_radar_profile_returns_b_and_c_results_for_supported_categories() -> None:
     profile = RadarRuleProfile()
     station = _make_station()
@@ -82,6 +108,197 @@ def test_radar_profile_returns_b_and_c_results_for_supported_categories() -> Non
 
     assert any(result.rule_code == "radar_minimum_distance_460m" for result in payload.rule_results)
     assert any(result.rule_code == "radar_rotating_reflector_16km" for result in payload.rule_results)
+
+
+def test_radar_a_skips_obstacle_outside_30km() -> None:
+    payload = RadarRuleProfile().analyze(
+        station=_make_station(antenna_hag=20.0),
+        obstacles=[
+            _make_obstacle(
+                category="building_general",
+                local_geometry=_point_geometry(30001.0, 0.0),
+                top_elevation=500.0,
+            )
+        ],
+        station_point=(0.0, 0.0),
+    )
+
+    assert not any(result.rule_code == "radar_site_protection" for result in payload.rule_results)
+
+
+def test_radar_a_passes_when_vertical_angle_is_below_0_25_deg() -> None:
+    payload = RadarRuleProfile().analyze(
+        station=_make_station(antenna_hag=20.0),
+        obstacles=[
+            _make_obstacle(
+                category="building_general",
+                local_geometry=_sector_band_polygon_geometry(10000.0, 10100.0, 2.0),
+                top_elevation=70.0,
+            )
+        ],
+        station_point=(0.0, 0.0),
+    )
+
+    result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
+    assert result.is_compliant is True
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["actualDistanceMeters"] == pytest.approx(10000.0)
+    assert result.metrics["verticalMaskAngleDegrees"] <= 0.25
+    assert result.metrics["horizontalMaskAngleDegrees"] > 1.5
+    assert result.metrics["verticalLimitAngleDegrees"] == 0.25
+    assert result.metrics["horizontalLimitAngleDegrees"] == 1.5
+    assert result.metrics["limitHeightMeters"] > result.metrics["baseHeightMeters"]
+
+
+def test_radar_a_passes_when_horizontal_angle_is_not_greater_than_1_5_deg() -> None:
+    payload = RadarRuleProfile().analyze(
+        station=_make_station(antenna_hag=20.0),
+        obstacles=[
+            _make_obstacle(
+                category="building_general",
+                local_geometry=_sector_band_polygon_geometry(10000.0, 10100.0, 0.5),
+                top_elevation=400.0,
+            )
+        ],
+        station_point=(0.0, 0.0),
+    )
+
+    result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
+    assert result.is_compliant is True
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["verticalMaskAngleDegrees"] > 0.25
+    assert result.metrics["horizontalMaskAngleDegrees"] <= 1.5
+    assert result.metrics["verticalLimitAngleDegrees"] == 0.25
+    assert result.metrics["horizontalLimitAngleDegrees"] == 1.5
+    assert result.metrics["limitHeightMeters"] < result.metrics["topElevationMeters"]
+
+
+def test_radar_a_fails_when_vertical_and_horizontal_angles_both_exceed_limits() -> None:
+    payload = RadarRuleProfile().analyze(
+        station=_make_station(antenna_hag=20.0),
+        obstacles=[
+            _make_obstacle(
+                category="building_general",
+                local_geometry=_sector_band_polygon_geometry(10000.0, 10100.0, 2.0),
+                top_elevation=400.0,
+            )
+        ],
+        station_point=(0.0, 0.0),
+    )
+
+    result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
+    assert result.is_compliant is False
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["verticalMaskAngleDegrees"] > 0.25
+    assert result.metrics["horizontalMaskAngleDegrees"] > 1.5
+    assert result.metrics["verticalLimitAngleDegrees"] == 0.25
+    assert result.metrics["horizontalLimitAngleDegrees"] == 1.5
+    assert result.metrics["limitHeightMeters"] < result.metrics["topElevationMeters"]
+    assert result.metrics["baseHeightMeters"] == 30.0
+
+
+def test_radar_a_station_point_zero_distance_does_not_crash() -> None:
+    payload = RadarRuleProfile().analyze(
+        station=_make_station(antenna_hag=20.0),
+        obstacles=[
+            _make_obstacle(
+                category="building_general",
+                local_geometry=_point_geometry(0.0, 0.0),
+                top_elevation=400.0,
+            )
+        ],
+        station_point=(0.0, 0.0),
+    )
+
+    result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["actualDistanceMeters"] == 0.0
+    assert result.metrics["verticalMaskAngleDegrees"] > result.metrics["verticalLimitAngleDegrees"]
+    assert result.is_compliant is True
+
+
+@pytest.mark.parametrize(
+    ("geometry",),
+    [
+        (_point_geometry(10000.0, 0.0),),
+        (_line_geometry(10000.0, 0.0, 10000.0, 0.0),),
+    ],
+)
+def test_radar_a_uses_zero_horizontal_mask_angle_for_point_or_degenerate_geometry(
+    geometry,
+) -> None:
+    payload = RadarRuleProfile().analyze(
+        station=_make_station(antenna_hag=20.0),
+        obstacles=[
+            _make_obstacle(
+                category="building_general",
+                local_geometry=geometry,
+                top_elevation=400.0,
+            )
+        ],
+        station_point=(0.0, 0.0),
+    )
+
+    result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["horizontalMaskAngleDegrees"] == pytest.approx(0.0)
+
+
+def test_radar_a_protection_zone_uses_analytic_surface_vertical_definition() -> None:
+    protection_zone = RadarSiteProtectionRule().bind(
+        station=_make_station(antenna_hag=20.0),
+        station_point=(0.0, 0.0),
+        radius_meters=30000.0,
+        vertical_limit_angle_degrees=0.25,
+        horizontal_limit_angle_degrees=1.5,
+    ).protection_zone
+
+    vertical_definition = protection_zone.vertical_definition
+    assert vertical_definition["mode"] != "flat"
+    assert vertical_definition["mode"] == "analytic_surface"
+    assert (
+        vertical_definition["surface"]["heightModel"]["type"]
+        == "radar_site_protection_mask_angle"
+    )
+    assert (
+        vertical_definition["surface"]["heightModel"]["maskAngleDegrees"]
+        == pytest.approx(0.25)
+    )
+    assert (
+        vertical_definition["surface"]["heightModel"]["distanceKilometersCorrectionDivisor"]
+        == pytest.approx(16970.0)
+    )
+
+
+def test_radar_a_public_vertical_payload_exposes_mask_angle_correction_model() -> None:
+    station = _make_station(antenna_hag=20.0)
+    protection_zone = RadarSiteProtectionRule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        radius_meters=30000.0,
+        vertical_limit_angle_degrees=0.25,
+        horizontal_limit_angle_degrees=1.5,
+    ).protection_zone
+    service = PolygonObstacleImportService(MagicMock())
+
+    payload = service._build_public_protection_zone_vertical_payload(
+        projector=AirportLocalProjector(
+            reference_longitude=station.longitude,
+            reference_latitude=station.latitude,
+        ),
+        vertical_definition=protection_zone.vertical_definition,
+        station_altitude_meters=float(station.altitude),
+        station_wgs84=(float(station.longitude), float(station.latitude)),
+    )
+
+    assert payload["mode"] == "analytic_surface"
+    assert payload["surface"]["type"] == "distance_parameterized"
+    assert payload["surface"]["heightModel"]["type"] == "radar_site_protection_mask_angle"
+    assert payload["surface"]["heightModel"]["maskAngleDegrees"] == pytest.approx(0.25)
+    assert (
+        payload["surface"]["heightModel"]["distanceKilometersCorrectionDivisor"]
+        == pytest.approx(16970.0)
+    )
 
 
 def test_radar_rules_resolve_zone_name_from_display_mapping(monkeypatch) -> None:
@@ -122,7 +339,7 @@ def test_radar_b_uses_460m_for_building_general() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_minimum_distance_460m")
     assert result.rule_code == "radar_minimum_distance_460m"
     assert result.zone_code == "radar_minimum_distance_zone_460m"
     assert result.standards_rule_code == "radar_minimum_distance_460m_standard"
@@ -145,7 +362,7 @@ def test_radar_b_uses_700m_for_110kv_substation() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_minimum_distance_700m")
     assert result.rule_code == "radar_minimum_distance_700m"
     assert result.metrics["minimumDistanceMeters"] == 700.0
     assert result.is_compliant is False
@@ -158,7 +375,7 @@ def test_radar_b_uses_800m_for_fm_broadcast() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_minimum_distance_800m")
     assert result.rule_code == "radar_minimum_distance_800m"
     assert result.metrics["minimumDistanceMeters"] == 800.0
     assert result.is_compliant is True
@@ -173,7 +390,7 @@ def test_radar_b_uses_930m_for_weather_radar_station() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_minimum_distance_930m")
     assert result.rule_code == "radar_minimum_distance_930m"
     assert result.metrics["minimumDistanceMeters"] == 930.0
     assert result.is_compliant is False
@@ -191,7 +408,7 @@ def test_radar_b_uses_1000m_for_500kv_power_line() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_minimum_distance_1000m")
     assert result.rule_code == "radar_minimum_distance_1000m"
     assert result.metrics["minimumDistanceMeters"] == 1000.0
     assert result.is_compliant is True
@@ -209,7 +426,7 @@ def test_radar_b_uses_1200m_for_500kv_substation() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_minimum_distance_1200m")
     assert result.rule_code == "radar_minimum_distance_1200m"
     assert result.metrics["minimumDistanceMeters"] == 1200.0
     assert result.is_compliant is False
@@ -224,7 +441,7 @@ def test_radar_b_uses_1610m_for_building_hangar() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_minimum_distance_1610m")
     assert result.rule_code == "radar_minimum_distance_1610m"
     assert result.metrics["minimumDistanceMeters"] == 1610.0
     assert result.metrics["enteredProtectionZone"] is True
@@ -243,7 +460,7 @@ def test_radar_b_treats_line_touching_boundary_as_entered() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_minimum_distance_460m")
     assert result.rule_code == "radar_minimum_distance_460m"
     assert result.metrics["enteredProtectionZone"] is True
     assert result.metrics["actualDistanceMeters"] == 460.0
@@ -262,7 +479,7 @@ def test_radar_b_treats_polygon_touching_boundary_as_entered() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_minimum_distance_460m")
     assert result.rule_code == "radar_minimum_distance_460m"
     assert result.metrics["enteredProtectionZone"] is True
     assert result.metrics["actualDistanceMeters"] == 460.0
@@ -281,8 +498,8 @@ def test_radar_b_does_not_apply_to_high_frequency_furnace_above_100kw() -> None:
         station_point=(0.0, 0.0),
     )
 
-    assert payload.rule_results == []
-    assert payload.protection_zones == []
+    assert not any(result.rule_code.startswith("radar_minimum_distance_") for result in payload.rule_results)
+    assert not any(result.rule_code == "radar_rotating_reflector_16km" for result in payload.rule_results)
 
 
 def test_radar_b_does_not_apply_to_high_voltage_substation_other() -> None:
@@ -297,8 +514,8 @@ def test_radar_b_does_not_apply_to_high_voltage_substation_other() -> None:
         station_point=(0.0, 0.0),
     )
 
-    assert payload.rule_results == []
-    assert payload.protection_zones == []
+    assert not any(result.rule_code.startswith("radar_minimum_distance_") for result in payload.rule_results)
+    assert not any(result.rule_code == "radar_rotating_reflector_16km" for result in payload.rule_results)
 
 
 def test_radar_b_does_not_apply_to_industrial_electric_welding_above_10kw() -> None:
@@ -313,8 +530,8 @@ def test_radar_b_does_not_apply_to_industrial_electric_welding_above_10kw() -> N
         station_point=(0.0, 0.0),
     )
 
-    assert payload.rule_results == []
-    assert payload.protection_zones == []
+    assert not any(result.rule_code.startswith("radar_minimum_distance_") for result in payload.rule_results)
+    assert not any(result.rule_code == "radar_rotating_reflector_16km" for result in payload.rule_results)
 
 
 def test_radar_b_does_not_apply_to_uhf_therapy_equipment_above_1kw() -> None:
@@ -329,8 +546,8 @@ def test_radar_b_does_not_apply_to_uhf_therapy_equipment_above_1kw() -> None:
         station_point=(0.0, 0.0),
     )
 
-    assert payload.rule_results == []
-    assert payload.protection_zones == []
+    assert not any(result.rule_code.startswith("radar_minimum_distance_") for result in payload.rule_results)
+    assert not any(result.rule_code == "radar_rotating_reflector_16km" for result in payload.rule_results)
 
 
 def test_radar_b_does_not_apply_to_agricultural_power_equipment_above_1kw() -> None:
@@ -345,8 +562,8 @@ def test_radar_b_does_not_apply_to_agricultural_power_equipment_above_1kw() -> N
         station_point=(0.0, 0.0),
     )
 
-    assert payload.rule_results == []
-    assert payload.protection_zones == []
+    assert not any(result.rule_code.startswith("radar_minimum_distance_") for result in payload.rule_results)
+    assert not any(result.rule_code == "radar_rotating_reflector_16km" for result in payload.rule_results)
 
 
 def test_radar_profile_reuses_same_zone_for_same_radius() -> None:
@@ -359,11 +576,13 @@ def test_radar_profile_reuses_same_zone_for_same_radius() -> None:
         station_point=(0.0, 0.0),
     )
 
-    assert len(payload.protection_zones) == 1
-    assert payload.protection_zones[0].zone_code == "radar_minimum_distance_zone_460m"
+    minimum_distance_zones = [
+        zone for zone in payload.protection_zones if zone.zone_code == "radar_minimum_distance_zone_460m"
+    ]
+    assert len(minimum_distance_zones) == 1
 
 
-def test_radar_protection_zone_vertical_definition_uses_station_base_reference() -> None:
+def test_radar_protection_zone_vertical_definition_matches_rule_semantics() -> None:
     payload = RadarRuleProfile().analyze(
         station=_make_station(),
         obstacles=[
@@ -375,7 +594,26 @@ def test_radar_protection_zone_vertical_definition_uses_station_base_reference()
         station_point=(0.0, 0.0),
     )
 
-    assert payload.protection_zones[0].vertical_definition == {
+    radar_a_zone = next(
+        zone for zone in payload.protection_zones if zone.zone_code == "radar_site_protection"
+    )
+    radar_b_zone = next(
+        zone
+        for zone in payload.protection_zones
+        if zone.zone_code == "radar_minimum_distance_zone_460m"
+    )
+
+    assert radar_a_zone.vertical_definition["baseReference"] == "station"
+    assert radar_a_zone.vertical_definition["mode"] == "analytic_surface"
+    assert (
+        radar_a_zone.vertical_definition["surface"]["heightModel"]["type"]
+        == "radar_site_protection_mask_angle"
+    )
+    assert (
+        radar_a_zone.vertical_definition["surface"]["heightModel"]["distanceKilometersCorrectionDivisor"]
+        == pytest.approx(16970.0)
+    )
+    assert radar_b_zone.vertical_definition == {
         "mode": "flat",
         "baseReference": "station",
         "baseHeightMeters": 0.0,
@@ -419,7 +657,7 @@ def test_radar_c_fails_when_rotating_reflector_is_inside_16km() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_rotating_reflector_16km")
     assert result.rule_code == "radar_rotating_reflector_16km"
     assert result.zone_code == "radar_rotating_reflector_zone_16km"
     assert result.standards_rule_code == "radar_rotating_reflector_16km_standard"
@@ -441,7 +679,7 @@ def test_radar_c_passes_when_rotating_reflector_is_outside_16km() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_rotating_reflector_16km")
     assert result.rule_code == "radar_rotating_reflector_16km"
     assert result.metrics["enteredProtectionZone"] is False
     assert result.is_compliant is True
@@ -459,7 +697,7 @@ def test_radar_c_treats_boundary_as_entered() -> None:
         station_point=(0.0, 0.0),
     )
 
-    result = payload.rule_results[0]
+    result = _find_rule_result(payload, "radar_rotating_reflector_16km")
     assert result.rule_code == "radar_rotating_reflector_16km"
     assert result.metrics["enteredProtectionZone"] is True
     assert result.metrics["actualDistanceMeters"] == 16000.0

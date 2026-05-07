@@ -175,6 +175,10 @@ _VOR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
 }
 
 _RADAR_STANDARD_KEYS: dict[str, tuple[str | None, str | None]] = {
+    "radar_site_protection": (
+        None,
+        "MH_PSRSSR_场地保护区",
+    ),
     "radar_minimum_distance_460m_standard": (
         None,
         "MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼",

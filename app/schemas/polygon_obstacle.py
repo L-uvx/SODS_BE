@@ -302,9 +302,14 @@ class AnalysisProtectionZoneClampRangeResponse(BaseModel):
 
 class AnalysisProtectionZoneHeightModelResponse(BaseModel):
     type: str
-    angle_degrees: float = Field(alias="angleDegrees")
+    angle_degrees: float | None = Field(alias="angleDegrees", default=None)
     distance_offset_meters: float | None = Field(
         alias="distanceOffsetMeters",
+        default=None,
+    )
+    mask_angle_degrees: float | None = Field(alias="maskAngleDegrees", default=None)
+    distance_kilometers_correction_divisor: float | None = Field(
+        alias="distanceKilometersCorrectionDivisor",
         default=None,
     )
 
@@ -449,9 +454,9 @@ class AnalysisProtectionZoneResponse(BaseModel):
     region_name: str = Field(alias="regionName")
     geometry: AnalysisProtectionZoneMultipolygonGeometryResponse
     vertical: (
-        AnalysisProtectionZoneVerticalResponse
+        AnalysisProtectionZoneSurfaceAnalyticVerticalResponse
         | AnalysisProtectionZoneAnalyticSurfaceVerticalResponse
-        | AnalysisProtectionZoneSurfaceAnalyticVerticalResponse
+        | AnalysisProtectionZoneVerticalResponse
     )
     style: AnalysisProtectionZoneStyleResponse
     properties: AnalysisProtectionZonePropertiesResponse

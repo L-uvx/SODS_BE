@@ -2398,6 +2398,7 @@ def test_get_analysis_task_result_returns_radar_station_vertical_payload() -> No
                     longitude=103.975864,
                     latitude=30.506881,
                     altitude=500.0,
+                    antenna_hag=20.0,
                     station_sub_type="PSR",
                 )
             )
@@ -2431,12 +2432,23 @@ def test_get_analysis_task_result_returns_radar_station_vertical_payload() -> No
         item
         for item in payload["protectionZones"]
         if item["stationType"] == "RADAR"
+        and item["zoneCode"] == "radar_site_protection"
     )
-    assert protection_zone["vertical"] == {
-        "mode": "flat",
-        "baseReference": "station",
-        "baseHeightMeters": 500.0,
-    }
+    assert "surface" in protection_zone["vertical"]
+    assert (
+        protection_zone["vertical"]["surface"]["heightModel"]["type"]
+        == "radar_site_protection_mask_angle"
+    )
+    assert (
+        protection_zone["vertical"]["surface"]["heightModel"]["maskAngleDegrees"]
+        == 0.25
+    )
+    assert (
+        protection_zone["vertical"]["surface"]["heightModel"][
+            "distanceKilometersCorrectionDivisor"
+        ]
+        == 16970.0
+    )
 
 
 def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() -> None:

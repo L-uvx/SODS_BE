@@ -79,6 +79,7 @@ def build_radar_circle_protection_zone(
     zone_name: str,
     station_point: tuple[float, float],
     radius_meters: float,
+    vertical_definition: dict[str, object] | None = None,
 ) -> ProtectionZoneSpec:
     local_geometry = ensure_multipolygon(
         build_circle_polygon(center_point=station_point, radius_meters=radius_meters)
@@ -93,7 +94,8 @@ def build_radar_circle_protection_zone(
         region_code="default",
         region_name="default",
         local_geometry=local_geometry,
-        vertical_definition={
+        vertical_definition=vertical_definition
+        or {
             "mode": "flat",
             "baseReference": "station",
             "baseHeightMeters": 0.0,

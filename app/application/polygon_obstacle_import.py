@@ -818,6 +818,7 @@ class PolygonObstacleImportService:
             raise ValueError("analytic surface definition is incomplete")
 
         distance_source_kind = str(distance_source.get("kind") or "point")
+        height_model_type = str(height_model.get("type") or "")
         if distance_source_kind == "front_reference_line":
             front_reference_line_points = (
                 self._build_public_front_reference_line_distance_source_points_payload(
@@ -863,6 +864,35 @@ class PolygonObstacleImportService:
                         "angleDegrees": float(height_model.get("angleDegrees", 0.0)),
                         "distanceOffsetMeters": float(
                             height_model.get("distanceOffsetMeters", 0.0)
+                        ),
+                    },
+                },
+            }
+
+        if height_model_type == "radar_site_protection_mask_angle":
+            return {
+                "mode": "analytic_surface",
+                "baseReference": vertical_definition.get("baseReference", "station"),
+                "baseHeightMeters": float(vertical_definition.get("baseHeightMeters", 0.0)),
+                "surface": {
+                    "type": str(surface.get("type") or "distance_parameterized"),
+                    "distanceSource": {
+                        "kind": distance_source_kind,
+                        "point": distance_source.get("point"),
+                    },
+                    "distanceMetric": "radial",
+                    "clampRange": {
+                        "startMeters": float(clamp_range.get("startMeters", 0.0)),
+                        "endMeters": float(clamp_range.get("endMeters", 0.0)),
+                    },
+                    "heightModel": {
+                        "type": "radar_site_protection_mask_angle",
+                        "maskAngleDegrees": float(height_model.get("maskAngleDegrees", 0.0)),
+                        "distanceOffsetMeters": float(
+                            height_model.get("distanceOffsetMeters", 0.0)
+                        ),
+                        "distanceKilometersCorrectionDivisor": float(
+                            height_model.get("distanceKilometersCorrectionDivisor", 16970.0)
                         ),
                     },
                 },

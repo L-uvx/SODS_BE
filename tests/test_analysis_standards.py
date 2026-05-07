@@ -298,6 +298,20 @@ def test_build_rule_standards_returns_radar_b_mapping() -> None:
     )
 
 
+def test_build_rule_standards_returns_radar_a_mh_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="RADAR",
+        rule_name="radar_site_protection",
+        region_code="default",
+    )
+
+    assert standards.gb is None
+    assert standards.mh == AnalysisStandardReference(
+        code="MH_PSRSSR_场地保护区",
+        text=load_standard_config_entries()["MH_PSRSSR_场地保护区"],
+    )
+
+
 def test_build_rule_standards_returns_radar_c_mapping() -> None:
     standards = build_rule_standards(
         station_type="RADAR",
