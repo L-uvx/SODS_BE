@@ -373,3 +373,53 @@ def test_station_rule_dispatcher_dispatches_radar_by_station_type() -> None:
         "radar_minimum_distance_zone_460m",
         "radar_rotating_reflector_zone_16km",
     }
+
+
+def test_station_rule_dispatcher_dispatches_surface_detection_radar_by_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    radar_station = type(
+        "Station",
+        (),
+        {
+            "id": 106,
+            "name": "Surface Detection RADAR Station",
+            "station_type": "Surface_Detection_Radar",
+            "longitude": 120.0,
+            "latitude": 30.0,
+            "altitude": 500.0,
+            "station_sub_type": "PSR",
+            "runway_no": "18",
+        },
+    )()
+    obstacles = [
+        {
+            "obstacleId": 1,
+            "name": "Building A",
+            "rawObstacleType": "建筑物/构筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 520.0,
+            "localGeometry": {"type": "Point", "coordinates": [0.0, 150.0]},
+            "geometry": {"type": "Point", "coordinates": [120.0, 30.0]},
+        },
+    ]
+    runways = [
+        {
+            "runNumber": "18",
+            "localCenterPoint": (0.0, 300.0),
+            "directionDegrees": 180.0,
+            "lengthMeters": 100.0,
+            "widthMeters": 45.0,
+        }
+    ]
+
+    payload = dispatcher.analyze_station(
+        station=radar_station,
+        obstacles=obstacles,
+        station_point=(0.0, 0.0),
+        runways=runways,
+    )
+
+    assert {result.rule_code for result in payload.rule_results} == {
+        "surface_detection_radar_runway_triangle",
+        "radar_minimum_distance_460m",
+    }

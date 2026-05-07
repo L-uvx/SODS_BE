@@ -59,6 +59,7 @@ def test_resolve_protection_zone_style_explicitly_maps_all_current_protection_zo
         ("radar_minimum_distance_zone_1200m", "default"),
         ("radar_minimum_distance_zone_1610m", "default"),
         ("radar_rotating_reflector_zone_16km", "default"),
+        ("surface_detection_radar_runway_triangle", "default"),
         ("vor_reflector_mask_area", "default"),
     }
 
@@ -171,6 +172,10 @@ def test_resolve_protection_zone_name_returns_radar_zone_names() -> None:
         resolve_protection_zone_name(zone_code="radar_rotating_reflector_zone_16km")
         == "Radar 16KM rotating reflector zone"
     )
+    assert (
+        resolve_protection_zone_name(zone_code="surface_detection_radar_runway_triangle")
+        == "场监雷达跑道三角区域"
+    )
 
 
 def test_resolve_protection_zone_style_returns_radar_a_style() -> None:
@@ -182,3 +187,14 @@ def test_resolve_protection_zone_style_returns_radar_a_style() -> None:
     assert style["colorKey"] == "violet_purple"
     assert style["fill"] == "rgba(167, 139, 250, 0.5)"
     assert style["stroke"] == "rgba(167, 139, 250, 0.9)"
+
+
+def test_resolve_protection_zone_style_returns_surface_detection_radar_triangle_style() -> None:
+    style = resolve_protection_zone_style(
+        zone_code="surface_detection_radar_runway_triangle",
+        region_code="default",
+    )
+
+    assert style["colorKey"] == "pink_rose"
+    assert style["fill"] == "rgba(244, 114, 182, 0.5)"
+    assert style["stroke"] == "rgba(244, 114, 182, 0.9)"

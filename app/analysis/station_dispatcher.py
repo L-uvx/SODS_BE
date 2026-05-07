@@ -7,6 +7,7 @@ from app.analysis.rules.loc import LocRuleProfile
 from app.analysis.rules.mb import MbRuleProfile
 from app.analysis.rules.ndb import NdbRuleProfile
 from app.analysis.rules.radar import RadarRuleProfile
+from app.analysis.rules.surface_detection_radar import SurfaceDetectionRadarRuleProfile
 from app.analysis.rules.vor import VorRuleProfile
 
 
@@ -25,6 +26,7 @@ class StationAnalysisDispatcher:
         self._gp_profile = GpRuleProfile()
         self._vor_profile = VorRuleProfile()
         self._radar_profile = RadarRuleProfile()
+        self._surface_detection_radar_profile = SurfaceDetectionRadarRuleProfile()
 
     # 按台站类型执行分析并返回规则结果与保护区集合。
     def analyze_station(
@@ -96,6 +98,17 @@ class StationAnalysisDispatcher:
                 station=station,
                 obstacles=obstacles,
                 station_point=station_point,
+            )
+            return StationAnalysisPayload(
+                rule_results=payload.rule_results,
+                protection_zones=payload.protection_zones,
+            )
+        if station.station_type == "Surface_Detection_Radar":
+            payload = self._surface_detection_radar_profile.analyze(
+                station=station,
+                obstacles=obstacles,
+                station_point=station_point,
+                runways=runways,
             )
             return StationAnalysisPayload(
                 rule_results=payload.rule_results,

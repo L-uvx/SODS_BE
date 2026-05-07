@@ -2780,7 +2780,7 @@ def test_run_analysis_task_skips_station_without_coordinates() -> None:
     assert payload["protectionZones"] == []
 
 
-def test_run_analysis_task_skips_unsupported_station_type() -> None:
+def test_run_analysis_task_returns_empty_for_surface_detection_radar_without_matching_runway() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)
 
