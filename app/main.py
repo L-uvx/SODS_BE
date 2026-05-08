@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.data_management import router as data_management_router
 from app.api.polygon_obstacle import point_router, router as polygon_obstacle_router
 from app.application.polygon_obstacle_import_cleanup import cleanup_export_storage
 from app.application.polygon_obstacle_import_cleanup import cleanup_import_storage
@@ -45,6 +46,7 @@ runtime.dispatch_analysis_task = app.state.dispatch_analysis_task
 runtime.dispatch_export_task = app.state.dispatch_export_task
 app.include_router(polygon_obstacle_router)
 app.include_router(point_router)
+app.include_router(data_management_router)
 
 
 # 返回服务健康状态。
