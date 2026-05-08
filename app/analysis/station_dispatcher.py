@@ -2,12 +2,15 @@ from dataclasses import dataclass
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
+from app.analysis.rules.adsb import AdsbRuleProfile
 from app.analysis.rules.gp import GpRuleProfile
+from app.analysis.rules.hf import HfRuleProfile
 from app.analysis.rules.loc import LocRuleProfile
 from app.analysis.rules.mb import MbRuleProfile
 from app.analysis.rules.ndb import NdbRuleProfile
 from app.analysis.rules.radar import RadarRuleProfile
 from app.analysis.rules.surface_detection_radar import SurfaceDetectionRadarRuleProfile
+from app.analysis.rules.vhf import VhfRuleProfile
 from app.analysis.rules.vor import VorRuleProfile
 from app.analysis.rules.weather_radar import WeatherRadarRuleProfile
 from app.analysis.rules.wind_radar import WindRadarRuleProfile
@@ -22,11 +25,14 @@ class StationAnalysisPayload:
 class StationAnalysisDispatcher:
     # 初始化按台站类型分发的分析入口。
     def __init__(self) -> None:
+        self._adsb_profile = AdsbRuleProfile()
         self._ndb_profile = NdbRuleProfile()
         self._loc_profile = LocRuleProfile()
+        self._hf_profile = HfRuleProfile()
         self._mb_profile = MbRuleProfile()
         self._gp_profile = GpRuleProfile()
         self._vor_profile = VorRuleProfile()
+        self._vhf_profile = VhfRuleProfile()
         self._radar_profile = RadarRuleProfile()
         self._weather_radar_profile = WeatherRadarRuleProfile()
         self._wind_radar_profile = WindRadarRuleProfile()
@@ -41,6 +47,17 @@ class StationAnalysisDispatcher:
         station_point: tuple[float, float],
         runways: list[dict[str, object]],
     ) -> StationAnalysisPayload:
+        if station.station_type == "ADS_B":
+            payload = self._adsb_profile.analyze(
+                station=station,
+                obstacles=obstacles,
+                station_point=station_point,
+            )
+            return StationAnalysisPayload(
+                rule_results=payload.rule_results,
+                protection_zones=payload.protection_zones,
+            )
+
         if station.station_type == "LOC":
             payload = self._loc_profile.analyze(
                 station=station,
@@ -55,6 +72,17 @@ class StationAnalysisDispatcher:
 
         if station.station_type == "NDB":
             payload = self._ndb_profile.analyze(
+                station=station,
+                obstacles=obstacles,
+                station_point=station_point,
+            )
+            return StationAnalysisPayload(
+                rule_results=payload.rule_results,
+                protection_zones=payload.protection_zones,
+            )
+
+        if station.station_type == "HF":
+            payload = self._hf_profile.analyze(
                 station=station,
                 obstacles=obstacles,
                 station_point=station_point,
@@ -89,6 +117,16 @@ class StationAnalysisDispatcher:
             )
         if station.station_type == "VOR":
             payload = self._vor_profile.analyze(
+                station=station,
+                obstacles=obstacles,
+                station_point=station_point,
+            )
+            return StationAnalysisPayload(
+                rule_results=payload.rule_results,
+                protection_zones=payload.protection_zones,
+            )
+        if station.station_type == "VHF":
+            payload = self._vhf_profile.analyze(
                 station=station,
                 obstacles=obstacles,
                 station_point=station_point,

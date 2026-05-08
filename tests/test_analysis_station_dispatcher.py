@@ -314,6 +314,148 @@ def test_dispatcher_vor_with_obstacle() -> None:
     }
 
 
+def test_station_rule_dispatcher_dispatches_vhf_by_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    vhf_station = type(
+        "Station",
+        (),
+        {
+            "id": 105,
+            "name": "VHF Station",
+            "station_type": "VHF",
+            "longitude": 120.0,
+            "latitude": 30.0,
+            "altitude": 500.0,
+        },
+    )()
+    obstacle = {
+        "obstacleId": 1,
+        "name": "Obstacle A",
+        "rawObstacleType": "调频广播1kW（含）以下",
+        "globalObstacleCategory": "fm_broadcast_1kw_below",
+        "topElevation": 520.0,
+        "localGeometry": {
+            "type": "Point",
+            "coordinates": [900.0, 0.0],
+        },
+        "geometry": {
+            "type": "Point",
+            "coordinates": [900.0, 0.0],
+        },
+    }
+
+    payload = dispatcher.analyze_station(
+        station=vhf_station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[],
+    )
+
+    assert len(payload.rule_results) == 1
+    assert len(payload.protection_zones) == 1
+    assert {result.rule_code for result in payload.rule_results} == {
+        "vhf_minimum_distance_1km",
+    }
+    assert {zone.rule_code for zone in payload.protection_zones} == {
+        "vhf_minimum_distance_1km",
+    }
+
+
+def test_station_rule_dispatcher_dispatches_hf_by_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    hf_station = type(
+        "Station",
+        (),
+        {
+            "id": 106,
+            "name": "HF Station",
+            "station_type": "HF",
+            "longitude": 120.0,
+            "latitude": 30.0,
+            "altitude": 500.0,
+        },
+    )()
+    obstacle = {
+        "obstacleId": 1,
+        "name": "Obstacle A",
+        "rawObstacleType": "工、科、医射频设备",
+        "globalObstacleCategory": "industrial_scientific_medical_rf_equipment",
+        "topElevation": 520.0,
+        "localGeometry": {
+            "type": "Point",
+            "coordinates": [4900.0, 0.0],
+        },
+        "geometry": {
+            "type": "Point",
+            "coordinates": [4900.0, 0.0],
+        },
+    }
+
+    payload = dispatcher.analyze_station(
+        station=hf_station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[],
+    )
+
+    assert len(payload.rule_results) == 1
+    assert len(payload.protection_zones) == 1
+    assert {result.rule_code for result in payload.rule_results} == {
+        "hf_minimum_distance_5km",
+    }
+    assert {zone.rule_code for zone in payload.protection_zones} == {
+        "hf_minimum_distance_5km",
+    }
+
+
+def test_station_rule_dispatcher_dispatches_ads_b_by_station_type() -> None:
+    dispatcher = StationAnalysisDispatcher()
+    ads_b_station = type(
+        "Station",
+        (),
+        {
+            "id": 301,
+            "name": "ADS-B Station",
+            "station_type": "ADS_B",
+            "longitude": 120.0,
+            "latitude": 30.0,
+            "altitude": 500.0,
+        },
+    )()
+    obstacle = {
+        "obstacleId": 1,
+        "name": "Obstacle A",
+        "rawObstacleType": "道路/公路",
+        "globalObstacleCategory": "road",
+        "topElevation": 520.0,
+        "localGeometry": {
+            "type": "Point",
+            "coordinates": [600.0, 0.0],
+        },
+        "geometry": {
+            "type": "Point",
+            "coordinates": [120.0, 30.0],
+        },
+    }
+
+    payload = dispatcher.analyze_station(
+        station=ads_b_station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[],
+    )
+
+    assert [result.rule_code for result in payload.rule_results] == [
+        "adsb_minimum_distance_0_7km",
+    ]
+    assert [result.standards_rule_code for result in payload.rule_results] == [
+        "adsb_minimum_distance_0_7km_road",
+    ]
+    assert [zone.rule_code for zone in payload.protection_zones] == [
+        "adsb_minimum_distance_0_7km",
+    ]
+
+
 def test_station_rule_dispatcher_dispatches_radar_by_station_type() -> None:
     dispatcher = StationAnalysisDispatcher()
     radar_station = type(
@@ -404,8 +546,8 @@ def test_station_rule_dispatcher_dispatches_weather_radar_by_station_type() -> N
         {
             "obstacleId": 2,
             "name": "FM A",
-            "rawObstacleType": "调频广播",
-            "globalObstacleCategory": "fm_broadcast",
+            "rawObstacleType": "调频广播1kW（含）以下",
+            "globalObstacleCategory": "fm_broadcast_1kw_below",
             "topElevation": 20.0,
             "localGeometry": {"type": "Point", "coordinates": [700.0, 0.0]},
             "geometry": {"type": "Point", "coordinates": [120.1, 30.1]},

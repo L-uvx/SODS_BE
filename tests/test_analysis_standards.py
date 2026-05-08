@@ -218,6 +218,37 @@ def test_standard_mappings_register_gp_run_area_critical_and_sensitive_codes() -
     )
 
 
+def test_build_rule_standards_returns_ads_b_ap_only_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="ADS_B",
+        rule_name="adsb_minimum_distance_0_7km_road",
+        region_code="default",
+    )
+
+    assert standards.gb == AnalysisStandardReference(
+        code="AP_ADS_B_0.7km平面防护间距要求_公路",
+        text=load_standard_config_entries()["AP_ADS_B_0.7km平面防护间距要求_公路"],
+    )
+    assert standards.mh is None
+
+
+def test_standard_mappings_register_ads_b_codes_by_station_type() -> None:
+    ads_b_standard_keys = _STANDARD_KEYS_BY_STATION_TYPE["ADS_B"]
+
+    assert ads_b_standard_keys["adsb_minimum_distance_0_5km_non_electrified_railway"] == (
+        "AP_ADS_B_0.5km平面防护间距要求_非电气化铁路",
+        None,
+    )
+    assert ads_b_standard_keys["adsb_minimum_distance_0_7km_road"] == (
+        "AP_ADS_B_0.7km平面防护间距要求_公路",
+        None,
+    )
+    assert ads_b_standard_keys["adsb_minimum_distance_1_2km_high_frequency_welding_machine"] == (
+        "AP_ADS_B_1.2km平面防护间距要求_高频热合机",
+        None,
+    )
+
+
 def test_standard_mappings_are_registered_by_station_type() -> None:
     assert "NDB" in _STANDARD_KEYS_BY_STATION_TYPE
     assert "LOC" in _STANDARD_KEYS_BY_STATION_TYPE

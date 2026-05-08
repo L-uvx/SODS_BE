@@ -60,7 +60,12 @@ def test_weather_radar_450m_applies_to_non_special_categories() -> None:
 def test_weather_radar_450m_skips_special_interference_categories() -> None:
     payload = WeatherRadarRuleProfile().analyze(
         station=_make_station(),
-        obstacles=[_make_obstacle(category="fm_broadcast", local_geometry=_point_geometry(300.0, 0.0))],
+        obstacles=[
+            _make_obstacle(
+                category="fm_broadcast_1kw_below",
+                local_geometry=_point_geometry(300.0, 0.0),
+            )
+        ],
         station_point=(0.0, 0.0),
     )
 
@@ -70,7 +75,12 @@ def test_weather_radar_450m_skips_special_interference_categories() -> None:
 def test_weather_radar_800m_applies_to_special_interference_categories() -> None:
     payload = WeatherRadarRuleProfile().analyze(
         station=_make_station(),
-        obstacles=[_make_obstacle(category="fm_broadcast", local_geometry=_point_geometry(700.0, 0.0))],
+        obstacles=[
+            _make_obstacle(
+                category="fm_broadcast_1kw_below",
+                local_geometry=_point_geometry(700.0, 0.0),
+            )
+        ],
         station_point=(0.0, 0.0),
     )
 
@@ -102,7 +112,12 @@ def test_weather_radar_450m_boundary_distance_is_compliant() -> None:
 def test_weather_radar_800m_boundary_distance_is_compliant() -> None:
     payload = WeatherRadarRuleProfile().analyze(
         station=_make_station(),
-        obstacles=[_make_obstacle(category="fm_broadcast", local_geometry=_point_geometry(800.0, 0.0))],
+        obstacles=[
+            _make_obstacle(
+                category="fm_broadcast_above_1kw",
+                local_geometry=_point_geometry(800.0, 0.0),
+            )
+        ],
         station_point=(0.0, 0.0),
     )
 
@@ -123,7 +138,12 @@ def test_weather_radar_1deg_skips_obstacle_inside_450m() -> None:
 def test_weather_radar_1deg_skips_special_category_between_450m_and_800m() -> None:
     payload = WeatherRadarRuleProfile().analyze(
         station=_make_station(),
-        obstacles=[_make_obstacle(category="fm_broadcast", local_geometry=_point_geometry(700.0, 0.0))],
+        obstacles=[
+            _make_obstacle(
+                category="fm_broadcast_above_1kw",
+                local_geometry=_point_geometry(700.0, 0.0),
+            )
+        ],
         station_point=(0.0, 0.0),
     )
 

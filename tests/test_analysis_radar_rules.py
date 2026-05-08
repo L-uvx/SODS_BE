@@ -369,10 +369,15 @@ def test_radar_b_uses_700m_for_110kv_substation() -> None:
     assert result.is_compliant is False
 
 
-def test_radar_b_uses_800m_for_fm_broadcast() -> None:
+def test_radar_b_uses_800m_for_high_power_fm_broadcast() -> None:
     payload = RadarRuleProfile().analyze(
         station=_make_station(),
-        obstacles=[_make_obstacle(category="fm_broadcast", local_geometry=_point_geometry(850.0, 0.0))],
+        obstacles=[
+            _make_obstacle(
+                category="fm_broadcast_above_1kw",
+                local_geometry=_point_geometry(850.0, 0.0),
+            )
+        ],
         station_point=(0.0, 0.0),
     )
 

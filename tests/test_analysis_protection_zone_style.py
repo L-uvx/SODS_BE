@@ -225,3 +225,34 @@ def test_resolve_protection_zone_style_returns_surface_detection_radar_triangle_
     assert style["colorKey"] == "pink_rose"
     assert style["fill"] == "rgba(244, 114, 182, 0.5)"
     assert style["stroke"] == "rgba(244, 114, 182, 0.9)"
+
+
+def test_resolve_protection_zone_name_returns_ads_b_zone_names() -> None:
+    assert (
+        resolve_protection_zone_name(zone_code="adsb_minimum_distance_0_5km")
+        == "ADS-B 0.5km最小间距"
+    )
+    assert (
+        resolve_protection_zone_name(zone_code="adsb_minimum_distance_1_2km")
+        == "ADS-B 1.2km最小间距"
+    )
+
+
+def test_resolve_protection_zone_style_maps_ads_b_zones_to_explicit_palette_keys() -> None:
+    expected_color_keys = {
+        "adsb_minimum_distance_0_5km": "sky_blue",
+        "adsb_minimum_distance_0_7km": "teal_green",
+        "adsb_minimum_distance_0_8km": "amber_orange",
+        "adsb_minimum_distance_1km": "violet_purple",
+        "adsb_minimum_distance_1_2km": "danger_red",
+    }
+
+    resolved_color_keys = {
+        zone_code: resolve_protection_zone_style(
+            zone_code=zone_code,
+            region_code="default",
+        )["colorKey"]
+        for zone_code in expected_color_keys
+    }
+
+    assert resolved_color_keys == expected_color_keys

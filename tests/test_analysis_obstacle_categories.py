@@ -46,6 +46,11 @@ def test_normalize_short_wave_power_bands() -> None:
     assert normalize_obstacle_type("短波发射台（其他）") == "radio_emitter_short_wave_other"
 
 
+def test_normalize_fm_broadcast_power_bands() -> None:
+    assert normalize_obstacle_type("调频广播1kW（含）以下") == "fm_broadcast_1kw_below"
+    assert normalize_obstacle_type("调频广播1kW以上") == "fm_broadcast_above_1kw"
+
+
 import pytest
 
 

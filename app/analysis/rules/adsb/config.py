@@ -1,0 +1,61 @@
+ADS_B_RULE_CODES_IN_BIND_ORDER = [
+    "adsb_minimum_distance_0_5km",
+    "adsb_minimum_distance_0_7km",
+    "adsb_minimum_distance_0_8km",
+    "adsb_minimum_distance_1km",
+    "adsb_minimum_distance_1_2km",
+]
+
+ADS_B_RULE_CODE_BY_CATEGORY = {
+    "railway_non_electrified": "adsb_minimum_distance_0_5km",
+    "high_frequency_furnace_100kw_below": "adsb_minimum_distance_0_5km",
+    "industrial_electric_welding_10kw_below": "adsb_minimum_distance_0_5km",
+    "agricultural_power_equipment_1kw_below": "adsb_minimum_distance_0_5km",
+    "power_line_high_voltage_110kv": "adsb_minimum_distance_0_7km",
+    "high_voltage_substation_110kv": "adsb_minimum_distance_0_7km",
+    "railway_electrified": "adsb_minimum_distance_0_7km",
+    "road": "adsb_minimum_distance_0_7km",
+    "power_line_high_voltage_220kv": "adsb_minimum_distance_0_8km",
+    "power_line_high_voltage_330kv": "adsb_minimum_distance_0_8km",
+    "high_voltage_substation_220kv_or_330kv": "adsb_minimum_distance_0_8km",
+    "power_line_high_voltage_500kv_and_above": "adsb_minimum_distance_1km",
+    "uhf_therapy_equipment_1kw_below": "adsb_minimum_distance_1km",
+    "high_voltage_substation_500kv_and_above": "adsb_minimum_distance_1_2km",
+    "high_frequency_welding_machine": "adsb_minimum_distance_1_2km",
+}
+
+ADS_B_BOUNDARY_MODE_BY_CATEGORY = {
+    "railway_non_electrified": "lte",
+    "high_frequency_furnace_100kw_below": "lt",
+    "industrial_electric_welding_10kw_below": "lt",
+    "agricultural_power_equipment_1kw_below": "lt",
+    "power_line_high_voltage_110kv": "lte",
+    "high_voltage_substation_110kv": "lt",
+    "railway_electrified": "lt",
+    "road": "lt",
+    "power_line_high_voltage_220kv": "lte",
+    "power_line_high_voltage_330kv": "lte",
+    "high_voltage_substation_220kv_or_330kv": "lt",
+    "power_line_high_voltage_500kv_and_above": "lt",
+    "uhf_therapy_equipment_1kw_below": "lt",
+    "high_voltage_substation_500kv_and_above": "lte",
+    "high_frequency_welding_machine": "lt",
+}
+
+ADS_B_STANDARDS_RULE_CODE_BY_CATEGORY = {
+    "railway_non_electrified": "adsb_minimum_distance_0_5km_non_electrified_railway",
+    "high_frequency_furnace_100kw_below": "adsb_minimum_distance_0_5km_high_frequency_furnace",
+    "industrial_electric_welding_10kw_below": "adsb_minimum_distance_0_5km_industrial_electric_welding",
+    "agricultural_power_equipment_1kw_below": "adsb_minimum_distance_0_5km_agricultural_power_equipment",
+    "power_line_high_voltage_110kv": "adsb_minimum_distance_0_7km_110kv_power_line",
+    "high_voltage_substation_110kv": "adsb_minimum_distance_0_7km_110kv_substation",
+    "railway_electrified": "adsb_minimum_distance_0_7km_electrified_railway",
+    "road": "adsb_minimum_distance_0_7km_road",
+    "power_line_high_voltage_220kv": "adsb_minimum_distance_0_8km_220_330kv_power_line",
+    "power_line_high_voltage_330kv": "adsb_minimum_distance_0_8km_220_330kv_power_line",
+    "high_voltage_substation_220kv_or_330kv": "adsb_minimum_distance_0_8km_220_330kv_substation",
+    "power_line_high_voltage_500kv_and_above": "adsb_minimum_distance_1km_500kv_power_line",
+    "uhf_therapy_equipment_1kw_below": "adsb_minimum_distance_1km_uhf_therapy_equipment",
+    "high_voltage_substation_500kv_and_above": "adsb_minimum_distance_1_2km_500kv_substation",
+    "high_frequency_welding_machine": "adsb_minimum_distance_1_2km_high_frequency_welding_machine",
+}
