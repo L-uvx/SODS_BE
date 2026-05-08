@@ -256,6 +256,7 @@ def test_radar_a_protection_zone_uses_analytic_surface_vertical_definition() -> 
     vertical_definition = protection_zone.vertical_definition
     assert vertical_definition["mode"] != "flat"
     assert vertical_definition["mode"] == "analytic_surface"
+    assert vertical_definition["surface"]["type"] == "radial_cone_surface"
     assert (
         vertical_definition["surface"]["heightModel"]["type"]
         == "radar_site_protection_mask_angle"
@@ -292,7 +293,7 @@ def test_radar_a_public_vertical_payload_exposes_mask_angle_correction_model() -
     )
 
     assert payload["mode"] == "analytic_surface"
-    assert payload["surface"]["type"] == "distance_parameterized"
+    assert payload["surface"]["type"] == "radial_cone_surface"
     assert payload["surface"]["heightModel"]["type"] == "radar_site_protection_mask_angle"
     assert payload["surface"]["heightModel"]["maskAngleDegrees"] == pytest.approx(0.25)
     assert (

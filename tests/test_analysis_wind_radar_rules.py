@@ -66,5 +66,6 @@ def test_wind_radar_15deg_vertical_payload_uses_15deg() -> None:
 
     zone = payload.protection_zones[0]
     assert zone.vertical_definition["mode"] == "analytic_surface"
+    assert zone.vertical_definition["surface"]["type"] == "radial_cone_surface"
     assert zone.vertical_definition["surface"]["heightModel"]["type"] == "angle_linear_rise"
     assert zone.vertical_definition["surface"]["heightModel"]["angleDegrees"] == 15.0

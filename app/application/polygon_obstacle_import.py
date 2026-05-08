@@ -835,7 +835,7 @@ class PolygonObstacleImportService:
                     vertical_definition.get("baseHeightMeters", 0.0)
                 ),
                 "surface": {
-                    "type": "distance_parameterized",
+                    "type": self._resolve_public_analytic_surface_type(surface),
                     "distanceSource": {
                         "kind": "front_reference_line",
                         **front_reference_line_points,
@@ -875,7 +875,7 @@ class PolygonObstacleImportService:
                 "baseReference": vertical_definition.get("baseReference", "station"),
                 "baseHeightMeters": float(vertical_definition.get("baseHeightMeters", 0.0)),
                 "surface": {
-                    "type": str(surface.get("type") or "distance_parameterized"),
+                    "type": self._resolve_public_analytic_surface_type(surface),
                     "distanceSource": {
                         "kind": distance_source_kind,
                         "point": distance_source.get("point"),
@@ -903,7 +903,7 @@ class PolygonObstacleImportService:
             "baseReference": vertical_definition.get("baseReference", "station"),
             "baseHeightMeters": float(vertical_definition.get("baseHeightMeters", 0.0)),
             "surface": {
-                "type": "distance_parameterized",
+                "type": self._resolve_public_analytic_surface_type(surface),
                 "distanceSource": {
                     "kind": distance_source_kind,
                     "point": distance_source.get("point"),
@@ -922,6 +922,15 @@ class PolygonObstacleImportService:
                 },
             },
         }
+
+    # 统一解析对外 analytic surface 类型，避免各分支漂移。
+    def _resolve_public_analytic_surface_type(
+        self,
+        surface: dict[str, object],
+    ) -> str:
+        if surface.get("type") == "radial_cone_surface":
+            return "radial_cone_surface"
+        return "distance_parameterized"
 
     # 将局部平面控制点反投影为对外 WGS84 点坐标。
     def _build_public_protection_zone_surface_point_payload(

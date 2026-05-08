@@ -161,5 +161,6 @@ def test_weather_radar_1deg_protection_zone_uses_analytic_surface_vertical_defin
     protection_zone = next(zone for zone in payload.protection_zones if zone.rule_code == "weather_radar_elevation_angle_1deg")
     vertical_definition = protection_zone.vertical_definition
     assert vertical_definition["mode"] == "analytic_surface"
+    assert vertical_definition["surface"]["type"] == "radial_cone_surface"
     assert vertical_definition["surface"]["heightModel"]["type"] == "angle_linear_rise"
     assert vertical_definition["surface"]["heightModel"]["angleDegrees"] == 1.0

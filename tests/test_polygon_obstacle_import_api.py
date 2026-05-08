@@ -1355,12 +1355,14 @@ def test_get_analysis_task_result_returns_radial_band_analytic_surface_protectio
                 "type": "angle_linear_rise",
                 "angleDegrees": 3.0,
                 "distanceOffsetMeters": 0.0,
+                "maskAngleDegrees": None,
+                "distanceKilometersCorrectionDivisor": None,
             },
         },
     }
     assert radial_band_zone["style"] == {
         "colorKey": "emerald_green",
-        "fill": "rgba(16, 185, 129, 0.25)",
+        "fill": "rgba(16, 185, 129, 0.5)",
         "stroke": "rgba(16, 185, 129, 0.9)",
     }
     assert radial_band_zone["renderGeometry"] is None
@@ -2003,6 +2005,167 @@ def test_public_flat_vertical_payload_uses_station_altitude_for_station_base_ref
     }
 
 
+def test_public_analytic_surface_payload_preserves_radial_cone_surface_type() -> None:
+    from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+    service = PolygonObstacleImportService(MagicMock())
+
+    payload = service._build_public_protection_zone_vertical_payload(
+        projector=MagicMock(),
+        vertical_definition={
+            "mode": "analytic_surface",
+            "baseReference": "station",
+            "baseHeightMeters": 500.0,
+            "surface": {
+                "type": "radial_cone_surface",
+                "distanceSource": {
+                    "kind": "point",
+                    "point": [104.123456, 30.123456],
+                },
+                "clampRange": {
+                    "startMeters": 0.0,
+                    "endMeters": 1800.0,
+                },
+                "heightModel": {
+                    "type": "angle_linear_rise",
+                    "angleDegrees": 1.0,
+                    "distanceOffsetMeters": 0.0,
+                },
+            },
+        },
+        station_altitude_meters=500.0,
+    )
+
+    assert payload == {
+        "mode": "analytic_surface",
+        "baseReference": "station",
+        "baseHeightMeters": 500.0,
+        "surface": {
+            "type": "radial_cone_surface",
+            "distanceSource": {
+                "kind": "point",
+                "point": [104.123456, 30.123456],
+            },
+            "distanceMetric": "radial",
+            "clampRange": {
+                "startMeters": 0.0,
+                "endMeters": 1800.0,
+            },
+            "heightModel": {
+                "type": "angle_linear_rise",
+                "angleDegrees": 1.0,
+                "distanceOffsetMeters": 0.0,
+            },
+        },
+    }
+
+
+def test_public_analytic_surface_payload_falls_back_for_unsupported_surface_type() -> None:
+    from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+    service = PolygonObstacleImportService(MagicMock())
+
+    payload = service._build_public_protection_zone_vertical_payload(
+        projector=MagicMock(),
+        vertical_definition={
+            "mode": "analytic_surface",
+            "baseReference": "station",
+            "baseHeightMeters": 500.0,
+            "surface": {
+                "type": "unsupported_internal_surface",
+                "distanceSource": {
+                    "kind": "point",
+                    "point": [104.123456, 30.123456],
+                },
+                "clampRange": {
+                    "startMeters": 0.0,
+                    "endMeters": 1800.0,
+                },
+                "heightModel": {
+                    "type": "angle_linear_rise",
+                    "angleDegrees": 1.0,
+                    "distanceOffsetMeters": 0.0,
+                },
+            },
+        },
+        station_altitude_meters=500.0,
+    )
+
+    assert payload["surface"]["type"] == "distance_parameterized"
+
+
+def test_public_radar_mask_angle_payload_preserves_radial_cone_surface_type() -> None:
+    from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+    service = PolygonObstacleImportService(MagicMock())
+
+    payload = service._build_public_protection_zone_vertical_payload(
+        projector=MagicMock(),
+        vertical_definition={
+            "mode": "analytic_surface",
+            "baseReference": "station",
+            "baseHeightMeters": 500.0,
+            "surface": {
+                "type": "radial_cone_surface",
+                "distanceSource": {
+                    "kind": "point",
+                    "point": [104.123456, 30.123456],
+                },
+                "clampRange": {
+                    "startMeters": 0.0,
+                    "endMeters": 30000.0,
+                },
+                "heightModel": {
+                    "type": "radar_site_protection_mask_angle",
+                    "maskAngleDegrees": 0.25,
+                    "distanceOffsetMeters": 0.0,
+                    "distanceKilometersCorrectionDivisor": 16970.0,
+                },
+            },
+        },
+        station_altitude_meters=500.0,
+    )
+
+    assert payload["surface"]["type"] == "radial_cone_surface"
+    assert payload["surface"]["heightModel"]["type"] == "radar_site_protection_mask_angle"
+
+
+def test_public_radar_mask_angle_payload_falls_back_for_unsupported_surface_type() -> None:
+    from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+    service = PolygonObstacleImportService(MagicMock())
+
+    payload = service._build_public_protection_zone_vertical_payload(
+        projector=MagicMock(),
+        vertical_definition={
+            "mode": "analytic_surface",
+            "baseReference": "station",
+            "baseHeightMeters": 500.0,
+            "surface": {
+                "type": "unsupported_internal_surface",
+                "distanceSource": {
+                    "kind": "point",
+                    "point": [104.123456, 30.123456],
+                },
+                "clampRange": {
+                    "startMeters": 0.0,
+                    "endMeters": 30000.0,
+                },
+                "heightModel": {
+                    "type": "radar_site_protection_mask_angle",
+                    "maskAngleDegrees": 0.25,
+                    "distanceOffsetMeters": 0.0,
+                    "distanceKilometersCorrectionDivisor": 16970.0,
+                },
+            },
+        },
+        station_altitude_meters=500.0,
+    )
+
+    assert payload["surface"]["type"] == "distance_parameterized"
+    assert payload["surface"]["heightModel"]["type"] == "radar_site_protection_mask_angle"
+
+
 def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_3() -> (
     None
 ):
@@ -2375,7 +2538,7 @@ def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_st
     assert ("NDB", "multipolygon") in protection_zone_shapes
 
 
-def test_get_analysis_task_result_returns_radar_station_vertical_payload() -> None:
+def test_get_analysis_task_result_returns_radar_site_protection_vertical_payload() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)
 
@@ -2435,6 +2598,10 @@ def test_get_analysis_task_result_returns_radar_station_vertical_payload() -> No
         and item["zoneCode"] == "radar_site_protection"
     )
     assert "surface" in protection_zone["vertical"]
+    assert (
+        protection_zone["vertical"]["surface"]["type"]
+        == "radial_cone_surface"
+    )
     assert (
         protection_zone["vertical"]["surface"]["heightModel"]["type"]
         == "radar_site_protection_mask_angle"

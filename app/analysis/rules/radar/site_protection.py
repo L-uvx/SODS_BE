@@ -160,7 +160,7 @@ class RadarSiteProtectionRule(RadarRule):
                     "baseReference": "station",
                     "baseHeightMeters": base_height_meters,
                     "surface": {
-                        "type": "distance_parameterized",
+                        "type": "radial_cone_surface",
                         "distanceSource": {
                             "kind": "point",
                             "point": [

@@ -110,6 +110,7 @@ class WeatherRadarElevationAngle1degRule(WeatherRadarRule):
                     "baseReference": "station",
                     "baseHeightMeters": base_height_meters,
                     "surface": {
+                        "type": "radial_cone_surface",
                         "distanceSource": {
                             "kind": "point",
                             "point": [

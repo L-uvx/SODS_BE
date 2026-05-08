@@ -107,6 +107,7 @@ class WindRadarElevationAngle15degRule(WindRadarRule):
                     "baseReference": "station",
                     "baseHeightMeters": base_height_meters,
                     "surface": {
+                        "type": "radial_cone_surface",
                         "distanceSource": {
                             "kind": "point",
                             "point": [
