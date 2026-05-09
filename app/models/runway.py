@@ -10,7 +10,7 @@ from app.db.base import Base
 class Runway(Base):
     __tablename__ = "runways"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     run_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
     direction: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     length: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)

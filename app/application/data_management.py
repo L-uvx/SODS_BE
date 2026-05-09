@@ -194,19 +194,18 @@ class DataManagementService:
         self._session.expunge(updated_runway)
         return RunwayWriteResponse(id=updated_runway.id, warnings=[])
 
-    # 创建台站，并在跑道编号未匹配时返回警告。
+    # 创建台站。
     def create_station(self, payload: StationUpsertRequest):
         self._validate_station_payload(payload)
         airport = self._repository.get_airport(payload.airport_id)
         if airport is None:
             raise DataManagementNotFoundError("airport_not_found", "airport not found")
 
-        warnings = self._build_station_runway_warnings(payload.airport_id, payload.runway_no)
         station = self._repository.create_station(**payload.model_dump(by_alias=False))
         self._session.commit()
         self._session.refresh(station)
         self._session.expunge(station)
-        return station, warnings
+        return station, []
 
     # 查询台站列表。
     def list_stations(
@@ -238,7 +237,7 @@ class DataManagementService:
             raise DataManagementNotFoundError("station_not_found", "station not found")
         return StationResponse.model_validate(station)
 
-    # 更新台站，并在跑道编号未匹配时返回警告。
+    # 更新台站。
     def update_station(self, station_id: int, payload: StationUpsertRequest):
         self._validate_station_payload(payload)
         station = self._repository.get_station(station_id)
@@ -249,7 +248,6 @@ class DataManagementService:
         if airport is None:
             raise DataManagementNotFoundError("airport_not_found", "airport not found")
 
-        warnings = self._build_station_runway_warnings(payload.airport_id, payload.runway_no)
         updated_station = self._repository.update_station(
             station,
             **payload.model_dump(by_alias=False),
@@ -257,7 +255,7 @@ class DataManagementService:
         self._session.commit()
         self._session.refresh(updated_station)
         self._session.expunge(updated_station)
-        return updated_station, warnings
+        return updated_station, []
 
     # 删除机场，存在子记录时阻断。
     def delete_airport(self, airport_id: int) -> None:
@@ -435,8 +433,6 @@ class DataManagementService:
     def _validate_station_payload(self, payload: StationUpsertRequest) -> None:
         self._validate_name(payload.name, field_name="name")
         self._validate_identifier(payload.station_type, field_name="stationType")
-        if payload.runway_no is not None:
-            self._validate_identifier(payload.runway_no, field_name="runwayNo")
         self._validate_coordinates(payload.longitude, payload.latitude)
         self._validate_non_negative_fields(
             (
@@ -458,25 +454,6 @@ class DataManagementService:
                 ("antennaHeight", payload.antenna_height),
             )
         )
-
-    # 构造台站跑道未命中警告。
-    def _build_station_runway_warnings(
-        self,
-        airport_id: int,
-        runway_no: str | None,
-    ) -> list[dict[str, str]]:
-        if not runway_no:
-            return []
-        if self._repository.runway_number_exists(airport_id, runway_no):
-            return []
-        return [self._build_runway_not_matched_warning()]
-
-    # 构造跑道未命中警告对象。
-    def _build_runway_not_matched_warning(self) -> dict[str, str]:
-        return {
-            "code": "runway_not_matched",
-            "message": "runwayNo does not match any runway under current airport",
-        }
 
     # 校验经纬度范围。
     def _validate_coordinates(

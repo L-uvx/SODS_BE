@@ -193,13 +193,6 @@ class StationUpsertRequest(DataManagementBaseModel):
     def validate_station_type_not_empty(cls, value: str) -> str:
         return cls.validate_non_empty_identifier(value)
 
-    @field_validator("runway_no")
-    @classmethod
-    def validate_runway_no_not_empty_when_present(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return cls.validate_non_empty_identifier(value)
-
 
 class StationResponse(DataManagementBaseModel):
     id: int

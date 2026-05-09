@@ -508,18 +508,6 @@ def test_station_upsert_request_rejects_blank_station_type() -> None:
         StationUpsertRequest(airportId=1, name="LOC Station", stationType="   ")
 
 
-def test_station_upsert_request_rejects_blank_runway_no() -> None:
-    from app.schemas.data_management import StationUpsertRequest
-
-    with pytest.raises(ValidationError):
-        StationUpsertRequest(
-            airportId=1,
-            name="LOC Station",
-            stationType="LOC",
-            runwayNo="   ",
-        )
-
-
 def test_station_upsert_request_rejects_out_of_range_coordinates() -> None:
     from app.schemas.data_management import StationUpsertRequest
 
@@ -914,7 +902,7 @@ def test_update_station_returns_updated_station_payload() -> None:
     }
 
 
-def test_update_station_returns_warning_when_runway_number_not_matched() -> None:
+def test_update_station_with_runway_no_returns_empty_warnings() -> None:
     with _create_test_client() as client:
         _seed_airport(name="Airport One")
         _seed_station(airport_id=1, name="LOC Station", station_type="LOC")
@@ -929,12 +917,7 @@ def test_update_station_returns_warning_when_runway_number_not_matched() -> None
         )
 
     assert response.status_code == 200
-    assert response.json()["warnings"] == [
-        {
-            "code": "runway_not_matched",
-            "message": "runwayNo does not match any runway under current airport",
-        }
-    ]
+    assert response.json()["warnings"] == []
 
 
 def test_conflict_detail_response_serializes_optional_counts() -> None:
@@ -1001,7 +984,7 @@ def test_station_type_option_response_serializes_value_label_shape() -> None:
     }
 
 
-def test_station_create_returns_warning_when_runway_number_not_matched() -> None:
+def test_station_create_with_runway_no_returns_empty_warnings() -> None:
     with _create_test_client() as client:
         _seed_airport(name="Airport One")
         response = client.post(
@@ -1015,12 +998,7 @@ def test_station_create_returns_warning_when_runway_number_not_matched() -> None
         )
 
     assert response.status_code == 201
-    assert response.json()["warnings"] == [
-        {
-            "code": "runway_not_matched",
-            "message": "runwayNo does not match any runway under current airport",
-        }
-    ]
+    assert response.json()["warnings"] == []
 
 
 def test_station_create_returns_created_id_without_warning() -> None:
@@ -1138,52 +1116,20 @@ def test_delete_station_returns_no_content() -> None:
     assert response.status_code == 204
 
 
-def test_station_create_response_serializes_warning_shape() -> None:
+def test_station_create_response_serializes_empty_warnings() -> None:
     from app.schemas.data_management import StationCreateResponse
 
-    response = StationCreateResponse(
-        id=1,
-        warnings=[
-            {
-                "code": "runway_not_matched",
-                "message": "runwayNo does not match any runway under current airport",
-            }
-        ],
-    )
+    response = StationCreateResponse(id=1, warnings=[])
 
-    assert response.model_dump(by_alias=True) == {
-        "id": 1,
-        "warnings": [
-            {
-                "code": "runway_not_matched",
-                "message": "runwayNo does not match any runway under current airport",
-            }
-        ],
-    }
+    assert response.model_dump(by_alias=True) == {"id": 1, "warnings": []}
 
 
-def test_station_write_response_serializes_warning_shape_for_update_contract() -> None:
+def test_station_write_response_serializes_empty_warnings() -> None:
     from app.schemas.data_management import StationWriteResponse
 
-    response = StationWriteResponse(
-        id=1,
-        warnings=[
-            {
-                "code": "runway_not_matched",
-                "message": "runwayNo does not match any runway under current airport",
-            }
-        ],
-    )
+    response = StationWriteResponse(id=1, warnings=[])
 
-    assert response.model_dump(by_alias=True) == {
-        "id": 1,
-        "warnings": [
-            {
-                "code": "runway_not_matched",
-                "message": "runwayNo does not match any runway under current airport",
-            }
-        ],
-    }
+    assert response.model_dump(by_alias=True) == {"id": 1, "warnings": []}
 
 
 def test_airport_write_response_serializes_id_and_warnings() -> None:
@@ -1211,25 +1157,9 @@ def test_runway_write_response_serializes_id_and_warnings() -> None:
 def test_station_write_response_serializes_id_and_warnings() -> None:
     from app.schemas.data_management import StationWriteResponse
 
-    response = StationWriteResponse(
-        id=1,
-        warnings=[
-            {
-                "code": "runway_not_matched",
-                "message": "runwayNo does not match any runway under current airport",
-            }
-        ],
-    )
+    response = StationWriteResponse(id=1, warnings=[])
 
-    assert response.model_dump(by_alias=True) == {
-        "id": 1,
-        "warnings": [
-            {
-                "code": "runway_not_matched",
-                "message": "runwayNo does not match any runway under current airport",
-            }
-        ],
-    }
+    assert response.model_dump(by_alias=True) == {"id": 1, "warnings": []}
 
 
 def test_repository_runway_number_exists_rejects_duplicate_within_same_airport() -> None:
@@ -1521,7 +1451,7 @@ def test_service_delete_runway_rejects_when_station_references_runway_number() -
     assert exc_info.value.extra == {"referencedStationCount": 1}
 
 
-def test_service_create_station_succeeds_with_warning_when_runway_no_missing_from_airport() -> None:
+def test_service_create_station_with_runway_no_returns_empty_warnings() -> None:
     from app.application.data_management import DataManagementService
     from app.schemas.data_management import StationUpsertRequest
 
@@ -1543,15 +1473,10 @@ def test_service_create_station_succeeds_with_warning_when_runway_no_missing_fro
 
     assert station.id == 1
     assert station.runway_no == "18"
-    assert warnings == [
-        {
-            "code": "runway_not_matched",
-            "message": "runwayNo does not match any runway under current airport",
-        }
-    ]
+    assert warnings == []
 
 
-def test_service_update_station_succeeds_with_warning_when_runway_no_missing_from_airport() -> None:
+def test_service_update_station_with_runway_no_returns_empty_warnings() -> None:
     from app.application.data_management import DataManagementService
     from app.schemas.data_management import StationUpsertRequest
 
@@ -1577,12 +1502,7 @@ def test_service_update_station_succeeds_with_warning_when_runway_no_missing_fro
 
     assert updated_station.name == "LOC Station Updated"
     assert updated_station.runway_no == "18"
-    assert warnings == [
-        {
-            "code": "runway_not_matched",
-            "message": "runwayNo does not match any runway under current airport",
-        }
-    ]
+    assert warnings == []
 
 
 def test_service_create_station_requires_station_type() -> None:

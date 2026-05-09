@@ -10,7 +10,7 @@ from app.db.base import Base
 class Station(Base):
     __tablename__ = "stations"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     station_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     station_group: Mapped[str | None] = mapped_column(String(100), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)

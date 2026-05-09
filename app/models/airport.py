@@ -10,7 +10,7 @@ from app.db.base import Base
 class Airport(Base):
     __tablename__ = "airports"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
