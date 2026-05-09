@@ -350,6 +350,16 @@ def test_radar_b_uses_460m_for_building_general() -> None:
     assert result.metrics["topElevationMeters"] == 25.0
     assert result.is_compliant is False
 
+    assert result.over_distance_meters >= 0.0
+    assert 0.0 <= result.azimuth_degrees < 360.0
+    assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
+    assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
+    assert isinstance(result.relative_height_meters, float)
+    assert isinstance(result.is_in_radius, bool)
+    assert isinstance(result.is_in_zone, bool)
+    assert isinstance(result.details, str)
+    assert len(result.details) > 0
+
 
 def test_radar_b_uses_700m_for_110kv_substation() -> None:
     payload = RadarRuleProfile().analyze(

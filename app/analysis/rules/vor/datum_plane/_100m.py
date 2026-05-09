@@ -5,6 +5,10 @@ from dataclasses import dataclass
 from shapely.geometry import Point
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.vor.common import VorRule, _float_or_none
 from app.analysis.rules.vor.datum_plane._base import (
@@ -86,6 +90,14 @@ class BoundVor100mDatumPlaneRule(BoundVorDatumPlaneRule):
             and actual_distance > self._half_d
             and actual_distance < self.shadow_radius
         ):
+            obstacle_centroid = shape.centroid
+            az = compute_azimuth_degrees(
+                self.station_point[0], self.station_point[1],
+                obstacle_centroid.x, obstacle_centroid.y,
+            )
+            min_h, max_h = compute_horizontal_angle_range_from_geometry(
+                self.station_point, shape,
+            )
             return AnalysisRuleResult(
                 station_id=self.protection_zone.station_id,
                 station_type=self.protection_zone.station_type,
@@ -109,6 +121,14 @@ class BoundVor100mDatumPlaneRule(BoundVorDatumPlaneRule):
                     "benchmarkHeightMeters": self.benchmark_height,
                 },
                 standards_rule_code=self.protection_zone.rule_code,
+                over_distance_meters=0.0,
+                azimuth_degrees=az,
+                max_horizontal_angle_degrees=max_h,
+                min_horizontal_angle_degrees=min_h,
+                relative_height_meters=0.0,
+                is_in_radius=entered,
+                is_in_zone=entered,
+                details="该障碍物已委托给反射网阴影区处理。",
             )
 
         return BoundVorDatumPlaneRule.analyze(self, obstacle)

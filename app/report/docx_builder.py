@@ -4,6 +4,24 @@ from typing import Any
 from docx import Document
 
 
+# 输出标准条文内容块。
+def _append_standards_block(
+    document: Document,
+    label: str,
+    standards_value: object,
+) -> None:
+    if standards_value is None:
+        document.add_paragraph(f"{label}: 无")
+        return
+
+    if isinstance(standards_value, list):
+        for standard in standards_value:
+            _append_standard_block(document, label, standard)
+        return
+
+    _append_standard_block(document, label, standards_value)
+
+
 # 输出单条标准条文内容。
 def _append_standard_block(
     document: Document,
@@ -61,9 +79,26 @@ def build_analysis_report_docx(payload: dict[str, Any], output_path: Path) -> No
                 f"是否满足: {'满足' if rule_result['isCompliant'] else '不满足'}"
             )
             document.add_paragraph(f"判定说明: {rule_result['message']}")
+            details = rule_result.get("details")
+            if details:
+                document.add_paragraph(f"详细说明: {details}")
+            metrics = rule_result.get("metrics")
+            if isinstance(metrics, dict):
+                metrics_parts = []
+                actual_distance = metrics.get("actualDistance")
+                if actual_distance is not None:
+                    metrics_parts.append(f"实际距离: {actual_distance}")
+                over_distance = metrics.get("overDistance")
+                if over_distance is not None:
+                    metrics_parts.append(f"超出距离: {over_distance}")
+                allowed_height = metrics.get("allowedHeight")
+                if allowed_height is not None:
+                    metrics_parts.append(f"允许高度: {allowed_height}")
+                if metrics_parts:
+                    document.add_paragraph(f"指标: {' / '.join(metrics_parts)}")
             standards = rule_result.get("standards", {})
-            _append_standard_block(document, "国标条文", standards.get("gb"))
-            _append_standard_block(document, "行标条文", standards.get("mh"))
+            _append_standards_block(document, "国标条文", standards.get("gb"))
+            _append_standards_block(document, "行标条文", standards.get("mh"))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     document.save(output_path)

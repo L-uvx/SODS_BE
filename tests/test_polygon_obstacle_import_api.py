@@ -1208,7 +1208,7 @@ def test_get_analysis_task_result_returns_protection_zones() -> None:
     }
     assert protection_zone["style"] == {
         "colorKey": "sky_blue",
-        "fill": "rgba(96, 165, 250, 0.25)",
+        "fill": "rgba(96, 165, 250, 0.5)",
         "stroke": "rgba(96, 165, 250, 0.9)",
     }
     assert protection_zone["properties"] == {
@@ -1635,22 +1635,22 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_rule() -> 
     rule_result = response.json()["ruleResults"][0]
     assert rule_result["isCompliant"] is True
     assert rule_result["standards"] == {
-        "gb": {
+        "gb": [{
             "code": "GB_NDB_50m最小间距区域_50",
             "text": (
                 "无方向信标天线与地形地物之间的最小间距：高于3m的树木、建筑物"
                 "（机房除外）以及公路与台站最小允许间距50m。"
             ),
             "isCompliant": True,
-        },
-        "mh": {
+        }],
+        "mh": [{
             "code": "MH_NDB_50m最小间距区域_50",
             "text": (
                 "无方向信标天线与地形地物之间的最小间距：建筑物（机房除外）、"
                 "公路以及高于3m的树木与台站最小允许间距50m。"
             ),
             "isCompliant": True,
-        },
+        }],
     }
 
 
@@ -1730,16 +1730,16 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_conical_ru
     )
     assert radial_band_rule["isCompliant"] is True
     assert radial_band_rule["standards"] == {
-        "gb": {
+        "gb": [{
             "code": "GB_NDB_50米以外仰角区域",
             "text": "在无方向信标天线50m以外，不应有超出无方向信标天线中心底部为基准垂直张角3°的障碍物。",
             "isCompliant": True,
-        },
-        "mh": {
+        }],
+        "mh": [{
             "code": "MH_NDB_50米以外仰角区域",
             "text": "在无方向信标天线50m以外，不应有超出无方向信标天线中心底部基准垂直张角为3°的障碍物。",
             "isCompliant": True,
-        },
+        }],
     }
 
 
@@ -1815,16 +1815,16 @@ def test_get_analysis_task_result_returns_loc_site_protection_zone_as_multipolyg
     assert loc_rule["regionCode"] == "default"
     assert "zoneDefinition" not in loc_rule
     assert loc_rule["standards"] == {
-        "gb": {
+        "gb": [{
             "code": "GB_ILSLOC_场地保护区",
             "text": "在航向信标台场地保护区内不应有障碍物存在。",
             "isCompliant": False,
-        },
-        "mh": {
+        }],
+        "mh": [{
             "code": "MH_ILSLOC_场地保护区",
             "text": "在航向信标台场地保护区内除必需的助航设施和滑行道外，不应有树木、建筑物（航向信标台机房除外）、道路、金属栅栏和架空线缆等障碍物。",
             "isCompliant": False,
-        },
+        }],
     }
 
     protection_zone = response.json()["protectionZones"][0]
@@ -1933,16 +1933,16 @@ def test_get_analysis_task_result_returns_loc_forward_sector_zone() -> None:
     assert loc_rule["stationType"] == "LOC"
     assert loc_rule["zoneCode"] == "loc_forward_sector_3000m_15m"
     assert loc_rule["standards"] == {
-        "gb": {
+        "gb": [{
             "code": "GB_ILSLOC_前向正负10°，3000米区域",
             "text": "在航向信标天线中心前向±10°、距离航向信标天线3km的区域内，不应有高于15m的建筑物、大型金属反射物和高压输电线存在。",
             "isCompliant": False,
-        },
-        "mh": {
+        }],
+        "mh": [{
             "code": "MH_ILSLOC_前向正负10°，3000米区域",
             "text": "在航向信标天线中心前向±10°、距离航向信标天线3000m的区域内，不应有高于15m的建筑物、大型金属反射物和高压输电线。",
             "isCompliant": False,
-        },
+        }],
     }
 
     protection_zone = next(
@@ -2263,11 +2263,11 @@ def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_3
     assert loc_rule["regionCode"] == "3"
     assert loc_rule["standards"] == {
         "gb": None,
-        "mh": {
+        "mh": [{
             "code": "MH_ILSLOC_建筑物限制区_Ⅲ",
             "text": "航向信标台建筑物限制区：对于Ⅲ类运行或规划Ⅲ类运行的跑道，飞行区与建筑物限制区重叠范围内规划建设超过高度限制的机库、航站楼等大型建筑物，应采用计算机仿真的方式确定建筑物的尺寸；飞行区外的建筑物限制区范围内规划建设超过高度限制的民用设施等大型建筑物，宜采用计算机仿真的方式确定建筑物的尺寸。",
             "isCompliant": False,
-        },
+        }],
     }
 
     protection_zone = next(
@@ -2520,7 +2520,7 @@ def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_st
         if item["stationType"] == "LOC"
     )
     assert loc_rule["zoneCode"] == "loc_site_protection"
-    assert loc_rule["standards"]["gb"]["code"] == "GB_ILSLOC_场地保护区"
+    assert loc_rule["standards"]["gb"][0]["code"] == "GB_ILSLOC_场地保护区"
 
     ndb_rule = next(
         item
@@ -2528,7 +2528,7 @@ def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_st
         if item["stationType"] == "NDB"
         and item["ruleName"] == "ndb_minimum_distance_50m"
     )
-    assert ndb_rule["standards"]["gb"]["code"] == "GB_NDB_50m最小间距区域_50"
+    assert ndb_rule["standards"]["gb"][0]["code"] == "GB_NDB_50m最小间距区域_50"
 
     protection_zone_shapes = {
         (item["stationType"], item["geometry"]["shapeType"])
@@ -2731,7 +2731,7 @@ def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() ->
         "gp_run_area_protection_region_a",
         "gp_run_area_protection_region_b",
     }
-    assert {item["standards"]["mh"]["code"] for item in gp_run_area_rules} == {
+    assert {item["standards"]["mh"][0]["code"] for item in gp_run_area_rules} == {
         "MH_ILSGP_运行保护区_临界",
         "MH_ILSGP_运行保护区_敏感",
     }

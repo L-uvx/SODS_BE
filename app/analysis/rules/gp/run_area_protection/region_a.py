@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -14,6 +18,8 @@ from app.analysis.rules.protection_zone_helpers import build_protection_zone_spe
 
 @dataclass(slots=True)
 class BoundGpRunAreaProtectionRegionARule(BoundObstacleRule):
+    station_point: tuple[float, float]
+
     # 执行 GP 运行保护区第 A 区判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         obstacle_category = str(obstacle["globalObstacleCategory"])
@@ -22,6 +28,23 @@ class BoundGpRunAreaProtectionRegionARule(BoundObstacleRule):
         entered_protection_zone = obstacle_shape.intersects(
             self.protection_zone.local_geometry
         )
+
+        obstacle_centroid = obstacle_shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, obstacle_shape,
+        )
+
+        if is_applicable and entered_protection_zone:
+            details = "障碍物进入运行保护区关键区域。"
+        elif not is_applicable:
+            details = "障碍物类型不适用GP运行保护区关键区规则。"
+        else:
+            details = "障碍物未进入GP运行保护区关键区域。"
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -51,6 +74,14 @@ class BoundGpRunAreaProtectionRegionARule(BoundObstacleRule):
                 "enteredProtectionZone": entered_protection_zone,
             },
             standards_rule_code="gp_run_area_protection_critical",
+            over_distance_meters=0.0,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=0.0,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 
@@ -84,5 +115,6 @@ class GpRunAreaProtectionRegionARule(ObstacleRule):
                     "baseReference": "station",
                     "baseHeightMeters": float(getattr(station, "altitude", 0.0) or 0.0),
                 },
-            )
+            ),
+            station_point=shared_context.station_point,
         )

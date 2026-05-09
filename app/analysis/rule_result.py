@@ -23,3 +23,11 @@ class AnalysisRuleResult:
     metrics: dict[str, float | str | bool | None]
     standards_rule_code: str | None = None
     standards: AnalysisStandardSet | None = None
+    over_distance_meters: float = 0.0
+    azimuth_degrees: float = 0.0
+    max_horizontal_angle_degrees: float = 0.0
+    min_horizontal_angle_degrees: float = 0.0
+    relative_height_meters: float = 0.0
+    is_in_radius: bool = False
+    is_in_zone: bool = False
+    details: str = ""

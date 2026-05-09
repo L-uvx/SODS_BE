@@ -3,6 +3,10 @@ from dataclasses import dataclass
 from shapely.geometry import Point
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
 from app.analysis.rules.vor.common import VorRule, _float_or_none
@@ -28,6 +32,15 @@ class BoundVor300Outside2_5_Rule(BoundVorElevationAngleRule):
         min_distance = float(shape.distance(Point(self.station_point)))
         category = str(obstacle["globalObstacleCategory"])
 
+        obstacle_centroid = shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, shape,
+        )
+
         if min_distance < 300.0:
             return AnalysisRuleResult(
                 station_id=self.protection_zone.station_id,
@@ -51,6 +64,14 @@ class BoundVor300Outside2_5_Rule(BoundVorElevationAngleRule):
                     "delegatedRule": "vor_300m_datum_plane",
                 },
                 standards_rule_code=self.protection_zone.rule_code,
+                over_distance_meters=0.0,
+                azimuth_degrees=az,
+                max_horizontal_angle_degrees=max_h,
+                min_horizontal_angle_degrees=min_h,
+                relative_height_meters=0.0,
+                is_in_radius=False,
+                is_in_zone=False,
+                details="该障碍物已委托给300m基准面处理。",
             )
 
         if category in _DELEGATED_500M_CATEGORIES and min_distance <= 500.0:
@@ -76,6 +97,14 @@ class BoundVor300Outside2_5_Rule(BoundVorElevationAngleRule):
                     "delegatedRule": "vor_500m_datum_plane",
                 },
                 standards_rule_code=self.protection_zone.rule_code,
+                over_distance_meters=0.0,
+                azimuth_degrees=az,
+                max_horizontal_angle_degrees=max_h,
+                min_horizontal_angle_degrees=min_h,
+                relative_height_meters=0.0,
+                is_in_radius=False,
+                is_in_zone=False,
+                details="该障碍物已委托给500m基准面处理。",
             )
 
         return BoundVorElevationAngleRule.analyze(self, obstacle)

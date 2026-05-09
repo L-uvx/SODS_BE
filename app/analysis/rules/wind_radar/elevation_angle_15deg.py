@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from shapely.geometry import Point
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -42,6 +46,16 @@ class BoundWindRadarElevationAngleRule(BoundObstacleRule):
             "limitHeightMeters": limit_height_meters,
         }
         is_compliant = angle_degrees <= self.limit_angle_degrees
+
+        centroid = obstacle_shape.centroid
+        azimuth_degrees = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1], centroid.x, centroid.y
+        )
+        min_horizontal_angle_degrees, max_horizontal_angle_degrees = (
+            compute_horizontal_angle_range_from_geometry(self.station_point, obstacle_shape)
+        )
+        is_in_zone = actual_distance_meters <= self.coverage_radius_meters
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -66,6 +80,14 @@ class BoundWindRadarElevationAngleRule(BoundObstacleRule):
             ),
             metrics=metrics,
             standards_rule_code=self.standards_rule_code,
+            over_distance_meters=0.0,
+            azimuth_degrees=azimuth_degrees,
+            max_horizontal_angle_degrees=max_horizontal_angle_degrees,
+            min_horizontal_angle_degrees=min_horizontal_angle_degrees,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=is_in_zone,
+            is_in_zone=is_in_zone,
+            details=f"障碍物{'满足' if is_compliant else '不满足'}仰角限制要求。",
         )
 
 

@@ -6,10 +6,15 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import build_circle_polygon, ensure_multipolygon, resolve_obstacle_shape
 from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
+from app.analysis.standards import _NDB_STANDARD_KEYS
 
 
 class NdbRule(ObstacleRule):
@@ -18,10 +23,26 @@ class NdbRule(ObstacleRule):
         raise NotImplementedError
 
 
+def _resolve_standard_names(standards_rule_code: str, mapping: dict) -> tuple[str, str]:
+    gb_codes, mh_codes = mapping.get(standards_rule_code, ([], []))
+    gb_name = gb_codes[0] if gb_codes else ""
+    mh_name = mh_codes[0] if mh_codes else ""
+    return gb_name, mh_name
+
+
+def _join_standard_names(gb_name: str, mh_name: str) -> str:
+    if gb_name and mh_name:
+        return f"{gb_name}和{mh_name}"
+    if gb_name:
+        return gb_name
+    return mh_name
+
+
 @dataclass(slots=True)
 class BoundNdbMinimumDistanceRule(BoundObstacleRule):
     station_point: tuple[float, float]
     required_distance_meters: float
+    station_altitude: float = 0.0
 
     # 执行已绑定的 NDB 最小间距判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
@@ -31,6 +52,33 @@ class BoundNdbMinimumDistanceRule(BoundObstacleRule):
         )
         actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         is_compliant = not entered_protection_zone
+
+        obstacle_centroid = obstacle_shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, obstacle_shape,
+        )
+        top_elevation = float(obstacle.get("topElevation") or 0.0)
+        relative_height_meters = top_elevation - self.station_altitude
+        over_distance_meters = (
+            max(0.0, self.required_distance_meters - actual_distance_meters)
+            if not is_compliant
+            else 0.0
+        )
+
+        standards_rule_code = self.protection_zone.rule_code
+        gb_name, mh_name = _resolve_standard_names(standards_rule_code, _NDB_STANDARD_KEYS)
+        joined_names = _join_standard_names(gb_name, mh_name)
+        req_dist = int(self.required_distance_meters)
+        if is_compliant:
+            details = f"满足{joined_names}中'障碍物与台站的允许间距{req_dist}m'的规定。"
+        else:
+            actual_dist = round(actual_distance_meters, 2)
+            details = f"不满足{joined_names}中'障碍物与台站的允许间距{req_dist}m'的规定，实际距离{actual_dist}m。"
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -56,7 +104,15 @@ class BoundNdbMinimumDistanceRule(BoundObstacleRule):
                 "actualDistanceMeters": actual_distance_meters,
                 "requiredDistanceMeters": self.required_distance_meters,
             },
-            standards_rule_code=self.protection_zone.rule_code,
+            standards_rule_code=standards_rule_code,
+            over_distance_meters=over_distance_meters,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 
@@ -110,6 +166,30 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
                 else "top elevation exceeds conical clearance"
             )
 
+        obstacle_centroid = obstacle_shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, obstacle_shape,
+        )
+        relative_height_meters = top_elevation - base_height_meters
+
+        gb_name, mh_name = _resolve_standard_names(
+            self.protection_zone.rule_code, _NDB_STANDARD_KEYS
+        )
+        joined_names = _join_standard_names(gb_name, mh_name)
+        angle = self.elevation_angle_degrees
+        if not is_compliant:
+            actual_angle = round(actual_elevation_angle_degrees, 2)
+            details = (
+                f"不满足{joined_names}中'不应有超出台站天线中心底部为基准垂直仰角"
+                f"{angle}°的障碍物'的规定，实际仰角{actual_angle}°。"
+            )
+        else:
+            details = ""
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -138,6 +218,14 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
                 "outerRadiusMeters": self.outer_radius_meters,
             },
             standards_rule_code=self.protection_zone.rule_code,
+            over_distance_meters=0.0,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 

@@ -1011,6 +1011,16 @@ def test_gp_bound_rule_returns_non_compliant_when_obstacle_enters_zone() -> None
     assert result.message == "non-cable obstacle enters region A"
     assert result.metrics["enteredProtectionZone"] is True
 
+    assert result.over_distance_meters >= 0.0
+    assert 0.0 <= result.azimuth_degrees < 360.0
+    assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
+    assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
+    assert isinstance(result.relative_height_meters, float)
+    assert isinstance(result.is_in_radius, bool)
+    assert isinstance(result.is_in_zone, bool)
+    assert isinstance(result.details, str)
+    assert len(result.details) > 0
+
 
 def _make_gp_1deg_shared_context() -> object:
     helpers = importlib.import_module(

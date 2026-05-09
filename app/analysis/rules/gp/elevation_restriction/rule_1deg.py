@@ -5,6 +5,11 @@ from shapely.geometry import Point
 from shapely.geometry.base import BaseGeometry
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+    compute_over_distance_meters,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -32,11 +37,19 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
         base_height_meters = self.base_height_meters
         top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
         limit_height_meters = base_height_meters
+        obstacle_metrics = None
+
+        sp = self.shared_context.station_point
+        obstacle_centroid = obstacle_shape.centroid
+        az = compute_azimuth_degrees(sp[0], sp[1], obstacle_centroid.x, obstacle_centroid.y)
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(sp, obstacle_shape)
+        rel_height = top_elevation_meters - base_height_meters
 
         if not entered_protection_zone:
             is_compliant = True
             message = "obstacle outside GP 1 degree elevation restriction zone"
-            obstacle_metrics = None
+            over = 0.0
+            details = "障碍物未进入GP 1°仰角限制区。"
         else:
             obstacle_metrics = _calculate_gp_1deg_obstacle_metrics(
                 obstacle_shape=obstacle_shape,
@@ -52,6 +65,11 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
                 if is_compliant
                 else "obstacle exceeds GP 1 degree elevation limit"
             )
+            over = compute_over_distance_meters(top_elevation_meters, limit_height_meters)
+            if is_compliant:
+                details = f"满足规定要求，障碍物高度{top_elevation_meters}m，允许高度{round(limit_height_meters,2)}m。"
+            else:
+                details = f"不满足规定要求，障碍物高度{top_elevation_meters}m，允许高度{round(limit_height_meters,2)}m，超出{round(over,2)}m。"
 
         return self.build_result(
             obstacle=obstacle,
@@ -77,6 +95,14 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
                     else obstacle_metrics.effective_forward_distance_meters
                 ),
             },
+            over_distance_meters=over,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=rel_height,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 

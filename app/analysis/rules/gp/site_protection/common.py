@@ -2,10 +2,13 @@ from dataclasses import dataclass
 
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
+
+
 @dataclass(slots=True)
 class BoundGpSiteProtectionRegionRule(BoundObstacleRule):
     station_sub_type: str | None
     standards_rule_code: str
+    station_point: tuple[float, float]
 
     def build_result(
         self,
@@ -15,6 +18,14 @@ class BoundGpSiteProtectionRegionRule(BoundObstacleRule):
         message: str,
         metrics: dict[str, float | str | bool | None],
         standards_rule_code: str | None = None,
+        over_distance_meters: float = 0.0,
+        azimuth_degrees: float = 0.0,
+        max_horizontal_angle_degrees: float = 0.0,
+        min_horizontal_angle_degrees: float = 0.0,
+        relative_height_meters: float = 0.0,
+        is_in_radius: bool = False,
+        is_in_zone: bool = False,
+        details: str = "",
     ) -> AnalysisRuleResult:
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -42,6 +53,14 @@ class BoundGpSiteProtectionRegionRule(BoundObstacleRule):
                 if standards_rule_code is None
                 else standards_rule_code
             ),
+            over_distance_meters=over_distance_meters,
+            azimuth_degrees=azimuth_degrees,
+            max_horizontal_angle_degrees=max_horizontal_angle_degrees,
+            min_horizontal_angle_degrees=min_horizontal_angle_degrees,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=is_in_radius,
+            is_in_zone=is_in_zone,
+            details=details,
         )
 
 

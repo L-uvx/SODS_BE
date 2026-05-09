@@ -1,21 +1,30 @@
 import math
 from dataclasses import dataclass
 
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.ops import unary_union
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import ensure_multipolygon, resolve_obstacle_shape
 from app.analysis.rules.loc.config import LOC_SITE_PROTECTION
 from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
+from app.analysis.rules.loc.common import _join_loc_standard_names, _resolve_loc_standard_names
+
+
+from app.analysis.rules.loc.common import _join_loc_standard_names, _resolve_loc_standard_names
 
 
 @dataclass(slots=True)
 class BoundLocSiteProtectionRule(BoundObstacleRule):
     station: object
+    station_point: tuple[float, float]
     rectangle_length_meters: float
 
     # 执行已绑定的 LOC 场地保护区判定。
@@ -44,6 +53,28 @@ class BoundLocSiteProtectionRule(BoundObstacleRule):
                 is_compliant = False
                 message = "obstacle enters site protection zone"
 
+        obstacle_centroid = obstacle_shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, obstacle_shape,
+        )
+        relative_height_meters = top_elevation_meters - base_height_meters
+
+        standards_rule_code = (
+            "loc_site_protection_cable"
+            if is_cable
+            else self.protection_zone.rule_code
+        )
+        gb_name, mh_name = _resolve_loc_standard_names(standards_rule_code)
+        joined_names = _join_loc_standard_names(gb_name, mh_name)
+        if entered_protection_zone:
+            details = f"障碍物进入场地保护区区域。"
+        else:
+            details = ""
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -66,11 +97,15 @@ class BoundLocSiteProtectionRule(BoundObstacleRule):
                 "topElevationMeters": top_elevation_meters,
                 "rectangleLengthMeters": self.rectangle_length_meters,
             },
-            standards_rule_code=(
-                "loc_site_protection_cable"
-                if is_cable
-                else self.protection_zone.rule_code
-            ),
+            standards_rule_code=standards_rule_code,
+            over_distance_meters=0.0,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 
@@ -133,6 +168,7 @@ class LocSiteProtectionRule(ObstacleRule):
                 },
             ),
             station=station,
+            station_point=station_point,
             rectangle_length_meters=rectangle_length_meters,
         )
 

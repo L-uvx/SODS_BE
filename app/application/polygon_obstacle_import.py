@@ -613,23 +613,37 @@ class PolygonObstacleImportService:
             "message": result.message,
             "metrics": result.metrics,
             "standardsRuleCode": result.standards_rule_code,
+            "overDistanceMeters": result.over_distance_meters,
+            "azimuthDegrees": result.azimuth_degrees,
+            "maxHorizontalAngleDegrees": result.max_horizontal_angle_degrees,
+            "minHorizontalAngleDegrees": result.min_horizontal_angle_degrees,
+            "relativeHeightMeters": result.relative_height_meters,
+            "isInRadius": result.is_in_radius,
+            "isInZone": result.is_in_zone,
+            "details": result.details,
             "standards": {
                 "gb": (
-                    {
-                        "code": standards.gb.code,
-                        "text": standards.gb.text,
-                        "isCompliant": result.is_compliant,
-                    }
-                    if standards.gb is not None
+                    [
+                        {
+                            "code": s.code,
+                            "text": s.text,
+                            "isCompliant": result.is_compliant,
+                        }
+                        for s in standards.gb
+                    ]
+                    if standards.gb
                     else None
                 ),
                 "mh": (
-                    {
-                        "code": standards.mh.code,
-                        "text": standards.mh.text,
-                        "isCompliant": result.is_compliant,
-                    }
-                    if standards.mh is not None
+                    [
+                        {
+                            "code": s.code,
+                            "text": s.text,
+                            "isCompliant": result.is_compliant,
+                        }
+                        for s in standards.mh
+                    ]
+                    if standards.mh
                     else None
                 ),
             },
@@ -1102,6 +1116,11 @@ class PolygonObstacleImportService:
             return None
 
         result_payload = analysis_task.result_payload or {}
+        rule_results = []
+        for item in result_payload.get("ruleResults", []):
+            rule_results.append(
+                self._compat_rule_result_payload(item)
+            )
         return AnalysisTaskResultResponse(
             analysisTaskId=analysis_task.id,
             status=analysis_task.status,
@@ -1115,13 +1134,41 @@ class PolygonObstacleImportService:
             summary=result_payload.get("summary", ""),
             ruleResults=[
                 AnalysisRuleResultResponse(**item)
-                for item in result_payload.get("ruleResults", [])
+                for item in rule_results
             ],
             protectionZones=[
                 AnalysisProtectionZoneResponse(**item)
                 for item in result_payload.get("protectionZones", [])
             ],
         )
+
+    # 兼容历史 payload 中旧版字段格式。
+    def _compat_rule_result_payload(
+        self, item: dict
+    ) -> dict:
+        result = dict(item)
+        result.setdefault("overDistanceMeters", 0.0)
+        result.setdefault("azimuthDegrees", 0.0)
+        result.setdefault("maxHorizontalAngleDegrees", 0.0)
+        result.setdefault("minHorizontalAngleDegrees", 0.0)
+        result.setdefault("relativeHeightMeters", 0.0)
+        result.setdefault("isInRadius", False)
+        result.setdefault("isInZone", False)
+        result.setdefault("details", "")
+        standards = result.get("standards")
+        if not isinstance(standards, dict):
+            return result
+        compat_standards: dict[str, object] = {}
+        for key in ("gb", "mh"):
+            value = standards.get(key)
+            if isinstance(value, dict):
+                compat_standards[key] = [value]
+            elif isinstance(value, list):
+                compat_standards[key] = value
+            else:
+                compat_standards[key] = None
+        result["standards"] = compat_standards
+        return result
 
     # 投递分析异步任务到运行时调度器。
     def _dispatch_analysis_task(self, task_id: str) -> None:

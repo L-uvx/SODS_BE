@@ -209,6 +209,14 @@ class AnalysisRuleResultResponse(BaseModel):
     message: str
     metrics: dict[str, float | str | bool | None]
     standards: "AnalysisStandardSetResponse"
+    over_distance_meters: float = Field(alias="overDistanceMeters", default=0.0)
+    azimuth_degrees: float = Field(alias="azimuthDegrees", default=0.0)
+    max_horizontal_angle_degrees: float = Field(alias="maxHorizontalAngleDegrees", default=0.0)
+    min_horizontal_angle_degrees: float = Field(alias="minHorizontalAngleDegrees", default=0.0)
+    relative_height_meters: float = Field(alias="relativeHeightMeters", default=0.0)
+    is_in_radius: bool = Field(alias="isInRadius", default=False)
+    is_in_zone: bool = Field(alias="isInZone", default=False)
+    details: str = ""
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -228,8 +236,8 @@ class AnalysisStandardReferenceResponse(BaseModel):
 
 
 class AnalysisStandardSetResponse(BaseModel):
-    gb: AnalysisStandardReferenceResponse | None = None
-    mh: AnalysisStandardReferenceResponse | None = None
+    gb: list[AnalysisStandardReferenceResponse] | None = None
+    mh: list[AnalysisStandardReferenceResponse] | None = None
 
 
 class AnalysisProtectionZoneMultipolygonGeometryResponse(BaseModel):

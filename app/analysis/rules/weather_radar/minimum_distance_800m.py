@@ -35,4 +35,5 @@ class WeatherRadarMinimumDistance800mRule(WeatherRadarRule):
             station_point=station_point,
             minimum_distance_meters=self.minimum_distance_meters,
             standards_rule_code=self.standards_rule_code,
+            base_height_meters=float(getattr(station, "altitude", 0.0) or 0.0),
         )

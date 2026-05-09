@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -13,11 +17,14 @@ from app.analysis.rules.loc.building_restriction.helpers import (
 )
 from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
 from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
+from app.analysis.rules.loc.common import _join_loc_standard_names, _resolve_loc_standard_names
+
 
 
 @dataclass(slots=True)
 class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
     station: object
+    station_point: tuple[float, float]
     zone_geometry: LocBuildingRestrictionZoneRegion3AnalysisGeometry
 
     # 执行 LOC 建筑物限制区第 3 区最不利点判定。
@@ -44,6 +51,36 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
                 else "obstacle within region 3 above allowed height"
             )
 
+        obstacle_centroid = obstacle_shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, obstacle_shape,
+        )
+        relative_height_meters = top_elevation_meters - base_height_meters
+        over_distance_meters = (
+            max(0.0, top_elevation_meters - (worst_allowed_height_meters or 0.0))
+            if not is_compliant
+            else 0.0
+        )
+
+        gb_name, mh_name = _resolve_loc_standard_names("loc_building_restriction_zone")
+        joined_names = _join_loc_standard_names(gb_name, mh_name)
+        limit = round((worst_allowed_height_meters or base_height_meters) - base_height_meters, 2)
+        if is_compliant:
+            details = (
+                f"满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定。"
+            )
+        else:
+            actual = round(top_elevation_meters - base_height_meters, 2)
+            over = round(top_elevation_meters - (worst_allowed_height_meters or 0.0), 2)
+            details = (
+                f"不满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定，"
+                f"实际高度{actual}m，超出{over}m。"
+            )
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -67,6 +104,14 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
                 "worstAllowedHeightMeters": worst_allowed_height_meters,
             },
             standards_rule_code="loc_building_restriction_zone",
+            over_distance_meters=over_distance_meters,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 
@@ -141,6 +186,7 @@ class LocBuildingRestrictionZoneRegion3Rule(ObstacleRule):
                 },
             ),
             station=station,
+            station_point=station_point,
             zone_geometry=_build_region_3_analysis_geometry(
                 shared_context=resolved_shared_context,
                 region_3_geometry=region_3_geometry,

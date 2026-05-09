@@ -32,4 +32,5 @@ class NdbMinimumDistance300mRule(NdbRule):
             ),
             station_point=station_point,
             required_distance_meters=self.radius_meters,
+            station_altitude=float(getattr(station, "altitude", 0.0) or 0.0),
         )

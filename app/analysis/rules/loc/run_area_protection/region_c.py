@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -14,6 +18,9 @@ from app.analysis.rules.protection_zone_helpers import build_protection_zone_spe
 
 @dataclass(slots=True)
 class BoundLocRunAreaProtectionRegionCRule(BoundObstacleRule):
+    station: object
+    station_point: tuple[float, float]
+
     # 执行 LOC 运行保护区第 C 区判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         obstacle_category = str(obstacle["globalObstacleCategory"])
@@ -22,6 +29,27 @@ class BoundLocRunAreaProtectionRegionCRule(BoundObstacleRule):
         entered_protection_zone = obstacle_shape.intersects(
             self.protection_zone.local_geometry
         )
+
+        az = 0.0
+        min_h = 0.0
+        max_h = 0.0
+        relative_height_meters = 0.0
+        if is_applicable:
+            obstacle_centroid = obstacle_shape.centroid
+            az = compute_azimuth_degrees(
+                self.station_point[0], self.station_point[1],
+                obstacle_centroid.x, obstacle_centroid.y,
+            )
+            min_h, max_h = compute_horizontal_angle_range_from_geometry(
+                self.station_point, obstacle_shape,
+            )
+            base_height_meters = float(getattr(self.station, "altitude", 0.0) or 0.0)
+            top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
+            relative_height_meters = top_elevation_meters - base_height_meters
+
+        region_name = self.protection_zone.region_name
+        details = f"障碍物进入{region_name}区域。" if entered_protection_zone else ""
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -34,7 +62,7 @@ class BoundLocRunAreaProtectionRegionCRule(BoundObstacleRule):
             zone_code=self.protection_zone.zone_code,
             zone_name=self.protection_zone.zone_name,
             region_code=self.protection_zone.region_code,
-            region_name=self.protection_zone.region_name,
+            region_name=region_name,
             is_applicable=is_applicable,
             is_compliant=(not entered_protection_zone) if is_applicable else True,
             message=(
@@ -51,6 +79,14 @@ class BoundLocRunAreaProtectionRegionCRule(BoundObstacleRule):
                 "enteredProtectionZone": entered_protection_zone,
             },
             standards_rule_code="loc_run_area_protection_critical",
+            over_distance_meters=0.0,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 
@@ -84,5 +120,7 @@ class LocRunAreaProtectionRegionCRule(ObstacleRule):
                     "baseReference": "station",
                     "baseHeightMeters": float(getattr(station, "altitude", 0.0) or 0.0),
                 },
-            )
+            ),
+            station=station,
+            station_point=shared_context.station_point,
         )

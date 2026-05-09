@@ -124,6 +124,16 @@ def test_mb_region_i_uses_20_degree_limit_with_expected_rule_code() -> None:
         station.altitude + math.tan(math.radians(20.0)) * 20.0,
     )
 
+    assert result.over_distance_meters >= 0.0
+    assert 0.0 <= result.azimuth_degrees < 360.0
+    assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
+    assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
+    assert isinstance(result.relative_height_meters, float)
+    assert isinstance(result.is_in_radius, bool)
+    assert isinstance(result.is_in_zone, bool)
+    assert isinstance(result.details, str)
+    assert len(result.details) > 0
+
 
 def test_mb_region_ii_uses_45_degree_limit_with_expected_rule_code() -> None:
     profile = _build_profile()
@@ -154,10 +164,10 @@ def test_mb_region_i_iii_standards_mapping(region_code: str) -> None:
         region_code=region_code,
     )
 
-    assert standards.gb is not None
-    assert standards.gb.code == "GB_MB_指点信标保护区_Ⅰ_Ⅲ"
-    assert standards.mh is not None
-    assert standards.mh.code == "MH_MB_指点信标保护区_Ⅰ_Ⅲ"
+    assert standards.gb
+    assert standards.gb[0].code == "GB_MB_指点信标保护区_Ⅰ_Ⅲ"
+    assert standards.mh
+    assert standards.mh[0].code == "MH_MB_指点信标保护区_Ⅰ_Ⅲ"
 
 
 def test_mb_region_iv_style_mapping() -> None:

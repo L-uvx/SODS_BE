@@ -4,6 +4,11 @@ from dataclasses import dataclass
 from shapely.geometry import Point
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+    compute_over_distance_meters,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
 from app.analysis.rules.radar.common import RadarRule, build_radar_circle_protection_zone
@@ -33,6 +38,15 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             station_point=self.station_point,
         )
 
+        centroid = obstacle_shape.centroid
+        azimuth_degrees = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1], centroid.x, centroid.y
+        )
+        min_horizontal_angle_degrees, max_horizontal_angle_degrees = (
+            compute_horizontal_angle_range_from_geometry(self.station_point, obstacle_shape)
+        )
+        relative_height_meters = top_elevation_meters - self.base_height_meters
+
         metrics: dict[str, float | bool] = {
             "enteredProtectionZone": entered_protection_zone,
             "actualDistanceMeters": actual_distance_meters,
@@ -45,12 +59,24 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             "baseHeightMeters": self.base_height_meters,
         }
 
+        over_distance = 0.0
+        limit_height_meters = self.base_height_meters
+
         if (not entered_protection_zone) or actual_distance_meters > self.radius_meters:
+            details = "障碍物位于保护区外。"
             return self._build_result(
                 obstacle=obstacle,
                 is_compliant=True,
                 message="obstacle outside radar site protection zone",
                 metrics=metrics,
+                azimuth_degrees=azimuth_degrees,
+                max_horizontal_angle_degrees=max_horizontal_angle_degrees,
+                min_horizontal_angle_degrees=min_horizontal_angle_degrees,
+                relative_height_meters=relative_height_meters,
+                is_in_radius=entered_protection_zone,
+                is_in_zone=entered_protection_zone,
+                over_distance_meters=over_distance,
+                details=details,
             )
 
         distance_km = actual_distance_meters / 1000.0
@@ -72,6 +98,8 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             )
         metrics["verticalMaskAngleDegrees"] = vertical_mask_angle_degrees
         metrics["limitHeightMeters"] = limit_height_meters
+        if entered_protection_zone:
+            over_distance = compute_over_distance_meters(top_elevation_meters, limit_height_meters)
 
         is_compliant = not (
             vertical_mask_angle_degrees > self.vertical_limit_angle_degrees
@@ -82,11 +110,21 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             if not is_compliant
             else "obstacle within radar site protection angle limits"
         )
+        details = f"障碍物{'满足' if is_compliant else '不满足'}雷达场地保护遮蔽角限制要求。"
+
         return self._build_result(
             obstacle=obstacle,
             is_compliant=is_compliant,
             message=message,
             metrics=metrics,
+            azimuth_degrees=azimuth_degrees,
+            max_horizontal_angle_degrees=max_horizontal_angle_degrees,
+            min_horizontal_angle_degrees=min_horizontal_angle_degrees,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            over_distance_meters=over_distance,
+            details=details,
         )
 
     def _build_result(
@@ -96,6 +134,14 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
         is_compliant: bool,
         message: str,
         metrics: dict[str, float | bool],
+        azimuth_degrees: float = 0.0,
+        max_horizontal_angle_degrees: float = 0.0,
+        min_horizontal_angle_degrees: float = 0.0,
+        relative_height_meters: float = 0.0,
+        is_in_radius: bool = False,
+        is_in_zone: bool = False,
+        over_distance_meters: float = 0.0,
+        details: str = "",
     ) -> AnalysisRuleResult:
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -117,6 +163,14 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             message=message,
             metrics=metrics,
             standards_rule_code=self.standards_rule_code,
+            azimuth_degrees=azimuth_degrees,
+            max_horizontal_angle_degrees=max_horizontal_angle_degrees,
+            min_horizontal_angle_degrees=min_horizontal_angle_degrees,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=is_in_radius,
+            is_in_zone=is_in_zone,
+            over_distance_meters=over_distance_meters,
+            details=details,
         )
 
 

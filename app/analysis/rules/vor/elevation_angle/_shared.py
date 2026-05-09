@@ -4,37 +4,16 @@ from dataclasses import dataclass
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 
+from app.analysis.result_helpers import (
+    _iter_boundary_coordinates,
+    _normalize_azimuth_degrees,
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
 from app.analysis.rules.vor.common import _float_or_none, build_vor_ring_protection_zone
-
-
-def _normalize_azimuth_degrees(angle: float) -> float:
-    return angle % 360.0
-
-
-def _iter_boundary_coordinates(shape: BaseGeometry):
-    if isinstance(shape, Point):
-        yield from shape.coords
-        return
-
-    if isinstance(shape, Polygon):
-        yield from shape.exterior.coords
-        return
-
-    if isinstance(shape, MultiPolygon):
-        for polygon in shape.geoms:
-            yield from _iter_boundary_coordinates(polygon)
-        return
-
-    boundary = shape.boundary
-    if hasattr(boundary, "geoms"):
-        for boundary_part in boundary.geoms:
-            yield from boundary_part.coords
-        return
-
-    yield from boundary.coords
 
 
 # 计算障碍物相对台站点的最小包络水平夹角。
@@ -42,23 +21,14 @@ def compute_horizontal_angular_width(
     shape: BaseGeometry,
     station_point: tuple[float, float],
 ) -> float:
-    sx, sy = station_point
-    azimuths: list[float] = []
-    for x, y in _iter_boundary_coordinates(shape):
-        azimuth = math.degrees(math.atan2(y - sy, x - sx))
-        azimuths.append(_normalize_azimuth_degrees(azimuth))
-
-    if len(azimuths) <= 1:
+    min_deg, max_deg = compute_horizontal_angle_range_from_geometry(
+        station_point, shape
+    )
+    if min_deg == 0.0 and max_deg == 0.0:
         return 0.0
-
-    azimuths.sort()
-    gaps = [
-        azimuths[index + 1] - azimuths[index]
-        for index in range(len(azimuths) - 1)
-    ]
-    gaps.append((azimuths[0] + 360.0) - azimuths[-1])
-    max_gap = max(gaps)
-    return 360.0 - max_gap
+    if min_deg <= max_deg:
+        return max_deg - min_deg
+    return (360.0 - min_deg) + max_deg
 
 
 @dataclass(slots=True)
@@ -79,6 +49,15 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
         raw_top = obstacle.get("topElevation")
         top_elevation = float(raw_top if raw_top is not None else 0.0)
         height_diff = top_elevation - self.base_height
+
+        obstacle_centroid = shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, shape,
+        )
 
         metrics: dict[str, object] = {
             "enteredProtectionZone": entered,
@@ -111,6 +90,14 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                 message="obstacle outside elevation angle zone",
                 metrics=metrics,
                 standards_rule_code=self.protection_zone.rule_code,
+                over_distance_meters=0.0,
+                azimuth_degrees=az,
+                max_horizontal_angle_degrees=max_h,
+                min_horizontal_angle_degrees=min_h,
+                relative_height_meters=height_diff,
+                is_in_radius=entered,
+                is_in_zone=entered,
+                details="障碍物未进入仰角限制区。",
             )
 
         if height_diff <= 0:
@@ -133,6 +120,14 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                 message="obstacle below benchmark plane",
                 metrics=metrics,
                 standards_rule_code=self.protection_zone.rule_code,
+                over_distance_meters=0.0,
+                azimuth_degrees=az,
+                max_horizontal_angle_degrees=max_h,
+                min_horizontal_angle_degrees=min_h,
+                relative_height_meters=height_diff,
+                is_in_radius=entered,
+                is_in_zone=entered,
+                details="障碍物低于基准面，满足仰角要求。",
             )
 
         vertical_angle = math.degrees(math.atan(height_diff / max(min_distance, 0.001)))
@@ -160,6 +155,14 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                 ),
                 metrics=metrics,
                 standards_rule_code=self.protection_zone.rule_code,
+                over_distance_meters=0.0,
+                azimuth_degrees=az,
+                max_horizontal_angle_degrees=max_h,
+                min_horizontal_angle_degrees=min_h,
+                relative_height_meters=height_diff,
+                is_in_radius=entered,
+                is_in_zone=entered,
+                details=f"不满足仰角限制要求，实际仰角{round(vertical_angle,2)}°，限值{self.limit_angle_degrees}°。",
             )
 
         if self.horizontal_angle_limit_degrees is not None:
@@ -191,6 +194,14 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                     ),
                     metrics=metrics,
                     standards_rule_code=self.protection_zone.rule_code,
+                    over_distance_meters=0.0,
+                    azimuth_degrees=az,
+                    max_horizontal_angle_degrees=max_h,
+                    min_horizontal_angle_degrees=min_h,
+                    relative_height_meters=height_diff,
+                    is_in_radius=entered,
+                    is_in_zone=entered,
+                    details=f"不满足水平角限制要求，实际水平角{round(horizontal_width,2)}°，限值{self.horizontal_angle_limit_degrees}°。",
                 )
 
         return AnalysisRuleResult(
@@ -211,6 +222,14 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
             message="obstacle within elevation angle limit",
             metrics=metrics,
             standards_rule_code=self.protection_zone.rule_code,
+            over_distance_meters=0.0,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=height_diff,
+            is_in_radius=entered,
+            is_in_zone=entered,
+            details=f"满足仰角限制要求，实际仰角{round(vertical_angle,2)}°，限值{self.limit_angle_degrees}°。",
         )
 
 

@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+    compute_over_distance_meters,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -32,12 +37,26 @@ class BoundGpSiteProtectionRegionCRule(BoundGpSiteProtectionRegionRule):
         clearance_limit_height_meters = None
         over_height_meters = None
 
+        top_elev = float(obstacle["topElevation"])
+        base_h = float(
+            self.protection_zone.vertical_definition.get("baseHeightMeters", 0.0) or 0.0
+        )
+        obstacle_centroid = obstacle_shape.centroid
+        sp = self.shared_context.station_point
+        az = compute_azimuth_degrees(sp[0], sp[1], obstacle_centroid.x, obstacle_centroid.y)
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(sp, obstacle_shape)
+        rel_height = top_elev - base_h
+
         if not entered_protection_zone:
             is_compliant = True
             message = "obstacle outside GP site protection region C"
+            over = 0.0
+            details = "障碍物未进入GP场地保护区C区。"
         elif is_road_or_rail:
             is_compliant = False
             message = "road or rail obstacle enters GP region C"
+            over = 0.0
+            details = f"障碍物进入{self.protection_zone.zone_name}C区。"
         else:
             requires_clearance_evaluation = True
             clearance_limit_height_meters = (
@@ -49,16 +68,21 @@ class BoundGpSiteProtectionRegionCRule(BoundGpSiteProtectionRegionRule):
             if clearance_limit_height_meters is None:
                 is_compliant = True
                 message = "gp clearance evaluation pending"
+                over = 0.0
+                details = "净空限高暂待评估。"
             else:
-                over_height_meters = float(obstacle["topElevation"]) - float(
-                    clearance_limit_height_meters
-                )
+                over_height_meters = top_elev - float(clearance_limit_height_meters)
                 is_compliant = over_height_meters <= 0.0
                 message = (
                     "obstacle within GP clearance limit"
                     if is_compliant
                     else "obstacle exceeds GP clearance limit"
                 )
+                over = compute_over_distance_meters(top_elev, float(clearance_limit_height_meters))
+                if is_compliant:
+                    details = f"满足规定要求，障碍物高度{top_elev}m，允许高度{clearance_limit_height_meters}m。"
+                else:
+                    details = f"不满足规定要求，障碍物高度{top_elev}m，允许高度{clearance_limit_height_meters}m，超出{over}m。"
 
         return self.build_result(
             obstacle=obstacle,
@@ -83,6 +107,14 @@ class BoundGpSiteProtectionRegionCRule(BoundGpSiteProtectionRegionRule):
                     }
                 ),
             },
+            over_distance_meters=over,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=rel_height,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 
@@ -121,6 +153,7 @@ class _GpSiteProtectionRegionCRuleBase(ObstacleRule):
                 else str(getattr(station, "station_sub_type"))
             ),
             standards_rule_code=self._resolve_standards_rule_code(station=station),
+            station_point=shared_context.station_point,
             shared_context=shared_context,
         )
 

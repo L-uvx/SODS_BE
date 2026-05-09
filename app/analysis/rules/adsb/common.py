@@ -3,6 +3,10 @@ from dataclasses import dataclass
 from shapely.geometry import Point
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.adsb.config import (
     ADS_B_BOUNDARY_MODE_BY_CATEGORY,
@@ -49,6 +53,28 @@ class BoundAdsbCircleRule(BoundObstacleRule):
             is_compliant = actual_distance_meters > self.minimum_distance_meters
         else:
             is_compliant = actual_distance_meters >= self.minimum_distance_meters
+
+        obstacle_centroid = obstacle_shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, obstacle_shape,
+        )
+        over_distance = (
+            max(0.0, self.minimum_distance_meters - actual_distance_meters)
+            if not is_compliant
+            else 0.0
+        )
+        actual_dist = round(actual_distance_meters, 2)
+        min_dist = self.minimum_distance_meters
+        details_text = (
+            f"不满足最小防护间距要求，实际距离{actual_dist}m，所需最小间距{min_dist}m。"
+            if not is_compliant
+            else f"实际距离{actual_dist}m，最小防护间距{min_dist}m。"
+        )
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -79,6 +105,14 @@ class BoundAdsbCircleRule(BoundObstacleRule):
                 "boundaryMode": boundary_mode,
             },
             standards_rule_code=standards_rule_code,
+            over_distance_meters=over_distance,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=top_elevation_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details_text,
         )
 
 

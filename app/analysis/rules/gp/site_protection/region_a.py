@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+    compute_over_distance_meters,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -32,9 +37,21 @@ class BoundGpSiteProtectionRegionARule(BoundGpSiteProtectionRegionRule):
         top_elevation_meters = float(obstacle.get("topElevation", 0.0) or 0.0)
         is_cable = is_gp_cable_category(str(obstacle.get("globalObstacleCategory")))
 
+        obstacle_centroid = obstacle_shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, obstacle_shape,
+        )
+        rel_height = top_elevation_meters - base_height_meters
+
         if not entered_protection_zone:
             is_compliant = True
             message = "obstacle outside GP site protection region A"
+            over = 0.0
+            details = "障碍物未进入GP场地保护区A区。"
         elif is_cable:
             is_compliant = top_elevation_meters < base_height_meters
             message = (
@@ -42,9 +59,16 @@ class BoundGpSiteProtectionRegionARule(BoundGpSiteProtectionRegionRule):
                 if is_compliant
                 else "cable within region A above station altitude"
             )
+            over = compute_over_distance_meters(top_elevation_meters, base_height_meters)
+            if is_compliant:
+                details = f"满足规定要求，障碍物高度{top_elevation_meters}m，允许高度{base_height_meters}m。"
+            else:
+                details = f"不满足规定要求，障碍物高度{top_elevation_meters}m，允许高度{base_height_meters}m，超出{over}m。"
         else:
             is_compliant = False
             message = "non-cable obstacle enters region A"
+            over = compute_over_distance_meters(top_elevation_meters, base_height_meters)
+            details = f"障碍物进入{self.protection_zone.zone_name}A区。"
 
         metrics = {
             "enteredProtectionZone": entered_protection_zone,
@@ -61,6 +85,14 @@ class BoundGpSiteProtectionRegionARule(BoundGpSiteProtectionRegionRule):
             message=message,
             metrics=metrics,
             standards_rule_code=self._resolve_result_standards_rule_code(obstacle),
+            over_distance_meters=over,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=rel_height,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 
@@ -99,6 +131,7 @@ class _GpSiteProtectionRegionARuleBase(ObstacleRule):
                 else str(getattr(station, "station_sub_type"))
             ),
             standards_rule_code=self._resolve_standards_rule_code(station=station),
+            station_point=shared_context.station_point,
         )
 
     def _resolve_standards_rule_code(self, *, station: object) -> str:

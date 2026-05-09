@@ -5,6 +5,10 @@ from shapely.geometry import Point, Polygon
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import ensure_multipolygon, resolve_obstacle_shape
@@ -82,9 +86,19 @@ class BoundMbSiteProtectionRule(BoundObstacleRule):
             math.atan((top_elevation_meters - base_height_meters) / distance_for_angle)
         )
 
+        centroid = obstacle_shape.centroid
+        azimuth_degrees = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1], centroid.x, centroid.y
+        )
+        min_horizontal_angle_degrees, max_horizontal_angle_degrees = (
+            compute_horizontal_angle_range_from_geometry(self.station_point, obstacle_shape)
+        )
+        relative_height_meters = top_elevation_meters - base_height_meters
+
         if not entered_protection_zone:
             is_compliant = True
             message = "obstacle outside MB site protection region"
+            details = "障碍物位于保护区外。"
         else:
             is_compliant = vertical_angle_degrees <= self.limit_angle_degrees
             message = (
@@ -92,6 +106,7 @@ class BoundMbSiteProtectionRule(BoundObstacleRule):
                 if is_compliant
                 else "obstacle exceeds MB site protection limit"
             )
+            details = f"障碍物{'满足' if is_compliant else '不满足'}仰角限制要求。"
 
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -113,6 +128,7 @@ class BoundMbSiteProtectionRule(BoundObstacleRule):
             is_applicable=True,
             is_compliant=is_compliant,
             message=message,
+            over_distance_meters=0.0,
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
                 "minDistanceMeters": min_distance_meters,
@@ -122,6 +138,13 @@ class BoundMbSiteProtectionRule(BoundObstacleRule):
                 "limitAngleDegrees": self.limit_angle_degrees,
                 "radiusMeters": self.radius_meters,
             },
+            azimuth_degrees=azimuth_degrees,
+            max_horizontal_angle_degrees=max_horizontal_angle_degrees,
+            min_horizontal_angle_degrees=min_horizontal_angle_degrees,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 

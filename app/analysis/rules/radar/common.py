@@ -3,6 +3,11 @@ from dataclasses import dataclass
 from shapely.geometry import Point
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+    compute_over_distance_meters,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import build_circle_polygon, ensure_multipolygon, resolve_obstacle_shape
@@ -20,6 +25,7 @@ class BoundRadarCircleRule(BoundObstacleRule):
     station_point: tuple[float, float]
     minimum_distance_meters: float | None
     standards_rule_code: str
+    base_height_meters: float = 0.0
 
     # 执行已绑定的 Radar 圆形保护区判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
@@ -39,6 +45,30 @@ class BoundRadarCircleRule(BoundObstacleRule):
         }
         if self.minimum_distance_meters is not None:
             metrics["minimumDistanceMeters"] = self.minimum_distance_meters
+
+        centroid = obstacle_shape.centroid
+        azimuth_degrees = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1], centroid.x, centroid.y
+        )
+        min_horizontal_angle_degrees, max_horizontal_angle_degrees = (
+            compute_horizontal_angle_range_from_geometry(self.station_point, obstacle_shape)
+        )
+        relative_height_meters = top_elevation_meters - self.base_height_meters
+
+        over_distance = 0.0
+        if not is_compliant and self.minimum_distance_meters is not None:
+            over_distance = compute_over_distance_meters(
+                self.minimum_distance_meters, actual_distance_meters
+            )
+            details = f"不满足规定要求，实际距离{int(actual_distance_meters)}m，所需最小间距{int(self.minimum_distance_meters)}m。"
+        elif self.minimum_distance_meters is not None:
+            details = f"满足规定要求，实际距离{int(actual_distance_meters)}m。"
+        else:
+            details = (
+                "障碍物进入雷达旋转反射体保护区。"
+                if entered_protection_zone
+                else "障碍物位于保护区外。"
+            )
 
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -66,6 +96,14 @@ class BoundRadarCircleRule(BoundObstacleRule):
             ),
             metrics=metrics,
             standards_rule_code=self.standards_rule_code,
+            azimuth_degrees=azimuth_degrees,
+            max_horizontal_angle_degrees=max_horizontal_angle_degrees,
+            min_horizontal_angle_degrees=min_horizontal_angle_degrees,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            over_distance_meters=over_distance,
+            details=details,
         )
 
 

@@ -64,6 +64,16 @@ def test_hf_0_8km_applies_to_electrified_railway() -> None:
     result = _find_rule_result(payload, "hf_minimum_distance_0_8km")
     assert result.is_compliant is False
 
+    assert result.over_distance_meters >= 0.0
+    assert 0.0 <= result.azimuth_degrees < 360.0
+    assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
+    assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
+    assert isinstance(result.relative_height_meters, float)
+    assert isinstance(result.is_in_radius, bool)
+    assert isinstance(result.is_in_zone, bool)
+    assert isinstance(result.details, str)
+    assert len(result.details) > 0
+
 
 def test_hf_5km_applies_to_rf_equipment() -> None:
     payload = HfRuleProfile().analyze(
@@ -203,12 +213,12 @@ def test_hf_standards_name_and_style_are_wired_for_representative_zones() -> Non
         region_code="default",
     )
 
-    assert standards_1.gb is not None
-    assert standards_1.gb.code == "AP_HF_0.8km平面防护间距要求_电气化铁路"
-    assert standards_1.mh is None
-    assert standards_2.gb is not None
-    assert standards_2.gb.code == "AP_HF_20km平面防护间距要求_200kW以上中波和长波发射台"
-    assert standards_2.mh is None
+    assert standards_1.gb
+    assert standards_1.gb[0].code == "AP_HF_0.8km平面防护间距要求_电气化铁路"
+    assert standards_1.mh == []
+    assert standards_2.gb
+    assert standards_2.gb[0].code == "AP_HF_20km平面防护间距要求_200kW以上中波和长波发射台"
+    assert standards_2.mh == []
 
     assert resolve_protection_zone_name(zone_code="hf_minimum_distance_0_8km") == "HF 0.8km最小间距"
     assert resolve_protection_zone_name(zone_code="hf_minimum_distance_20km") == "HF 20km最小间距"
@@ -274,6 +284,6 @@ def test_hf_shared_rule_band_uses_category_specific_standards_rule_code() -> Non
             rule_name=standards_rule_code,
             region_code="default",
         )
-        assert standards.gb is not None
-        assert standards.gb.code == expected_key
-        assert standards.mh is None
+        assert standards.gb
+        assert standards.gb[0].code == expected_key
+        assert standards.mh == []

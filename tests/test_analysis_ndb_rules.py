@@ -229,6 +229,16 @@ def test_ndb_minimum_distance_rules_return_uniform_results() -> None:
     assert result_500.rule_code == "ndb_minimum_distance_500m"
     assert result_500.metrics["requiredDistanceMeters"] == 500.0
 
+    assert result_150.over_distance_meters >= 0.0
+    assert 0.0 <= result_150.azimuth_degrees < 360.0
+    assert 0.0 <= result_150.max_horizontal_angle_degrees < 360.0
+    assert 0.0 <= result_150.min_horizontal_angle_degrees < 360.0
+    assert isinstance(result_150.relative_height_meters, float)
+    assert isinstance(result_150.is_in_radius, bool)
+    assert isinstance(result_150.is_in_zone, bool)
+    assert isinstance(result_150.details, str)
+    assert len(result_150.details) > 0
+
 
 def test_ndb_conical_clearance_rule_returns_uniform_result() -> None:
     station = type("Station", (), {"id": 1, "station_type": "NDB"})()

@@ -5,6 +5,11 @@ from dataclasses import dataclass
 from shapely.geometry import Point
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+    compute_over_distance_meters,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -108,6 +113,24 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
         else:
             message = "obstacle exceeds reflector mask height limit"
 
+        obstacle_centroid = shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, shape,
+        )
+        over = compute_over_distance_meters(top_elevation, allowed_h)
+        rel_h = top_elevation - self.altitude
+
+        if not entered:
+            details = "障碍物未进入反射网阴影区。"
+        elif is_compliant:
+            details = f"满足规定要求，障碍物高度{top_elevation}m，允许高度{round(allowed_h,2)}m。"
+        else:
+            details = f"不满足规定要求，障碍物高度{top_elevation}m，允许高度{round(allowed_h,2)}m，超出{round(over,2)}m。"
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -133,4 +156,12 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
                 "shadowRadiusMeters": self.shadow_radius_m,
             },
             standards_rule_code=self.protection_zone.rule_code,
+            over_distance_meters=over,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=rel_h,
+            is_in_radius=entered,
+            is_in_zone=entered,
+            details=details,
         )

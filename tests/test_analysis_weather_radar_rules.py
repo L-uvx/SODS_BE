@@ -160,6 +160,16 @@ def test_weather_radar_1deg_fails_when_elevation_angle_exceeds_1deg() -> None:
     result = _find_rule_result(payload, "weather_radar_elevation_angle_1deg")
     assert result.is_compliant is False
 
+    assert result.over_distance_meters >= 0.0
+    assert 0.0 <= result.azimuth_degrees < 360.0
+    assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
+    assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
+    assert isinstance(result.relative_height_meters, float)
+    assert isinstance(result.is_in_radius, bool)
+    assert isinstance(result.is_in_zone, bool)
+    assert isinstance(result.details, str)
+    assert len(result.details) > 0
+
 
 def test_weather_radar_1deg_skips_obstacle_outside_coverage_radius() -> None:
     payload = WeatherRadarRuleProfile().analyze(

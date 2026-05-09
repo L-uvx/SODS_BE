@@ -4,6 +4,10 @@ from shapely.geometry import Point
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -16,12 +20,25 @@ from .triangle_utils import build_runway_triangle_geometry
 class BoundSurfaceDetectionRadarRunwayTriangleRule(BoundObstacleRule):
     runway: dict[str, object]
     station_point: tuple[float, float]
+    base_height_meters: float
 
     # 执行已绑定的跑道三角区判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         obstacle_shape = resolve_obstacle_shape(obstacle)
         entered_protection_zone = obstacle_shape.intersects(self.protection_zone.local_geometry)
         actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
+        top_elevation_meters = float(
+            obstacle.get("topElevation") if obstacle.get("topElevation") is not None else 0.0
+        )
+
+        centroid = obstacle_shape.centroid
+        azimuth_degrees = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1], centroid.x, centroid.y
+        )
+        min_horizontal_angle_degrees, max_horizontal_angle_degrees = (
+            compute_horizontal_angle_range_from_geometry(self.station_point, obstacle_shape)
+        )
+        relative_height_meters = top_elevation_meters - self.base_height_meters
 
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -56,6 +73,18 @@ class BoundSurfaceDetectionRadarRunwayTriangleRule(BoundObstacleRule):
                 "runwayDirectionDegrees": float(self.runway["directionDegrees"]),
             },
             standards_rule_code=None,
+            over_distance_meters=0.0,
+            azimuth_degrees=azimuth_degrees,
+            max_horizontal_angle_degrees=max_horizontal_angle_degrees,
+            min_horizontal_angle_degrees=min_horizontal_angle_degrees,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=(
+                "障碍物进入跑道三角区。"
+                if entered_protection_zone
+                else "障碍物位于保护区外。"
+            ),
         )
 
 
@@ -98,4 +127,5 @@ class SurfaceDetectionRadarRunwayTriangleRule(ObstacleRule):
             ),
             runway=runway,
             station_point=station_point,
+            base_height_meters=float(getattr(station, "altitude", 0.0) or 0.0),
         )

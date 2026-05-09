@@ -15,6 +15,14 @@ class BoundGpElevationRestrictionRule(BoundObstacleRule):
         is_compliant: bool,
         message: str,
         metrics: dict[str, float | str | bool | None],
+        over_distance_meters: float = 0.0,
+        azimuth_degrees: float = 0.0,
+        max_horizontal_angle_degrees: float = 0.0,
+        min_horizontal_angle_degrees: float = 0.0,
+        relative_height_meters: float = 0.0,
+        is_in_radius: bool = False,
+        is_in_zone: bool = False,
+        details: str = "",
     ) -> AnalysisRuleResult:
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -38,6 +46,14 @@ class BoundGpElevationRestrictionRule(BoundObstacleRule):
             message=message,
             metrics=metrics,
             standards_rule_code=self.standards_rule_code,
+            over_distance_meters=over_distance_meters,
+            azimuth_degrees=azimuth_degrees,
+            max_horizontal_angle_degrees=max_horizontal_angle_degrees,
+            min_horizontal_angle_degrees=min_horizontal_angle_degrees,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=is_in_radius,
+            is_in_zone=is_in_zone,
+            details=details,
         )
 
 

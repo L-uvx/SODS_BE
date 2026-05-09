@@ -26,20 +26,20 @@ def test_build_rule_standards_returns_gb_and_mh_for_ndb_rule() -> None:
     )
 
     assert standards == AnalysisStandardSet(
-        gb=AnalysisStandardReference(
+        gb=[AnalysisStandardReference(
             code="GB_NDB_50m最小间距区域_50",
             text=(
                 "无方向信标天线与地形地物之间的最小间距：高于3m的树木、建筑物"
                 "（机房除外）以及公路与台站最小允许间距50m。"
             ),
-        ),
-        mh=AnalysisStandardReference(
+        )],
+        mh=[AnalysisStandardReference(
             code="MH_NDB_50m最小间距区域_50",
             text=(
                 "无方向信标天线与地形地物之间的最小间距：建筑物（机房除外）、"
                 "公路以及高于3m的树木与台站最小允许间距50m。"
             ),
-        ),
+        )],
     )
 
 
@@ -50,8 +50,8 @@ def test_build_rule_standards_returns_none_for_missing_mapping() -> None:
         region_code="default",
     )
 
-    assert standards.gb is None
-    assert standards.mh is None
+    assert standards.gb == []
+    assert standards.mh == []
 
 
 def test_build_rule_standards_returns_shared_loc_building_restriction_mapping() -> None:
@@ -62,7 +62,7 @@ def test_build_rule_standards_returns_shared_loc_building_restriction_mapping() 
     )
 
     assert standards == AnalysisStandardSet(
-        mh=AnalysisStandardReference(
+        mh=[AnalysisStandardReference(
             code="MH_ILSLOC_建筑物限制区_Ⅲ",
             text=(
                 "航向信标台建筑物限制区：对于Ⅲ类运行或规划Ⅲ类运行的跑道，"
@@ -71,8 +71,8 @@ def test_build_rule_standards_returns_shared_loc_building_restriction_mapping() 
                 "飞行区外的建筑物限制区范围内规划建设超过高度限制的民用设施等"
                 "大型建筑物，宜采用计算机仿真的方式确定建筑物的尺寸。"
             ),
-        ),
-        gb=None,
+        )],
+        gb=[],
     )
 
 
@@ -84,14 +84,14 @@ def test_build_rule_standards_returns_loc_run_area_critical_mapping() -> None:
     )
 
     assert standards == AnalysisStandardSet(
-        mh=AnalysisStandardReference(
+        mh=[AnalysisStandardReference(
             code="MH_ILSLOC_运行保护区_临界区",
             text=(
                 "航向信标台运行保护区：实施Ⅰ/Ⅱ/Ⅲ类运行时，临界区内不应停放"
                 "车辆、机械和航空器，不应有任何地面交通活动。"
             ),
-        ),
-        gb=None,
+        )],
+        gb=[],
     )
 
 
@@ -103,14 +103,14 @@ def test_build_rule_standards_returns_loc_run_area_sensitive_mapping() -> None:
     )
 
     assert standards == AnalysisStandardSet(
-        mh=AnalysisStandardReference(
+        mh=[AnalysisStandardReference(
             code="MH_ILSLOC_运行保护区_敏感区",
             text=(
                 "航向信标台运行保护区：车辆、航空器等移动物体未经许可不应进入"
                 "相应类别的敏感区，跑道等待位置应位于敏感区外。"
             ),
-        ),
-        gb=None,
+        )],
+        gb=[],
     )
 
 
@@ -121,11 +121,11 @@ def test_build_rule_standards_returns_gp_gb_region_a_mapping() -> None:
         region_code="A",
     )
 
-    assert standards.gb == AnalysisStandardReference(
+    assert standards.gb == [AnalysisStandardReference(
         code="GB_ILSGP_GB场地保护区_A",
         text=load_standard_config_entries()["GB_ILSGP_GB场地保护区_A"],
-    )
-    assert standards.mh is None
+    )]
+    assert standards.mh == []
 
 
 def test_build_rule_standards_returns_gp_mh_cable_region_a_mapping() -> None:
@@ -135,11 +135,11 @@ def test_build_rule_standards_returns_gp_mh_cable_region_a_mapping() -> None:
         region_code="A",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="MH_ILSGP_场地保护区_A线缆",
         text=load_standard_config_entries()["MH_ILSGP_场地保护区_A线缆"],
-    )
+    )]
 
 
 def test_build_rule_standards_returns_gp_mh_region_b_by_station_sub_type() -> None:
@@ -156,11 +156,11 @@ def test_build_rule_standards_returns_gp_mh_region_b_by_station_sub_type() -> No
             region_code="B",
         )
 
-        assert standards.gb is None
-        assert standards.mh == AnalysisStandardReference(
+        assert standards.gb == []
+        assert standards.mh == [AnalysisStandardReference(
             code=expected_code,
             text=load_standard_config_entries()[expected_code],
-        )
+        )]
 
 
 def test_build_rule_standards_returns_gp_1deg_mh_mapping() -> None:
@@ -170,11 +170,11 @@ def test_build_rule_standards_returns_gp_1deg_mh_mapping() -> None:
         region_code="default",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="MH_ILSGP_1°仰角限制区域",
         text=load_standard_config_entries()["MH_ILSGP_1°仰角限制区域"],
-    )
+    )]
 
 
 def test_build_rule_standards_returns_gp_run_area_critical_mapping() -> None:
@@ -184,11 +184,11 @@ def test_build_rule_standards_returns_gp_run_area_critical_mapping() -> None:
         region_code="A",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="MH_ILSGP_运行保护区_临界",
         text=load_standard_config_entries()["MH_ILSGP_运行保护区_临界"],
-    )
+    )]
 
 
 def test_build_rule_standards_returns_gp_run_area_sensitive_mapping() -> None:
@@ -198,23 +198,23 @@ def test_build_rule_standards_returns_gp_run_area_sensitive_mapping() -> None:
         region_code="B",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="MH_ILSGP_运行保护区_敏感",
         text=load_standard_config_entries()["MH_ILSGP_运行保护区_敏感"],
-    )
+    )]
 
 
 def test_standard_mappings_register_gp_run_area_critical_and_sensitive_codes() -> None:
     gp_standard_keys = _STANDARD_KEYS_BY_STATION_TYPE["GP"]
 
     assert gp_standard_keys["gp_run_area_protection_critical"] == (
-        None,
-        "MH_ILSGP_运行保护区_临界",
+        [],
+        ["MH_ILSGP_运行保护区_临界"],
     )
     assert gp_standard_keys["gp_run_area_protection_sensitive"] == (
-        None,
-        "MH_ILSGP_运行保护区_敏感",
+        [],
+        ["MH_ILSGP_运行保护区_敏感"],
     )
 
 
@@ -225,27 +225,27 @@ def test_build_rule_standards_returns_ads_b_ap_only_mapping() -> None:
         region_code="default",
     )
 
-    assert standards.gb == AnalysisStandardReference(
+    assert standards.gb == [AnalysisStandardReference(
         code="AP_ADS_B_0.7km平面防护间距要求_公路",
         text=load_standard_config_entries()["AP_ADS_B_0.7km平面防护间距要求_公路"],
-    )
-    assert standards.mh is None
+    )]
+    assert standards.mh == []
 
 
 def test_standard_mappings_register_ads_b_codes_by_station_type() -> None:
     ads_b_standard_keys = _STANDARD_KEYS_BY_STATION_TYPE["ADS_B"]
 
     assert ads_b_standard_keys["adsb_minimum_distance_0_5km_non_electrified_railway"] == (
-        "AP_ADS_B_0.5km平面防护间距要求_非电气化铁路",
-        None,
+        ["AP_ADS_B_0.5km平面防护间距要求_非电气化铁路"],
+        [],
     )
     assert ads_b_standard_keys["adsb_minimum_distance_0_7km_road"] == (
-        "AP_ADS_B_0.7km平面防护间距要求_公路",
-        None,
+        ["AP_ADS_B_0.7km平面防护间距要求_公路"],
+        [],
     )
     assert ads_b_standard_keys["adsb_minimum_distance_1_2km_high_frequency_welding_machine"] == (
-        "AP_ADS_B_1.2km平面防护间距要求_高频热合机",
-        None,
+        ["AP_ADS_B_1.2km平面防护间距要求_高频热合机"],
+        [],
     )
 
 
@@ -255,63 +255,63 @@ def test_standard_mappings_are_registered_by_station_type() -> None:
     assert "GP" in _STANDARD_KEYS_BY_STATION_TYPE
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["NDB"]["ndb_minimum_distance_50m"][0]
-        == "GB_NDB_50m最小间距区域_50"
+        == ["GB_NDB_50m最小间距区域_50"]
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_site_protection"][0]
-        == "GB_ILSLOC_场地保护区"
+        == ["GB_ILSLOC_场地保护区"]
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_forward_sector_3000m_15m"][0]
-        == "GB_ILSLOC_前向正负10°，3000米区域"
+        == ["GB_ILSLOC_前向正负10°，3000米区域"]
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_building_restriction_zone"][0]
-        is None
+        == []
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_run_area_protection_critical"][0]
-        is None
+        == []
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_run_area_protection_critical"][1]
-        == "MH_ILSLOC_运行保护区_临界区"
+        == ["MH_ILSLOC_运行保护区_临界区"]
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_run_area_protection_sensitive"][0]
-        is None
+        == []
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_run_area_protection_sensitive"][1]
-        == "MH_ILSLOC_运行保护区_敏感区"
+        == ["MH_ILSLOC_运行保护区_敏感区"]
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_site_protection_gb_region_a"][0]
-        == "GB_ILSGP_GB场地保护区_A"
+        == ["GB_ILSGP_GB场地保护区_A"]
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_site_protection_mh_region_b_ii"][1]
-        == "MH_ILSGP_场地保护区_B_Ⅱ"
+        == ["MH_ILSGP_场地保护区_B_Ⅱ"]
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_elevation_restriction_1deg"][1]
-        == "MH_ILSGP_1°仰角限制区域"
+        == ["MH_ILSGP_1°仰角限制区域"]
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_run_area_protection_critical"][0]
-        is None
+        == []
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_run_area_protection_critical"][1]
-        == "MH_ILSGP_运行保护区_临界"
+        == ["MH_ILSGP_运行保护区_临界"]
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_run_area_protection_sensitive"][0]
-        is None
+        == []
     )
     assert (
         _STANDARD_KEYS_BY_STATION_TYPE["GP"]["gp_run_area_protection_sensitive"][1]
-        == "MH_ILSGP_运行保护区_敏感"
+        == ["MH_ILSGP_运行保护区_敏感"]
     )
 
 
@@ -322,11 +322,11 @@ def test_build_rule_standards_returns_radar_b_mapping() -> None:
         region_code="default",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼",
         text=load_standard_config_entries()["MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼"],
-    )
+    )]
 
 
 def test_build_rule_standards_returns_radar_a_mh_mapping() -> None:
@@ -336,11 +336,11 @@ def test_build_rule_standards_returns_radar_a_mh_mapping() -> None:
         region_code="default",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="MH_PSRSSR_场地保护区",
         text=load_standard_config_entries()["MH_PSRSSR_场地保护区"],
-    )
+    )]
 
 
 def test_build_rule_standards_returns_weather_radar_450m_mapping() -> None:
@@ -350,11 +350,11 @@ def test_build_rule_standards_returns_weather_radar_450m_mapping() -> None:
         region_code="default",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="QX_2016_WeatherRadar_450_防护间距",
         text=load_standard_config_entries()["QX_2016_WeatherRadar_450_防护间距"],
-    )
+    )]
 
 
 def test_build_rule_standards_returns_weather_radar_1deg_mapping() -> None:
@@ -364,11 +364,11 @@ def test_build_rule_standards_returns_weather_radar_1deg_mapping() -> None:
         region_code="default",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="QX_2016_WeatherRadar_雷达探测⽅向1°仰角",
         text=load_standard_config_entries()["QX_2016_WeatherRadar_雷达探测⽅向1°仰角"],
-    )
+    )]
 
 
 def test_build_rule_standards_returns_wind_radar_15deg_mapping() -> None:
@@ -378,11 +378,11 @@ def test_build_rule_standards_returns_wind_radar_15deg_mapping() -> None:
         region_code="default",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="QX_2016_WindRadar_探测系统天线15°仰角",
         text=load_standard_config_entries()["QX_2016_WindRadar_探测系统天线15°仰角"],
-    )
+    )]
 
 
 def test_build_rule_standards_returns_radar_c_mapping() -> None:
@@ -392,21 +392,21 @@ def test_build_rule_standards_returns_radar_c_mapping() -> None:
         region_code="default",
     )
 
-    assert standards.gb is None
-    assert standards.mh == AnalysisStandardReference(
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
         code="MH_PSRSSR_16KM保护区",
         text=load_standard_config_entries()["MH_PSRSSR_16KM保护区"],
-    )
+    )]
 
 
 def test_standard_mappings_register_radar_standard_codes_separately_from_rule_codes() -> None:
     radar_standard_keys = _STANDARD_KEYS_BY_STATION_TYPE["RADAR"]
 
     assert radar_standard_keys["radar_minimum_distance_460m_standard"] == (
-        None,
-        "MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼",
+        [],
+        ["MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼"],
     )
     assert radar_standard_keys["radar_rotating_reflector_16km_standard"] == (
-        None,
-        "MH_PSRSSR_16KM保护区",
+        [],
+        ["MH_PSRSSR_16KM保护区"],
     )

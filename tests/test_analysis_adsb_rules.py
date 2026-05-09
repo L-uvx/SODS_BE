@@ -60,6 +60,16 @@ def test_adsb_0_5km_applies_to_non_electrified_railway_with_lte_boundary() -> No
     assert result.is_compliant is False
     assert result.metrics["boundaryMode"] == "lte"
 
+    assert result.over_distance_meters >= 0.0
+    assert 0.0 <= result.azimuth_degrees < 360.0
+    assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
+    assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
+    assert isinstance(result.relative_height_meters, float)
+    assert isinstance(result.is_in_radius, bool)
+    assert isinstance(result.is_in_zone, bool)
+    assert isinstance(result.details, str)
+    assert len(result.details) > 0
+
 
 def test_adsb_0_5km_applies_to_high_frequency_furnace_with_lt_boundary() -> None:
     payload = AdsbRuleProfile().analyze(

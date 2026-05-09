@@ -5,16 +5,23 @@ from shapely.geometry import Polygon
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.protection_zone_style import resolve_protection_zone_name
+from app.analysis.result_helpers import (
+    compute_azimuth_degrees,
+    compute_horizontal_angle_range_from_geometry,
+)
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
 from app.analysis.rules.loc.config import LOC_FORWARD_SECTOR_3000M_15M
 from app.analysis.rules.geometry_helpers import ensure_multipolygon, resolve_obstacle_shape
 from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
+from app.analysis.rules.loc.common import _join_loc_standard_names, _resolve_loc_standard_names
+
 
 
 @dataclass(slots=True)
 class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
     station: object
+    station_point: tuple[float, float]
     height_limit_meters: float
 
     # 执行已绑定的 LOC 前向扇区判定。
@@ -35,6 +42,36 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
                 "obstacle within forward sector and below height limit"
                 if is_compliant
                 else "obstacle within forward sector above height limit"
+            )
+
+        obstacle_centroid = obstacle_shape.centroid
+        az = compute_azimuth_degrees(
+            self.station_point[0], self.station_point[1],
+            obstacle_centroid.x, obstacle_centroid.y,
+        )
+        min_h, max_h = compute_horizontal_angle_range_from_geometry(
+            self.station_point, obstacle_shape,
+        )
+        relative_height_meters = top_elevation_meters - base_height_meters
+        over_distance_meters = (
+            max(0.0, top_elevation_meters - self.height_limit_meters)
+            if not is_compliant
+            else 0.0
+        )
+
+        gb_name, mh_name = _resolve_loc_standard_names(self.protection_zone.rule_code)
+        joined_names = _join_loc_standard_names(gb_name, mh_name)
+        limit = round(self.height_limit_meters - base_height_meters, 2)
+        if is_compliant:
+            details = (
+                f"满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定。"
+            )
+        else:
+            actual = round(top_elevation_meters - base_height_meters, 2)
+            over = round(top_elevation_meters - self.height_limit_meters, 2)
+            details = (
+                f"不满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定，"
+                f"实际高度{actual}m，超出{over}m。"
             )
 
         return AnalysisRuleResult(
@@ -61,10 +98,19 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
                 "elevationAngleDegrees": 0.0,
             },
             standards_rule_code=self.protection_zone.rule_code,
+            over_distance_meters=over_distance_meters,
+            azimuth_degrees=az,
+            max_horizontal_angle_degrees=max_h,
+            min_horizontal_angle_degrees=min_h,
+            relative_height_meters=relative_height_meters,
+            is_in_radius=entered_protection_zone,
+            is_in_zone=entered_protection_zone,
+            details=details,
         )
 
 
 class LocForwardSector3000m15mRule(ObstacleRule):
+    pass
     rule_code = "loc_forward_sector_3000m_15m"
     rule_name = "loc_forward_sector_3000m_15m"
     zone_code = "loc_forward_sector_3000m_15m"
@@ -145,6 +191,7 @@ class LocForwardSector3000m15mRule(ObstacleRule):
                 },
             ),
             station=station,
+            station_point=station_point,
             height_limit_meters=height_limit_meters,
         )
 
