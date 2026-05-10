@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -11,6 +11,7 @@ class ImportBatch(Base):
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    project: Mapped["Project"] = relationship("Project", lazy="joined")
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     import_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)

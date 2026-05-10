@@ -408,10 +408,17 @@ def test_build_export_payload_includes_rule_results_with_standards() -> None:
 
     payload = build_export_payload(analysis_task)
 
-    assert payload["ruleResults"][0]["standards"]["gb"][0]["code"] == "GB_NDB_50m最小间距区域_50"
-    assert payload["ruleResults"][0]["standards"]["gb"][0]["isCompliant"] is False
-    assert payload["ruleResults"][0]["standards"]["mh"][0]["code"] == "MH_NDB_50m最小间距区域_50"
-    assert payload["ruleResults"][0]["standards"]["mh"][0]["isCompliant"] is False
+    assert "tableRows" in payload
+    assert len(payload["tableRows"]) == 2  # gb + mh
+    row = payload["tableRows"][0]
+    assert row["obstacleName"] == "Obstacle A"
+    assert row["obstacleType"] == "建筑物/构建物"
+    assert row["stationName"] == "NDB Station"
+    assert row["standardName"] == "《GB6364-2013》"
+    # second row is MH standard
+    row_mh = payload["tableRows"][1]
+    assert row_mh["standardName"] == "《MH/T 4003.1-2021》"
+    assert row_mh["stationName"] == "NDB Station"
 
 
 def test_download_export_file_returns_docx_after_generation() -> None:
@@ -505,13 +512,22 @@ def test_run_export_task_writes_gb_and_mh_standards_into_report() -> None:
             assert report_export is not None
             document = Document(report_export.file_path)
 
+    # Check paragraphs for metadata (standards used, etc.)
     full_text = "\n".join(paragraph.text for paragraph in document.paragraphs)
-    assert "GB_NDB_50m最小间距区域_50" in full_text
-    assert "GB text" in full_text
-    assert "国标条文: GB_NDB_50m最小间距区域_50: GB text (不满足)" in full_text
-    assert "MH_NDB_50m最小间距区域_50" in full_text
-    assert "MH text" in full_text
-    assert "行标条文: MH_NDB_50m最小间距区域_50: MH text (不满足)" in full_text
+    assert "GB6364" in full_text
+    assert "MH/T 4003.1-2021" in full_text
+
+    # Check table cells for data row content
+    all_cell_text = "\n".join(
+        cell.text for table in document.tables for row in table.rows for cell in row.cells
+    )
+    assert "Obstacle A" in all_cell_text
+    assert "建筑物/构建物" in all_cell_text
+    assert "NDB Station" in all_cell_text
+    assert "GB text" in all_cell_text
+    assert "MH text" in all_cell_text
+    assert "《GB6364-2013》" in all_cell_text
+    assert "《MH/T 4003.1-2021》" in all_cell_text
 
 
 def test_run_export_task_succeeds_when_runtime_settings_are_uninitialized() -> None:

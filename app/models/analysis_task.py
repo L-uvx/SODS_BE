@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, JSON, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -13,6 +13,9 @@ class AnalysisTask(Base):
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     import_batch_id: Mapped[str] = mapped_column(
         ForeignKey("import_batches.id"), nullable=False
+    )
+    import_batch: Mapped["ImportBatch"] = relationship(
+        "ImportBatch", lazy="joined"
     )
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     progress_percent: Mapped[int] = mapped_column(nullable=False, default=0)
