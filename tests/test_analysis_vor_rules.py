@@ -11,8 +11,8 @@ from app.analysis.rules.vor.elevation_angle._200_300_1_5 import Vor200_300_1_5_R
 from app.analysis.rules.vor.elevation_angle._300_outside_2_5 import Vor300Outside2_5_Rule
 from app.analysis.rules.vor.elevation_angle._shared import (
     BoundVorElevationAngleRule,
-    compute_horizontal_angular_width,
 )
+from app.analysis.result_helpers import compute_horizontal_angular_width
 from app.analysis.rules.vor.profile import VorRuleProfile
 from app.analysis.rules.vor.reflector_mask_area import (
     BoundVorReflectorMaskAreaRule,

@@ -9,26 +9,13 @@ from app.analysis.result_helpers import (
     _normalize_azimuth_degrees,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    compute_horizontal_angular_width,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
 from app.analysis.rules.vor.common import _float_or_none, build_vor_ring_protection_zone
 
-
-# 计算障碍物相对台站点的最小包络水平夹角。
-def compute_horizontal_angular_width(
-    shape: BaseGeometry,
-    station_point: tuple[float, float],
-) -> float:
-    min_deg, max_deg = compute_horizontal_angle_range_from_geometry(
-        station_point, shape
-    )
-    if min_deg == 0.0 and max_deg == 0.0:
-        return 0.0
-    if min_deg <= max_deg:
-        return max_deg - min_deg
-    return (360.0 - min_deg) + max_deg
 
 
 @dataclass(slots=True)

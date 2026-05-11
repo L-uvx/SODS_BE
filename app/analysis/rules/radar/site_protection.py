@@ -7,13 +7,13 @@ from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    compute_horizontal_angular_width,
     compute_over_distance_meters,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
 from app.analysis.rules.radar.common import RadarRule, build_radar_circle_protection_zone
 from app.analysis.rules.base import BoundObstacleRule
-from app.analysis.rules.vor.elevation_angle._shared import compute_horizontal_angular_width
 
 
 @dataclass(slots=True)

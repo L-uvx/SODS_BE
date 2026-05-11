@@ -47,7 +47,12 @@ def _build_relative_position(metrics: dict | None, rule: dict | None = None) -> 
         max_h = rule.get("maxHorizontalAngleDegrees")
 
     if min_h is not None and max_h is not None:
-        avg = (min_h + max_h) / 2
+        if min_h <= max_h:
+            avg = (min_h + max_h) / 2
+        else:
+            avg = (min_h + max_h + 360) / 2
+            if avg >= 360:
+                avg -= 360
         azimuth_str = f"{avg:.2f}°"
     else:
         single = max_h if max_h is not None else min_h
