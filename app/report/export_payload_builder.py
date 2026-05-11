@@ -1,6 +1,7 @@
 from typing import Any
 
 from app.models.analysis_task import AnalysisTask
+from app.analysis.rules.radar.cumulative_analysis import compute_cumulative_horizontal_mask_angles
 
 _STANDARD_NAME_BY_PREFIX: list[tuple[str, str]] = [
     ("MH_PSRSSR_", "MH/T 4003.2-2014"),
@@ -179,6 +180,7 @@ def _build_summary(rule_results: list[dict], obstacle_count: int) -> str:
 def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     result_payload = analysis_task.result_payload or {}
     rule_results = result_payload.get("ruleResults", [])
+    cumulative_mask_angle_results = compute_cumulative_horizontal_mask_angles(rule_results)
 
     station_names_set: set[str] = set()
     standard_codes: set[str] = set()
@@ -214,6 +216,7 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
         "airportName": airport_name,
         "standardsUsed": standards_used,
         "stationNames": "、".join(sorted(station_names_set)),
+        "cumulativeMaskAngleResults": cumulative_mask_angle_results,
         "electromagneticZoneResult": "待补充",
         "obstacleCount": obstacle_count,
         "summary": summary,

@@ -79,11 +79,12 @@ def _merge_overlapping(spans: list[ObstacleAngleSpan]) -> tuple[float, float, li
             if span.max_azimuth > end:
                 cumulative += span.max_azimuth - end
                 end = span.max_azimuth
+                snapshots.append(AngleSnapshot(start=start, end=end, cumulative=cumulative))
         else:
             cumulative += span.max_azimuth - span.min_azimuth
             start = span.min_azimuth
             end = span.max_azimuth
-        snapshots.append(AngleSnapshot(start=start, end=end, cumulative=cumulative))
+            snapshots.append(AngleSnapshot(start=start, end=end, cumulative=cumulative))
 
     total_span = snapshots[-1].end - snapshots[0].start
     return total_span, cumulative, snapshots
@@ -190,14 +191,38 @@ def compute_cumulative_horizontal_mask_angles(
                 "stationType": str(r.get("stationType", "")),
                 "spans": [],
             }
-        radar_station_spans[station_id]["spans"].append(
-            ObstacleAngleSpan(
-                obstacle_id=int(r["obstacleId"]),
-                obstacle_name=str(r.get("obstacleName", "")),
-                min_azimuth=float(r.get("minHorizontalAngleDegrees", 0) or 0),
-                max_azimuth=float(r.get("maxHorizontalAngleDegrees", 0) or 0),
+        min_az = float(r.get("minHorizontalAngleDegrees", 0) or 0)
+        max_az = float(r.get("maxHorizontalAngleDegrees", 0) or 0)
+        if min_az == max_az:
+            continue
+        obstacle_id = int(r["obstacleId"])
+        obstacle_name = str(r.get("obstacleName", ""))
+        if min_az > max_az:
+            radar_station_spans[station_id]["spans"].append(
+                ObstacleAngleSpan(
+                    obstacle_id=obstacle_id,
+                    obstacle_name=obstacle_name,
+                    min_azimuth=min_az,
+                    max_azimuth=360.0,
+                )
             )
-        )
+            radar_station_spans[station_id]["spans"].append(
+                ObstacleAngleSpan(
+                    obstacle_id=obstacle_id,
+                    obstacle_name=obstacle_name,
+                    min_azimuth=0.0,
+                    max_azimuth=max_az,
+                )
+            )
+        else:
+            radar_station_spans[station_id]["spans"].append(
+                ObstacleAngleSpan(
+                    obstacle_id=obstacle_id,
+                    obstacle_name=obstacle_name,
+                    min_azimuth=min_az,
+                    max_azimuth=max_az,
+                )
+            )
 
     results: list[dict[str, object]] = []
     for station_data in radar_station_spans.values():
@@ -227,7 +252,7 @@ def compute_cumulative_horizontal_mask_angles(
             "cumulativeHorizontalAngleDegrees": round(cumulative, 2),
             "maxCumulativeIn15Deg": round(max_15, 2),
             "maxCumulativeIn45Deg": round(max_45, 2),
-            "isCompliant": is_compliant,
+            "isCompliant": "满足" if is_compliant else "不满足",
             "conclusion": conclusion,
             "clusters": clusters,
         })
