@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from shapely.geometry import Point
+
 from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
@@ -33,6 +35,7 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
         entered_protection_zone = obstacle_shape.intersects(
             self.protection_zone.local_geometry
         )
+        actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         base_height_meters = float(getattr(self.station, "altitude", 0.0) or 0.0)
         top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
         worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
@@ -40,16 +43,26 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
             obstacle_geometry=obstacle_shape,
             station_altitude_meters=base_height_meters,
         )
+        allowed_height_meters = worst_allowed_height_meters
 
         is_compliant = True
-        message = "obstacle outside loc building restriction zone region 3"
         if entered_protection_zone and worst_allowed_height_meters is not None:
             is_compliant = top_elevation_meters <= worst_allowed_height_meters
-            message = (
-                "obstacle within region 3 and below allowed height"
-                if is_compliant
-                else "obstacle within region 3 above allowed height"
-            )
+
+        over_height_meters = (
+            max(0.0, top_elevation_meters - (allowed_height_meters or 0.0))
+            if entered_protection_zone
+            else 0.0
+        )
+        if entered_protection_zone:
+            limit = round(allowed_height_meters or base_height_meters, 2)
+            if is_compliant:
+                message = f"位于建筑物限制区内,此处限制顶部高程为{limit}米，未超出标准要求"
+            else:
+                over = round(over_height_meters, 2)
+                message = f"位于建筑物限制区内,此处限制顶部高程为{limit}米,超出标准要求{over}米"
+        else:
+            message = "不位于建筑物限制区内"
 
         obstacle_centroid = obstacle_shape.centroid
         az = compute_azimuth_degrees(
@@ -60,11 +73,7 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
             self.station_point, obstacle_shape,
         )
         relative_height_meters = top_elevation_meters - base_height_meters
-        over_distance_meters = (
-            max(0.0, top_elevation_meters - (worst_allowed_height_meters or 0.0))
-            if not is_compliant
-            else 0.0
-        )
+        over_distance_meters = over_height_meters if not is_compliant else 0.0
 
         gb_name, mh_name = _resolve_loc_standard_names("loc_building_restriction_zone")
         joined_names = _join_loc_standard_names(gb_name, mh_name)
@@ -101,7 +110,10 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
                 "enteredProtectionZone": entered_protection_zone,
                 "baseHeightMeters": base_height_meters,
                 "topElevationMeters": top_elevation_meters,
+                "allowedHeightMeters": allowed_height_meters,
+                "overHeightMeters": over_height_meters,
                 "worstAllowedHeightMeters": worst_allowed_height_meters,
+                "actualDistanceMeters": actual_distance_meters,
             },
             standards_rule_code="loc_building_restriction_zone",
             over_distance_meters=over_distance_meters,

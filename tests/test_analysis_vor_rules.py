@@ -184,7 +184,7 @@ def test_analyze_outside_ring_is_compliant():
     )
     result = bound.analyze(obstacle)
     assert result.is_compliant is True
-    assert "outside" in result.message
+    assert "不在VOR" in result.message and "阴影区" in result.message
 
 
 # —— analyze 进入环带且高度合规 ——————————————————
@@ -236,7 +236,7 @@ def test_analyze_inside_ring_height_exceeded():
     )
     result = bound.analyze(obstacle)
     assert result.is_compliant is False
-    assert "exceeds" in result.message
+    assert "对边带天线相位中心" in result.message and "未对" not in result.message
 
     assert result.over_distance_meters >= 0.0
     assert 0.0 <= result.azimuth_degrees < 360.0
@@ -284,7 +284,7 @@ def test_analyze_beyond_shadow_radius_within_100m():
     )
     result = bound.analyze(obstacle)
     assert result.is_compliant is False
-    assert "exceeds" in result.message
+    assert "对边带天线相位中心" in result.message and "未对" not in result.message
     # x 应被夹到 shadow_radius
     assert result.metrics["clampedDistanceMeters"] == pytest.approx(shadow_radius)
 
@@ -308,6 +308,7 @@ def test_analyze_metrics_populated():
     assert "clampedDistanceMeters" in result.metrics
     assert "allowedHeightMeters" in result.metrics
     assert "topElevationMeters" in result.metrics
+    assert "overHeightMeters" in result.metrics
     assert "shadowRadiusMeters" in result.metrics
 
 
@@ -329,7 +330,7 @@ def test_vor_100_200_1_5_analyze_outside_ring_is_compliant():
     result = bound.analyze(obstacle)
     assert result.is_applicable is True
     assert result.is_compliant is True
-    assert "outside" in result.message
+    assert "不在VOR" in result.message and "仰角限制" in result.message
 
 
 def test_vor_100_200_1_5_analyze_below_benchmark_plane_is_compliant():
@@ -345,7 +346,7 @@ def test_vor_100_200_1_5_analyze_below_benchmark_plane_is_compliant():
 
     result = bound.analyze(obstacle)
     assert result.is_compliant is True
-    assert "below benchmark" in result.message
+    assert "低于基准面" in result.message
 
 
 def test_vor_100_200_1_5_analyze_vertical_angle_exceeded_is_non_compliant():
@@ -362,7 +363,7 @@ def test_vor_100_200_1_5_analyze_vertical_angle_exceeded_is_non_compliant():
 
     result = bound.analyze(obstacle)
     assert result.is_compliant is False
-    assert "elevation angle limit" in result.message
+    assert "垂直仰角为" in result.message
     assert result.metrics["verticalAngleDegrees"] > 1.5
 
 
@@ -381,7 +382,7 @@ def test_vor_100_200_1_5_analyze_horizontal_angle_exceeded_is_non_compliant():
 
     result = bound.analyze(obstacle)
     assert result.is_compliant is False
-    assert "horizontal angle limit" in result.message
+    assert "水平张角为" in result.message
     assert result.metrics["horizontalAngularWidthDegrees"] > 7.0
 
 
@@ -439,7 +440,7 @@ def test_vor_200_300_1_5_analyze_horizontal_angle_exceeded_is_non_compliant():
 
     result = bound.analyze(obstacle)
     assert result.is_compliant is False
-    assert "horizontal angle limit" in result.message
+    assert "水平张角为" in result.message
     assert result.metrics["horizontalAngularWidthDegrees"] > 10.0
 
 

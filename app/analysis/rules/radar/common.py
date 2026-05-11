@@ -90,9 +90,7 @@ class BoundRadarCircleRule(BoundObstacleRule):
             is_applicable=True,
             is_compliant=is_compliant,
             message=(
-                "obstacle outside radar protection zone"
-                if is_compliant
-                else "obstacle entered radar protection zone"
+                f"距离台站{round(actual_distance_meters, 2)}米"
             ),
             metrics=metrics,
             standards_rule_code=self.standards_rule_code,
@@ -102,7 +100,7 @@ class BoundRadarCircleRule(BoundObstacleRule):
             relative_height_meters=relative_height_meters,
             is_in_radius=entered_protection_zone,
             is_in_zone=entered_protection_zone,
-            over_distance_meters=over_distance,
+            over_distance_meters=top_elevation_meters,
             details=details,
         )
 

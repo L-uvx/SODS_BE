@@ -90,6 +90,8 @@ class BoundVor100mDatumPlaneRule(BoundVorDatumPlaneRule):
             and actual_distance > self._half_d
             and actual_distance < self.shadow_radius
         ):
+            raw_top = obstacle.get("topElevation")
+            top_elevation = float(raw_top if raw_top is not None else 0.0)
             obstacle_centroid = shape.centroid
             az = compute_azimuth_degrees(
                 self.station_point[0], self.station_point[1],
@@ -117,6 +119,9 @@ class BoundVor100mDatumPlaneRule(BoundVorDatumPlaneRule):
                 metrics={
                     "enteredProtectionZone": entered,
                     "actualDistanceMeters": actual_distance,
+                    "allowedHeightMeters": self.benchmark_height,
+                    "overHeightMeters": max(0.0, top_elevation - self.benchmark_height),
+                    "topElevationMeters": top_elevation,
                     "shadowRadiusMeters": self.shadow_radius,
                     "benchmarkHeightMeters": self.benchmark_height,
                 },

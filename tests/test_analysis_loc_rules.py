@@ -170,7 +170,7 @@ def test_loc_placeholder_building_restriction_regions_keep_standards_neutral() -
         "loc_building_restriction_zone_region_2",
         "loc_building_restriction_zone_region_4",
     ]
-    assert all(result.standards_rule_code is None for result in results)
+    assert all(result.standards_rule_code == "loc_building_restriction_zone" for result in results)
 
 
 def test_build_geometry_definition_returns_multipolygon_coordinates() -> None:
@@ -392,7 +392,7 @@ def test_loc_run_area_region_a_rule_rejects_obstacle_entering_sensitive_zone() -
 
     assert result.is_applicable is True
     assert result.is_compliant is False
-    assert result.standards_rule_code == "loc_run_area_protection_sensitive"
+    assert result.standards_rule_code == "loc_run_area_protection_critical"
     assert result.metrics["enteredProtectionZone"] is True
 
 
@@ -414,7 +414,7 @@ def test_loc_run_area_region_a_rule_skips_non_mobile_obstacle_type() -> None:
 
     assert result.is_applicable is False
     assert result.is_compliant is True
-    assert result.standards_rule_code == "loc_run_area_protection_sensitive"
+    assert result.standards_rule_code == "loc_run_area_protection_critical"
     assert result.metrics["enteredProtectionZone"] is True
 
 
@@ -968,7 +968,7 @@ def test_loc_forward_sector_rule_rejects_applicable_obstacle_above_height_limit(
     assert result.region_code == "default"
     assert result.is_applicable is True
     assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["heightLimitMeters"] == 515.0
+    assert result.metrics["allowedHeightMeters"] == 515.0
     assert result.is_compliant is False
 
 
@@ -1078,12 +1078,21 @@ def test_loc_profile_skips_forward_sector_rule_for_non_applicable_obstacle() -> 
         runways=[runway],
     )
 
-    assert [result.rule_name for result in payload.rule_results] == [
-        "loc_site_protection",
-    ]
-    assert {zone.rule_code for zone in payload.protection_zones} == {
-        "loc_site_protection",
-    }
+    for result in payload.rule_results:
+        assert result.station_id == 101
+        assert result.obstacle_id == 7
+
+    rule_names = [result.rule_name for result in payload.rule_results]
+    assert "loc_site_protection" in rule_names
+    assert "loc_forward_sector_3000m_15m" in rule_names
+
+    forward_result = next(
+        result
+        for result in payload.rule_results
+        if result.rule_code == "loc_forward_sector_3000m_15m"
+    )
+    assert forward_result.is_applicable is False
+    assert forward_result.is_compliant is True
 
 
 def _make_loc_profile_station() -> object:
@@ -1326,7 +1335,7 @@ def test_loc_rule_profile_only_prebinds_run_area_for_mobile_obstacle_batch(
 
     assert calls["run_area_builder"] == 1
     assert calls["building_builder"] == 0
-    assert calls["forward_sector_bind"] == 0
+    assert calls["forward_sector_bind"] == 1
 
 
 def test_loc_rule_profile_only_prebinds_building_groups_for_building_obstacle_batch(
@@ -1881,7 +1890,7 @@ def test_loc_forward_sector_rule_uses_config_defined_defaults() -> None:
     assert LOC_FORWARD_SECTOR_3000M_15M["radius_m"] == 3000.0
     assert LOC_FORWARD_SECTOR_3000M_15M["half_angle_degrees"] == 10.0
     assert LOC_FORWARD_SECTOR_3000M_15M["height_limit_offset_m"] == 15.0
-    assert result.metrics["heightLimitMeters"] == 515.0
+    assert result.metrics["allowedHeightMeters"] == 515.0
     assert result.metrics["elevationAngleDegrees"] == 0.0
 
 
@@ -1938,7 +1947,7 @@ def test_loc_forward_sector_rule_respects_sector_angle_boundary() -> None:
         "obstacleId": 9,
         "name": "Obstacle H",
         "rawObstacleType": "高压架空输电线路",
-        "globalObstacleCategory": "power_line_high_voltage_overhead",
+        "globalObstacleCategory": "power_line_high_voltage_110kv",
         "topElevation": 520.0,
         "geometry": {
             "type": "MultiPolygon",
@@ -1959,7 +1968,7 @@ def test_loc_forward_sector_rule_respects_sector_angle_boundary() -> None:
         "obstacleId": 10,
         "name": "Obstacle I",
         "rawObstacleType": "高压架空输电线路",
-        "globalObstacleCategory": "power_line_high_voltage_overhead",
+        "globalObstacleCategory": "power_line_high_voltage_110kv",
         "topElevation": 520.0,
         "geometry": {
             "type": "MultiPolygon",
@@ -2318,13 +2327,12 @@ def test_loc_building_restriction_zone_region_1_rule_allows_obstacle_within_zone
     ).analyze(obstacle)
 
     assert result.region_code == "1"
-    assert result.metrics == {
-        "enteredProtectionZone": True,
-        "baseHeightMeters": 500.0,
-        "allowedHeightMeters": 520.0,
-        "topElevationMeters": 519.0,
-    }
-    assert result.message == "obstacle within region 1 and below allowed height"
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["baseHeightMeters"] == 500.0
+    assert result.metrics["allowedHeightMeters"] == 520.0
+    assert result.metrics["topElevationMeters"] == 519.0
+    assert result.metrics["overHeightMeters"] == 0.0
+    assert result.message == "位于建筑物限制区内,此处限制顶部高程为520.0米，未超出标准要求"
     assert result.is_compliant is True
 
 
@@ -2376,13 +2384,12 @@ def test_loc_building_restriction_zone_region_1_rule_rejects_obstacle_within_zon
     ).analyze(obstacle)
 
     assert result.region_code == "1"
-    assert result.metrics == {
-        "enteredProtectionZone": True,
-        "baseHeightMeters": 500.0,
-        "allowedHeightMeters": 520.0,
-        "topElevationMeters": 521.0,
-    }
-    assert result.message == "obstacle within region 1 above allowed height"
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["baseHeightMeters"] == 500.0
+    assert result.metrics["allowedHeightMeters"] == 520.0
+    assert result.metrics["topElevationMeters"] == 521.0
+    assert result.metrics["overHeightMeters"] == 1.0
+    assert result.message == "位于建筑物限制区内,此处限制顶部高程为520.0米,超出标准要求1.0米"
     assert result.is_compliant is False
 
 
@@ -2434,13 +2441,12 @@ def test_loc_building_restriction_zone_region_2_rule_allows_obstacle_within_zone
     ).analyze(obstacle)
 
     assert result.region_code == "2"
-    assert result.metrics == {
-        "enteredProtectionZone": True,
-        "baseHeightMeters": 500.0,
-        "allowedHeightMeters": 520.0,
-        "topElevationMeters": 519.0,
-    }
-    assert result.message == "obstacle within region 2 and below allowed height"
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["baseHeightMeters"] == 500.0
+    assert result.metrics["allowedHeightMeters"] == 520.0
+    assert result.metrics["topElevationMeters"] == 519.0
+    assert result.metrics["overHeightMeters"] == 0.0
+    assert result.message == "位于建筑物限制区内,此处限制顶部高程为520.0米，未超出标准要求"
     assert result.is_compliant is True
 
 
@@ -2492,13 +2498,12 @@ def test_loc_building_restriction_zone_region_2_rule_rejects_obstacle_within_zon
     ).analyze(obstacle)
 
     assert result.region_code == "2"
-    assert result.metrics == {
-        "enteredProtectionZone": True,
-        "baseHeightMeters": 500.0,
-        "allowedHeightMeters": 520.0,
-        "topElevationMeters": 521.0,
-    }
-    assert result.message == "obstacle within region 2 above allowed height"
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["baseHeightMeters"] == 500.0
+    assert result.metrics["allowedHeightMeters"] == 520.0
+    assert result.metrics["topElevationMeters"] == 521.0
+    assert result.metrics["overHeightMeters"] == 1.0
+    assert result.message == "位于建筑物限制区内,此处限制顶部高程为520.0米,超出标准要求1.0米"
     assert result.is_compliant is False
 
 
@@ -3360,7 +3365,8 @@ def test_loc_building_restriction_zone_region_4_rule_allows_obstacle_within_zone
 
     assert result.metrics["enteredProtectionZone"] is True
     assert result.is_compliant is True
-    assert result.message == "obstacle within region 4 and below allowed height"
+    assert "位于建筑物限制区内" in result.message
+    assert "未超出标准要求" in result.message
 
 
 def test_loc_building_restriction_zone_region_4_bind_uses_shared_context_and_region_builder(
@@ -3761,4 +3767,5 @@ def test_loc_building_restriction_zone_region_4_rule_rejects_obstacle_within_zon
 
     assert result.metrics["enteredProtectionZone"] is True
     assert result.is_compliant is False
-    assert result.message == "obstacle within region 4 above allowed height"
+    assert "位于建筑物限制区内" in result.message
+    assert "超出标准要求" in result.message

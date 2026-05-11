@@ -53,10 +53,10 @@ def _build_relative_position(metrics: dict | None, rule: dict | None = None) -> 
         single = max_h if max_h is not None else min_h
         azimuth_str = f"{single:.2f}°" if single is not None else ""
 
-    distance = metrics.get("actualDistanceMeters") or metrics.get("actualDistance")
+    distance = metrics.get("actualDistanceMeters")
     distance_str = f"{distance:.2f}" if distance is not None else ""
 
-    top_elevation = metrics.get("topElevationMeters") or metrics.get("topElevation")
+    top_elevation = metrics.get("topElevationMeters")
     elevation_str = f"{top_elevation:.2f}" if top_elevation is not None else ""
 
     parts = []
@@ -108,19 +108,9 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
 
         for std_key in ("gb", "mh"):
             for s in _normalize_standards(r.get("standards", {}).get(std_key)):
-                over_val = r.get("overDistanceMeters")
-                if over_val is None:
-                    over_val = metrics.get("overDistanceMeters")
-                if over_val is None:
-                    over_val = metrics.get("overDistance")
-                over = _float_or_none(over_val)
+                over = _float_or_none(metrics.get("overHeightMeters"))
 
-                height_val = (
-                    metrics.get("allowedHeightMeters")
-                    or metrics.get("limitHeightMeters")
-                    or metrics.get("heightLimitMeters")
-                    or metrics.get("allowedHeight")
-                )
+                height_val = _float_or_none(metrics.get("allowedHeightMeters"))
 
                 row = {
                     "obstacleName": obstacle_name,
@@ -130,30 +120,29 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                     "standardName": f"《{_extract_standard_name(s.get('code', ''))}》",
                     "standardClause": s.get("text", ""),
                     "analysisDetail": details,
-                    "heightLimit": _float_or_none(height_val) or 0,
+                    "heightLimit": round(height_val or 0, 2),
                     "isCompliant": compliant_text,
-                    "overHeight": over or 0,
+                    "overHeight": round(over or 0, 2),
                 }
                 rows.append(row)
                 key = (obstacle_name, station_name)
-                obstacle_station_overheights.setdefault(key, []).append(over or 0)
+                obstacle_station_overheights.setdefault(key, []).append(round(over or 0, 2))
 
     for row in rows:
         key = (row["obstacleName"], row["stationName"])
         dists = obstacle_station_overheights.get(key, [0])
-        row["finalOverHeight"] = max(dists)
+        row["finalOverHeight"] = round(max(dists), 2)
 
     return rows
 
 
 def _get_metrics_height(metrics: dict) -> float | None:
-    for key in ("allowedHeightMeters", "limitHeightMeters", "heightLimitMeters", "allowedHeight"):
-        val = metrics.get(key)
-        if val is not None:
-            try:
-                return float(val)
-            except (TypeError, ValueError):
-                pass
+    val = metrics.get("allowedHeightMeters")
+    if val is not None:
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            pass
     return None
 
 

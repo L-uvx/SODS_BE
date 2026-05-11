@@ -54,7 +54,7 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             "horizontalMaskAngleDegrees": horizontal_mask_angle_degrees,
             "verticalLimitAngleDegrees": self.vertical_limit_angle_degrees,
             "horizontalLimitAngleDegrees": self.horizontal_limit_angle_degrees,
-            "limitHeightMeters": self.base_height_meters,
+            "allowedHeightMeters": self.base_height_meters,
             "topElevationMeters": top_elevation_meters,
             "baseHeightMeters": self.base_height_meters,
         }
@@ -67,7 +67,7 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             return self._build_result(
                 obstacle=obstacle,
                 is_compliant=True,
-                message="obstacle outside radar site protection zone",
+                message="不在雷达场地保护区内",
                 metrics=metrics,
                 azimuth_degrees=azimuth_degrees,
                 max_horizontal_angle_degrees=max_horizontal_angle_degrees,
@@ -97,7 +97,8 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
                 + self.base_height_meters
             )
         metrics["verticalMaskAngleDegrees"] = vertical_mask_angle_degrees
-        metrics["limitHeightMeters"] = limit_height_meters
+        metrics["allowedHeightMeters"] = limit_height_meters
+        metrics["overHeightMeters"] = max(0.0, top_elevation_meters - limit_height_meters)
         if entered_protection_zone:
             over_distance = compute_over_distance_meters(top_elevation_meters, limit_height_meters)
 
@@ -105,11 +106,9 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             vertical_mask_angle_degrees > self.vertical_limit_angle_degrees
             and horizontal_mask_angle_degrees > self.horizontal_limit_angle_degrees
         )
-        message = (
-            "obstacle exceeds radar site protection mask angles"
-            if not is_compliant
-            else "obstacle within radar site protection angle limits"
-        )
+        v_angle = round(vertical_mask_angle_degrees, 2)
+        h_angle = round(horizontal_mask_angle_degrees, 2)
+        message = f"对台站的垂直遮蔽角为{v_angle}°，水平遮蔽角为{h_angle}°"
         details = f"障碍物{'满足' if is_compliant else '不满足'}雷达场地保护遮蔽角限制要求。"
 
         return self._build_result(

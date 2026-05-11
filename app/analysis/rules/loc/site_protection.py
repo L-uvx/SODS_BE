@@ -35,23 +35,28 @@ class BoundLocSiteProtectionRule(BoundObstacleRule):
         )
         base_height_meters = float(getattr(self.station, "altitude", 0.0) or 0.0)
         top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
+        actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         is_cable = (
             str(obstacle["globalObstacleCategory"]) == "power_or_communication_cable"
         )
 
         is_compliant = True
-        message = "obstacle outside site protection zone"
         if entered_protection_zone:
             if is_cable:
                 is_compliant = top_elevation_meters < base_height_meters
-                message = (
-                    "cable below station base height"
-                    if is_compliant
-                    else "cable enters site protection zone above station base height"
-                )
             else:
                 is_compliant = False
-                message = "obstacle enters site protection zone"
+
+        if is_cable:
+            if not is_compliant:
+                message = "位于场地保护区内，未埋地"
+            else:
+                message = "位于场地保护区内，已埋地"
+        else:
+            if entered_protection_zone:
+                message = "位于场地保护区内"
+            else:
+                message = "不位于场地保护区内"
 
         obstacle_centroid = obstacle_shape.centroid
         az = compute_azimuth_degrees(
@@ -75,6 +80,8 @@ class BoundLocSiteProtectionRule(BoundObstacleRule):
         else:
             details = ""
 
+        over_height_meters = max(0.0, top_elevation_meters - base_height_meters)
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -94,11 +101,14 @@ class BoundLocSiteProtectionRule(BoundObstacleRule):
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
                 "baseHeightMeters": base_height_meters,
+                "allowedHeightMeters": base_height_meters,
                 "topElevationMeters": top_elevation_meters,
+                "overHeightMeters": over_height_meters,
                 "rectangleLengthMeters": self.rectangle_length_meters,
+                "actualDistanceMeters": actual_distance_meters,
             },
             standards_rule_code=standards_rule_code,
-            over_distance_meters=0.0,
+            over_distance_meters=over_height_meters if not is_compliant else 0.0,
             azimuth_degrees=az,
             max_horizontal_angle_degrees=max_h,
             min_horizontal_angle_degrees=min_h,

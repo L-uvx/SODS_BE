@@ -44,7 +44,7 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         shape = resolve_obstacle_shape(obstacle)
         entered = shape.intersects(self.protection_zone.local_geometry)
-        min_distance = float(shape.distance(Point(self.station_point)))
+        actual_distance = float(shape.distance(Point(self.station_point)))
 
         raw_top = obstacle.get("topElevation")
         top_elevation = float(raw_top if raw_top is not None else 0.0)
@@ -61,7 +61,7 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
 
         metrics: dict[str, object] = {
             "enteredProtectionZone": entered,
-            "minDistanceMeters": min_distance,
+            "actualDistanceMeters": actual_distance,
             "topElevationMeters": top_elevation,
             "heightDiffMeters": height_diff,
             "baseHeightMeters": self.base_height,
@@ -87,7 +87,7 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                 region_name=self.protection_zone.region_name,
                 is_applicable=True,
                 is_compliant=True,
-                message="obstacle outside elevation angle zone",
+                message=f"不在VOR {self.inner_radius_m}-{self.outer_radius_m}m仰角限制范围内",
                 metrics=metrics,
                 standards_rule_code=self.protection_zone.rule_code,
                 over_distance_meters=0.0,
@@ -117,7 +117,7 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                 region_name=self.protection_zone.region_name,
                 is_applicable=True,
                 is_compliant=True,
-                message="obstacle below benchmark plane",
+                message="障碍物低于基准面",
                 metrics=metrics,
                 standards_rule_code=self.protection_zone.rule_code,
                 over_distance_meters=0.0,
@@ -130,10 +130,20 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                 details="障碍物低于基准面，满足仰角要求。",
             )
 
-        vertical_angle = math.degrees(math.atan(height_diff / max(min_distance, 0.001)))
+        vertical_angle = math.degrees(math.atan(height_diff / max(actual_distance, 0.001)))
         metrics["verticalAngleDegrees"] = vertical_angle
 
         if vertical_angle > self.limit_angle_degrees:
+            v_angle = round(vertical_angle, 2)
+            if self.protection_zone.zone_code == "vor_300_outside_2_5_deg":
+                message = f"与基准面形成的垂直仰角为{v_angle}°"
+            else:
+                hw = compute_horizontal_angular_width(
+                    shape=shape,
+                    station_point=self.station_point,
+                )
+                h_angle = round(hw, 2)
+                message = f"与基准面形成的垂直仰角为{v_angle}°,超出基准面高度的水平张角为{h_angle}°"
             return AnalysisRuleResult(
                 station_id=self.protection_zone.station_id,
                 station_type=self.protection_zone.station_type,
@@ -149,10 +159,7 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                 region_name=self.protection_zone.region_name,
                 is_applicable=True,
                 is_compliant=False,
-                message=(
-                    "obstacle exceeds elevation angle limit: "
-                    f"{vertical_angle:.2f}deg > {self.limit_angle_degrees:.2f}deg"
-                ),
+                message=message,
                 metrics=metrics,
                 standards_rule_code=self.protection_zone.rule_code,
                 over_distance_meters=0.0,
@@ -188,9 +195,9 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                     is_applicable=True,
                     is_compliant=False,
                     message=(
-                        "obstacle exceeds horizontal angle limit: "
-                        f"{horizontal_width:.2f}deg > "
-                        f"{self.horizontal_angle_limit_degrees:.2f}deg"
+                        "与基准面形成的垂直仰角为"
+                        f"{round(vertical_angle, 2)}°,超出基准面高度的水平张角为"
+                        f"{round(horizontal_width, 2)}°"
                     ),
                     metrics=metrics,
                     standards_rule_code=self.protection_zone.rule_code,
@@ -219,7 +226,12 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=True,
-            message="obstacle within elevation angle limit",
+            message=(
+                "与基准面形成的垂直仰角为"
+                f"{round(vertical_angle, 2)}°,超出基准面高度的水平张角为"
+                f"{round(horizontal_width, 2)}°"
+            ) if self.horizontal_angle_limit_degrees is not None
+            else f"与基准面形成的垂直仰角为{round(vertical_angle, 2)}°",
             metrics=metrics,
             standards_rule_code=self.protection_zone.rule_code,
             over_distance_meters=0.0,

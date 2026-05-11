@@ -387,8 +387,8 @@ def test_build_export_payload_includes_rule_results_with_standards() -> None:
                     "regionName": "default",
                     "isApplicable": True,
                     "isCompliant": False,
-                    "message": "distance below minimum separation",
-                    "metrics": {"requiredDistanceMeters": 50.0},
+                    "message": "在50米以内",
+                    "metrics": {"minimumDistanceMeters": 50.0},
                     "standards": {
                         "gb": {
                             "code": "GB_NDB_50m最小间距区域_50",
@@ -480,8 +480,8 @@ def test_run_export_task_writes_gb_and_mh_standards_into_report() -> None:
                         "regionName": "default",
                         "isApplicable": True,
                         "isCompliant": False,
-                        "message": "distance below minimum separation",
-                        "metrics": {"requiredDistanceMeters": 50.0},
+                        "message": "在50米以内",
+                        "metrics": {"minimumDistanceMeters": 50.0},
                         "standards": {
                             "gb": {
                                 "code": "GB_NDB_50m最小间距区域_50",

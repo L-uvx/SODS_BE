@@ -37,6 +37,7 @@ class BoundGpRunAreaProtectionRegionARule(BoundObstacleRule):
         min_h, max_h = compute_horizontal_angle_range_from_geometry(
             self.station_point, obstacle_shape,
         )
+        top_elevation_meters = float(obstacle.get("topElevation") or 0.0)
 
         if is_applicable and entered_protection_zone:
             details = "障碍物进入运行保护区关键区域。"
@@ -61,20 +62,21 @@ class BoundGpRunAreaProtectionRegionARule(BoundObstacleRule):
             is_applicable=is_applicable,
             is_compliant=(not entered_protection_zone) if is_applicable else True,
             message=(
-                "obstacle type not restricted by GP run area critical standard"
+                "在运行保护区范围内,但标准未明确对该障碍物类型进行限制"
                 if not is_applicable
                 else (
-                    "obstacle outside GP run area critical region"
+                    "不在运行保护区临界区范围内"
                     if not entered_protection_zone
-                    else "obstacle enters GP run area critical region"
+                    else "在临界区范围内"
                 )
             ),
             metrics={
                 "areaType": "critical",
                 "enteredProtectionZone": entered_protection_zone,
+                "topElevationMeters": top_elevation_meters,
             },
             standards_rule_code="gp_run_area_protection_critical",
-            over_distance_meters=0.0,
+            over_distance_meters=top_elevation_meters,
             azimuth_degrees=az,
             max_horizontal_angle_degrees=max_h,
             min_horizontal_angle_degrees=min_h,

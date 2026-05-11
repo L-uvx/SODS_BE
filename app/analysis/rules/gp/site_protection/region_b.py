@@ -9,6 +9,7 @@ from app.analysis.result_helpers import (
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import ObstacleRule
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
+from shapely.geometry import Point
 from app.analysis.rules.gp.clearance import calculate_gp_clearance_limit_height_meters
 from app.analysis.rules.gp.site_protection.common import BoundGpSiteProtectionRegionRule
 from app.analysis.rules.gp.site_protection.helpers import (
@@ -49,13 +50,14 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
         )
         obstacle_centroid = obstacle_shape.centroid
         sp = self.shared_context.station_point
+        actual_distance_meters = float(obstacle_shape.distance(Point(sp)))
         az = compute_azimuth_degrees(sp[0], sp[1], obstacle_centroid.x, obstacle_centroid.y)
         min_h, max_h = compute_horizontal_angle_range_from_geometry(sp, obstacle_shape)
         rel_height = top_elev - base_h
 
         if not entered_protection_zone:
             is_compliant = True
-            message = "obstacle outside GP site protection region B"
+            message = "不在B区范围内"
             over = 0.0
             details = "障碍物未进入GP场地保护区B区。"
         else:
@@ -68,13 +70,13 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
             )
             if forward_distance_meters is None:
                 is_compliant = True
-                message = "obstacle outside GP site protection region B"
+                message = "在B区范围内"
                 over = 0.0
-                details = "障碍物未进入GP场地保护区B区。"
+                details = "障碍物进入GP场地保护区B区。"
             elif self.protection_zone.zone_code == "gp_site_protection_gb":
                 if forward_distance_meters <= 600.0:
                     is_compliant = False
-                    message = "obstacle within GP region B forward 600m"
+                    message = "在B区范围600米内"
                     over = 0.0
                     details = f"障碍物进入{self.protection_zone.zone_name}B区前向600m内。"
                 else:
@@ -105,16 +107,16 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
                             details = f"不满足规定要求，障碍物高度{top_elev}m，允许高度{clearance_limit_height_meters}m，超出{over}m。"
             elif station_sub_type == "I":
                 is_compliant = False
-                message = "obstacle enters GP MH region B subtype I"
+                message = "在B区范围内"
                 over = 0.0
                 details = f"障碍物进入{self.protection_zone.zone_name}B区。"
             elif station_sub_type in {"II", "III"}:
                 if is_airport_ring_road:
                     is_compliant = forward_distance_meters > 600.0
                     message = (
-                        "airport ring road outside GP MH region B forward 600m"
+                        "在B区范围内"
                         if is_compliant
-                        else "airport ring road within GP MH region B forward 600m"
+                        else "在B区范围600米内"
                     )
                     over = 0.0
                     details = (
@@ -124,12 +126,12 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
                     )
                 else:
                     is_compliant = False
-                    message = "non-ring-road obstacle enters GP MH region B"
+                    message = "在B区范围内"
                     over = 0.0
                     details = f"障碍物进入{self.protection_zone.zone_name}B区。"
             else:
                 is_compliant = False
-                message = "obstacle enters GP site protection region B"
+                message = "在B区范围内"
                 over = 0.0
                 details = f"障碍物进入{self.protection_zone.zone_name}B区。"
 
@@ -139,6 +141,8 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
             message=message,
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
+                "topElevationMeters": top_elev,
+                "actualDistanceMeters": actual_distance_meters,
                 "forwardDistanceMeters": forward_distance_meters,
                 "isAirportRingRoad": is_airport_ring_road,
                 "requiresClearanceEvaluation": requires_clearance_evaluation,
@@ -149,6 +153,7 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
                     or forward_distance_meters <= 600.0
                     else {
                         "clearanceLimitHeightMeters": clearance_limit_height_meters,
+                        "allowedHeightMeters": clearance_limit_height_meters,
                         "overHeightMeters": (
                             None
                             if clearance_limit_height_meters is None

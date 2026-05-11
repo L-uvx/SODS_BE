@@ -147,7 +147,7 @@ def test_radar_a_passes_when_vertical_angle_is_below_0_25_deg() -> None:
     assert result.metrics["horizontalMaskAngleDegrees"] > 1.5
     assert result.metrics["verticalLimitAngleDegrees"] == 0.25
     assert result.metrics["horizontalLimitAngleDegrees"] == 1.5
-    assert result.metrics["limitHeightMeters"] > result.metrics["baseHeightMeters"]
+    assert result.metrics["allowedHeightMeters"] > result.metrics["baseHeightMeters"]
 
 
 def test_radar_a_passes_when_horizontal_angle_is_not_greater_than_1_5_deg() -> None:
@@ -170,7 +170,7 @@ def test_radar_a_passes_when_horizontal_angle_is_not_greater_than_1_5_deg() -> N
     assert result.metrics["horizontalMaskAngleDegrees"] <= 1.5
     assert result.metrics["verticalLimitAngleDegrees"] == 0.25
     assert result.metrics["horizontalLimitAngleDegrees"] == 1.5
-    assert result.metrics["limitHeightMeters"] < result.metrics["topElevationMeters"]
+    assert result.metrics["allowedHeightMeters"] < result.metrics["topElevationMeters"]
 
 
 def test_radar_a_fails_when_vertical_and_horizontal_angles_both_exceed_limits() -> None:
@@ -193,7 +193,7 @@ def test_radar_a_fails_when_vertical_and_horizontal_angles_both_exceed_limits() 
     assert result.metrics["horizontalMaskAngleDegrees"] > 1.5
     assert result.metrics["verticalLimitAngleDegrees"] == 0.25
     assert result.metrics["horizontalLimitAngleDegrees"] == 1.5
-    assert result.metrics["limitHeightMeters"] < result.metrics["topElevationMeters"]
+    assert result.metrics["allowedHeightMeters"] < result.metrics["topElevationMeters"]
     assert result.metrics["baseHeightMeters"] == 30.0
 
 

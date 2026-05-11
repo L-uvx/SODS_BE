@@ -1579,7 +1579,7 @@ def test_get_analysis_task_result_returns_ndb_300m_rule_result_for_hill() -> Non
     assert response.status_code == 200
     rule_results = response.json()["ruleResults"]
     assert rule_results[0]["ruleName"] == "ndb_minimum_distance_300m"
-    assert rule_results[0]["metrics"]["requiredDistanceMeters"] == 300.0
+    assert rule_results[0]["metrics"]["minimumDistanceMeters"] == 300.0
 
 
 def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_rule() -> None:
@@ -2406,10 +2406,9 @@ def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_4
     assert loc_rule["zoneCode"] == "loc_building_restriction_zone"
     assert loc_rule["zoneName"] == "LOC 建筑物限制区"
     assert loc_rule["regionCode"] == "4"
-    assert loc_rule["standards"] == {
-        "gb": None,
-        "mh": None,
-    }
+    assert loc_rule["standards"]["gb"] is None
+    assert loc_rule["standards"]["mh"] is not None
+    assert loc_rule["standards"]["mh"][0]["code"] == "MH_ILSLOC_建筑物限制区_Ⅲ"
 
     protection_zone = next(
         item

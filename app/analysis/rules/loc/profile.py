@@ -82,10 +82,7 @@ class LocRuleProfile:
             runway_context=runway_context,
         )
         forward_sector_rule = None
-        if (
-            not has_obstacles
-            or obstacle_categories & self._forward_sector_rule.SUPPORTED_CATEGORIES
-        ):
+        if True:
             forward_sector_rule = self._forward_sector_rule.bind(
                 station=station,
                 station_point=station_point,
@@ -151,10 +148,7 @@ class LocRuleProfile:
         ]
         for obstacle in obstacles:
             results.append(site_protection_rule.analyze(obstacle))
-            if (
-                forward_sector_rule is not None
-                and self._forward_sector_rule.is_applicable(obstacle)
-            ):
+            if forward_sector_rule is not None:
                 results.append(forward_sector_rule.analyze(obstacle))
             if self._is_run_area_applicable(obstacle):
                 for rule in run_area_rules:

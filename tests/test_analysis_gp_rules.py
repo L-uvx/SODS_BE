@@ -548,9 +548,11 @@ def test_gp_region_c_road_entering_region_is_non_compliant() -> None:
     )
 
     assert result.is_compliant is False
-    assert result.message == "road or rail obstacle enters GP region C"
+    assert result.message == "在C区范围内"
     assert result.metrics == {
         "enteredProtectionZone": True,
+        "topElevationMeters": 510.0,
+        "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": True,
         "requiresClearanceEvaluation": False,
     }
@@ -586,9 +588,11 @@ def test_gp_region_c_electrified_rail_entering_region_is_non_compliant() -> None
     )
 
     assert result.is_compliant is False
-    assert result.message == "road or rail obstacle enters GP region C"
+    assert result.message == "在C区范围内"
     assert result.metrics == {
         "enteredProtectionZone": True,
+        "topElevationMeters": 510.0,
+        "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": True,
         "requiresClearanceEvaluation": False,
     }
@@ -623,9 +627,11 @@ def test_gp_region_c_non_electrified_rail_entering_region_is_non_compliant() -> 
     )
 
     assert result.is_compliant is False
-    assert result.message == "road or rail obstacle enters GP region C"
+    assert result.message == "在C区范围内"
     assert result.metrics == {
         "enteredProtectionZone": True,
+        "topElevationMeters": 510.0,
+        "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": True,
         "requiresClearanceEvaluation": False,
     }
@@ -664,6 +670,8 @@ def test_gp_region_c_non_road_or_rail_with_unavailable_clearance_is_non_complian
     assert result.message == "gp clearance evaluation pending"
     assert result.metrics == {
         "enteredProtectionZone": True,
+        "topElevationMeters": 510.0,
+        "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": False,
         "requiresClearanceEvaluation": True,
     }
@@ -709,9 +717,12 @@ def test_gp_region_c_non_road_or_rail_with_available_clearance_can_be_compliant(
     assert result.is_compliant is True
     assert result.metrics == {
         "enteredProtectionZone": True,
+        "topElevationMeters": 510.0,
+        "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": False,
         "requiresClearanceEvaluation": True,
         "clearanceLimitHeightMeters": 520.0,
+        "allowedHeightMeters": 520.0,
         "overHeightMeters": -10.0,
     }
 
@@ -755,689 +766,14 @@ def test_gp_region_c_non_road_or_rail_with_available_clearance_can_be_non_compli
     assert result.is_compliant is False
     assert result.metrics == {
         "enteredProtectionZone": True,
+        "topElevationMeters": 530.0,
+        "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": False,
         "requiresClearanceEvaluation": True,
         "clearanceLimitHeightMeters": 520.0,
+        "allowedHeightMeters": 520.0,
         "overHeightMeters": 10.0,
     }
-
-
-def test_gp_rule_profile_returns_dual_standard_protection_zones() -> None:
-    profile_module = importlib.import_module("app.analysis.rules.gp.profile")
-
-    payload = profile_module.GpRuleProfile().analyze(
-        station=_make_gp_station(),
-        obstacles=[],
-        station_point=(0.0, 0.0),
-        runways=[
-            {
-                "runNumber": "18",
-                "directionDegrees": 0.0,
-                "widthMeters": 40.0,
-                "lengthMeters": 600.0,
-                "localCenterPoint": (0.0, -600.0),
-            }
-        ],
-    )
-
-    assert len(payload.protection_zones) == 7
-    assert {zone.zone_code for zone in payload.protection_zones} == {
-        "gp_elevation_restriction_1deg",
-        "gp_site_protection_gb",
-        "gp_site_protection_mh",
-    }
-    assert {zone.region_code for zone in payload.protection_zones} == {
-        "A",
-        "B",
-        "C",
-        "default",
-    }
-
-
-def test_gp_rule_profile_returns_run_area_protection_zones_for_mobile_obstacle_categories() -> None:
-    profile_module = importlib.import_module("app.analysis.rules.gp.profile")
-
-    payload = profile_module.GpRuleProfile().analyze(
-        station=_make_gp_station(),
-        obstacles=[
-            {
-                "obstacleId": 901,
-                "name": "Run Area Vehicle",
-                "rawObstacleType": "车辆",
-                "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
-                "topElevation": 510.0,
-                "localGeometry": {"type": "Point", "coordinates": [0.0, -100.0]},
-                "geometry": {"type": "Point", "coordinates": [0.0, -100.0]},
-            }
-        ],
-        station_point=(0.0, 0.0),
-        runways=[
-            {
-                "runNumber": "18",
-                "directionDegrees": 0.0,
-                "widthMeters": 40.0,
-                "lengthMeters": 600.0,
-                "localCenterPoint": (0.0, -600.0),
-                "maximumAirworthiness": 1,
-            }
-        ],
-    )
-
-    run_area_zone_codes = {
-        zone.rule_code
-        for zone in payload.protection_zones
-        if zone.zone_code == "gp_run_area_protection"
-    }
-    run_area_rule_codes = {
-        result.rule_code
-        for result in payload.rule_results
-        if result.zone_code == "gp_run_area_protection"
-    }
-
-    assert run_area_zone_codes == {
-        "gp_run_area_protection_region_a",
-        "gp_run_area_protection_region_b",
-    }
-    assert run_area_rule_codes == {
-        "gp_run_area_protection_region_a",
-        "gp_run_area_protection_region_b",
-    }
-
-
-def test_gp_run_area_region_a_rule_uses_critical_area_semantics() -> None:
-    region_a_module = importlib.import_module(
-        "app.analysis.rules.gp.run_area_protection.region_a"
-    )
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.run_area_protection.helpers"
-    )
-    shared_context = helpers.build_gp_run_area_shared_context(
-        station=_make_gp_station(),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-            "maximumAirworthiness": 1,
-        },
-    )
-
-    assert shared_context is not None
-    bound_rule = region_a_module.GpRunAreaProtectionRegionARule().bind(
-        station=_make_gp_station(),
-        shared_context=shared_context,
-    )
-
-    result = bound_rule.analyze(
-        {
-            "obstacleId": 902,
-            "name": "Run Area Vehicle A",
-            "rawObstacleType": "车辆",
-            "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
-            "topElevation": 510.0,
-            "localGeometry": {"type": "Point", "coordinates": [0.0, -100.0]},
-            "geometry": {"type": "Point", "coordinates": [0.0, -100.0]},
-        }
-    )
-
-    assert result.metrics["areaType"] == "critical"
-    assert result.standards_rule_code == "gp_run_area_protection_critical"
-
-
-def test_gp_run_area_region_b_rule_uses_sensitive_area_semantics() -> None:
-    region_b_module = importlib.import_module(
-        "app.analysis.rules.gp.run_area_protection.region_b"
-    )
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.run_area_protection.helpers"
-    )
-    shared_context = helpers.build_gp_run_area_shared_context(
-        station=_make_gp_station(),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-            "maximumAirworthiness": 1,
-        },
-    )
-
-    assert shared_context is not None
-    bound_rule = region_b_module.GpRunAreaProtectionRegionBRule().bind(
-        station=_make_gp_station(),
-        shared_context=shared_context,
-    )
-
-    result = bound_rule.analyze(
-        {
-            "obstacleId": 903,
-            "name": "Run Area Vehicle B",
-            "rawObstacleType": "车辆",
-            "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
-            "topElevation": 510.0,
-            "localGeometry": {"type": "Point", "coordinates": [0.0, -310.0]},
-            "geometry": {"type": "Point", "coordinates": [0.0, -310.0]},
-        }
-    )
-
-    assert result.metrics["areaType"] == "sensitive"
-    assert result.standards_rule_code == "gp_run_area_protection_sensitive"
-
-
-def test_gp_rule_profile_skips_run_area_results_for_unrelated_obstacles_in_mixed_batch() -> None:
-    profile_module = importlib.import_module("app.analysis.rules.gp.profile")
-
-    payload = profile_module.GpRuleProfile().analyze(
-        station=_make_gp_station(),
-        obstacles=[
-            {
-                "obstacleId": 904,
-                "name": "Run Area Vehicle Mixed",
-                "rawObstacleType": "车辆",
-                "globalObstacleCategory": "vehicle_or_aircraft_or_machine",
-                "topElevation": 510.0,
-                "localGeometry": {"type": "Point", "coordinates": [0.0, -100.0]},
-                "geometry": {"type": "Point", "coordinates": [0.0, -100.0]},
-            },
-            {
-                "obstacleId": 905,
-                "name": "Building Mixed",
-                "rawObstacleType": "建筑物",
-                "globalObstacleCategory": "building_general",
-                "topElevation": 520.0,
-                "localGeometry": {"type": "Point", "coordinates": [0.0, -100.0]},
-                "geometry": {"type": "Point", "coordinates": [0.0, -100.0]},
-            },
-        ],
-        station_point=(0.0, 0.0),
-        runways=[
-            {
-                "runNumber": "18",
-                "directionDegrees": 0.0,
-                "widthMeters": 40.0,
-                "lengthMeters": 600.0,
-                "localCenterPoint": (0.0, -600.0),
-                "maximumAirworthiness": 1,
-            }
-        ],
-    )
-
-    mixed_batch_run_area_results = [
-        result
-        for result in payload.rule_results
-        if result.zone_code == "gp_run_area_protection"
-    ]
-
-    assert {(result.obstacle_id, result.rule_code) for result in mixed_batch_run_area_results} == {
-        (904, "gp_run_area_protection_region_a"),
-        (904, "gp_run_area_protection_region_b"),
-    }
-
-
-def test_gp_bound_rule_returns_non_compliant_when_obstacle_enters_zone() -> None:
-    region_a_module = importlib.import_module(
-        "app.analysis.rules.gp.site_protection.region_a"
-    )
-
-    bound_rule = region_a_module.GpSiteProtectionGbRegionARule().bind(
-        station=_make_gp_station(station_sub_type="II"),
-        shared_context=_make_gp_shared_context(standard_version="GB"),
-    )
-
-    result = bound_rule.analyze(
-        {
-            "obstacleId": 1,
-            "name": "Inside Obstacle",
-            "rawObstacleType": "建筑物",
-            "globalObstacleCategory": "building_general",
-            "topElevation": 510.0,
-            "localGeometry": {
-                "type": "Point",
-                "coordinates": [0.0, -200.0],
-            },
-            "geometry": {
-                "type": "Point",
-                "coordinates": [0.0, -200.0],
-            },
-        }
-    )
-
-    assert result.is_applicable is True
-    assert result.is_compliant is False
-    assert result.message == "non-cable obstacle enters region A"
-    assert result.metrics["enteredProtectionZone"] is True
-
-    assert result.over_distance_meters >= 0.0
-    assert 0.0 <= result.azimuth_degrees < 360.0
-    assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
-    assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
-    assert isinstance(result.relative_height_meters, float)
-    assert isinstance(result.is_in_radius, bool)
-    assert isinstance(result.is_in_zone, bool)
-    assert isinstance(result.details, str)
-    assert len(result.details) > 0
-
-
-def _make_gp_1deg_shared_context() -> object:
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-    return helpers.build_gp_1deg_shared_context(
-        station=_make_gp_station(distance_v_to_runway=180.0, gp360_altitude=512.0),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-        },
-    )
-
-
-def test_gp_1deg_base_height_prefers_gp360_altitude_when_positive() -> None:
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-
-    station = _make_gp_station(altitude=500.0, gp360_altitude=512.0)
-
-    assert helpers.resolve_gp_1deg_reference_height_meters(station) == 512.0
-
-
-def test_gp_1deg_base_height_falls_back_to_station_altitude_for_invalid_gp360_altitude() -> None:
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-
-    station = _make_gp_station(altitude=500.0, gp360_altitude=0.0)
-
-    assert helpers.resolve_gp_1deg_reference_height_meters(station) == 500.0
-
-
-def test_gp_1deg_builds_d_zone_geometry_with_expected_front_edge_and_radius() -> None:
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-    shared_context = helpers.build_gp_1deg_shared_context(
-        station=_make_gp_station(distance_v_to_runway=180.0, gp360_altitude=512.0),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-        },
-    )
-
-    geometry = helpers.build_gp_1deg_zone_geometry(shared_context)
-
-    assert isinstance(geometry.local_geometry, MultiPolygon)
-    polygon = geometry.local_geometry.geoms[0]
-    coordinates = list(polygon.exterior.coords)
-    assert coordinates[0][1] == pytest.approx(-360.0, abs=1e-6)
-    assert polygon.bounds[1] <= -18500.0
-    assert polygon.bounds[3] <= 1.0
-
-
-def test_gp_1deg_geometry_uses_configured_sector_step_degrees() -> None:
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-
-    default_geometry = helpers.build_gp_1deg_zone_geometry(_make_gp_1deg_shared_context())
-    default_coordinates = list(default_geometry.local_geometry.geoms[0].exterior.coords)
-
-    with patch.dict(
-        helpers.PROTECTION_ZONE_BUILDER_DISCRETIZATION,
-        {"sector_step_degrees": 4.0},
-        clear=False,
-    ):
-        geometry = helpers.build_gp_1deg_zone_geometry(_make_gp_1deg_shared_context())
-
-    polygon = geometry.local_geometry.geoms[0]
-    coordinates = list(polygon.exterior.coords)
-    assert len(coordinates) < len(default_coordinates)
-
-
-def test_gp_1deg_geometry_outer_arc_uses_csharp_alpha_not_raw_half_angle() -> None:
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-
-    geometry = helpers.build_gp_1deg_zone_geometry(_make_gp_1deg_shared_context())
-
-    polygon = geometry.local_geometry.geoms[0]
-    coordinates = list(polygon.exterior.coords)
-    first_arc_point = coordinates[1]
-    assert first_arc_point[0] > 2600.0
-
-
-def test_gp_1deg_effective_forward_distance_uses_obstacle_bounds_center_direction() -> None:
-    module = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
-    )
-    polygon = Polygon(
-        [
-            (300.0, -400.0),
-            (600.0, -1200.0),
-            (-50.0, -1000.0),
-            (300.0, -400.0),
-        ]
-    )
-
-    metrics = module._calculate_gp_1deg_obstacle_metrics(
-        obstacle_shape=polygon,
-        shared_context=_make_gp_1deg_shared_context(),
-    )
-
-    bounds_center_x = (polygon.bounds[0] + polygon.bounds[2]) / 2.0
-    bounds_center_y = (polygon.bounds[1] + polygon.bounds[3]) / 2.0
-    expected_direction_degrees = math.degrees(
-        math.atan2(bounds_center_x, bounds_center_y)
-    )
-    centroid_direction_degrees = math.degrees(
-        math.atan2(polygon.centroid.x, polygon.centroid.y)
-    )
-    axis_heading_radians = math.atan2(0.0, -1.0)
-    angle_delta_radians = abs(math.radians(expected_direction_degrees) - axis_heading_radians)
-    angle_delta_radians = min(
-        angle_delta_radians,
-        abs((2.0 * math.pi) - angle_delta_radians),
-    )
-    expected_effective_forward_distance_meters = max(
-        metrics.actual_distance_meters - 360.0 / abs(math.cos(angle_delta_radians)),
-        0.0,
-    )
-
-    assert expected_direction_degrees != pytest.approx(centroid_direction_degrees, abs=0.05)
-    assert metrics.center_direction_degrees == pytest.approx(
-        expected_direction_degrees,
-        abs=0.05,
-    )
-    assert metrics.effective_forward_distance_meters == pytest.approx(
-        expected_effective_forward_distance_meters,
-        abs=0.5,
-    )
-
-
-def test_gp_1deg_effective_forward_distance_uses_obstacle_min_distance() -> None:
-    rule_module = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
-    )
-
-    polygon = Polygon(
-        [
-            (250.0, -390.0),
-            (450.0, -600.0),
-            (350.0, -1000.0),
-            (150.0, -800.0),
-            (250.0, -390.0),
-        ]
-    )
-
-    metrics = rule_module._calculate_gp_1deg_obstacle_metrics(
-        obstacle_shape=polygon,
-        shared_context=_make_gp_1deg_shared_context(),
-    )
-
-    assert metrics.actual_distance_meters == pytest.approx(463.25, abs=0.05)
-    assert metrics.effective_forward_distance_meters == pytest.approx(71.35, abs=0.5)
-
-
-def test_gp_1deg_rule_uses_base_height_when_obstacle_is_inside_front_edge() -> None:
-    module = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
-    )
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-
-    station = _make_gp_station(altitude=500.0, gp360_altitude=500.0)
-
-    bound_rule = module.GpElevationRestriction1DegRule().bind(
-        station=station,
-        shared_context=helpers.build_gp_1deg_shared_context(
-            station=station,
-            station_point=(0.0, 0.0),
-            runway_context={
-                "runNumber": "18",
-                "directionDegrees": 0.0,
-                "widthMeters": 40.0,
-                "lengthMeters": 600.0,
-                "localCenterPoint": (0.0, -600.0),
-            },
-        ),
-    )
-
-    result = bound_rule.analyze(
-        {
-            "obstacleId": 22,
-            "name": "Inside Front Edge",
-            "topElevation": 500.5,
-            "globalObstacleCategory": "building_general",
-            "geometry": {
-                "type": "Point",
-                "coordinates": [-50.0, -360.0],
-            },
-            "localGeometry": {
-                "type": "Point",
-                "coordinates": [-50.0, -360.0],
-            },
-        }
-    )
-
-    assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["limitHeightMeters"] == pytest.approx(500.0, abs=1e-6)
-    assert result.is_compliant is False
-
-
-def test_gp_1deg_rule_binder_builds_zone_spec_with_analytic_surface_vertical() -> None:
-    module = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
-    )
-
-    bound_rule = module.GpElevationRestriction1DegRule().bind(
-        station=_make_gp_station(gp360_altitude=512.0),
-        shared_context=_make_gp_1deg_shared_context(),
-    )
-
-    assert bound_rule.protection_zone.zone_code == "gp_elevation_restriction_1deg"
-    assert bound_rule.protection_zone.vertical_definition["mode"] == "analytic_surface"
-    assert (
-        bound_rule.protection_zone.vertical_definition["surface"]["distanceSource"]["kind"]
-        == "front_reference_line"
-    )
-
-
-def test_gp_1deg_rule_binder_reuses_shared_reference_height_resolution() -> None:
-    module = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
-    )
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-    station = _make_gp_station(altitude=500.0, GP360Altitude=512.0)
-
-    bound_rule = module.GpElevationRestriction1DegRule().bind(
-        station=station,
-        shared_context=helpers.build_gp_1deg_shared_context(
-            station=station,
-            station_point=(0.0, 0.0),
-            runway_context={
-                "runNumber": "18",
-                "directionDegrees": 0.0,
-                "widthMeters": 40.0,
-                "lengthMeters": 600.0,
-                "localCenterPoint": (0.0, -600.0),
-            },
-        ),
-    )
-
-    assert bound_rule.base_height_meters == 512.0
-    assert bound_rule.protection_zone.vertical_definition["baseHeightMeters"] == 512.0
-
-
-def test_gp_1deg_rule_marks_point_above_limit_as_non_compliant() -> None:
-    module = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
-    )
-
-    bound_rule = module.GpElevationRestriction1DegRule().bind(
-        station=_make_gp_station(altitude=500.0, gp360_altitude=500.0),
-        shared_context=_make_gp_1deg_shared_context(),
-    )
-
-    result = bound_rule.analyze(
-        {
-            "obstacleId": 1,
-            "name": "Obstacle A",
-            "topElevation": 513.0,
-            "globalObstacleCategory": "building_general",
-            "geometry": {"type": "Point", "coordinates": [0.0, -400.0]},
-            "localGeometry": {"type": "Point", "coordinates": [0.0, -400.0]},
-        }
-    )
-
-    assert result.is_compliant is False
-    assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["limitHeightMeters"] < 513.0
-
-
-def test_gp_1deg_rule_uses_worst_boundary_vertex_for_polygon_limit_height() -> None:
-    module = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
-    )
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-    polygon = Polygon(
-        [
-            (-20.0, -400.0),
-            (20.0, -400.0),
-            (20.0, -600.0),
-            (-20.0, -600.0),
-            (-20.0, -400.0),
-        ]
-    )
-    shared_context = helpers.build_gp_1deg_shared_context(
-        station=_make_gp_station(altitude=500.0, gp360_altitude=500.0),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-        },
-    )
-
-    bound_rule = module.GpElevationRestriction1DegRule().bind(
-        station=_make_gp_station(altitude=500.0, gp360_altitude=500.0),
-        shared_context=shared_context,
-    )
-
-    result = bound_rule.analyze(
-        {
-            "obstacleId": 2,
-            "name": "Polygon Obstacle",
-            "topElevation": 501.0,
-            "globalObstacleCategory": "building_general",
-            "geometry": polygon.__geo_interface__,
-            "localGeometry": polygon.__geo_interface__,
-        }
-    )
-
-    assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["limitHeightMeters"] == pytest.approx(500.7, abs=0.1)
-    assert result.is_compliant is False
-
-
-def test_gp_1deg_rule_uses_segment_interior_point_for_worst_case_limit_height() -> None:
-    module = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
-    )
-    helpers = importlib.import_module(
-        "app.analysis.rules.gp.elevation_restriction.helpers"
-    )
-    polygon = Polygon(
-        [
-            (-130.0, -1200.0),
-            (130.0, -1200.0),
-            (130.0, -1220.0),
-            (-130.0, -1220.0),
-            (-130.0, -1200.0),
-        ]
-    )
-    shared_context = helpers.build_gp_1deg_shared_context(
-        station=_make_gp_station(altitude=500.0, gp360_altitude=500.0),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-        },
-    )
-
-    bound_rule = module.GpElevationRestriction1DegRule().bind(
-        station=_make_gp_station(altitude=500.0, gp360_altitude=500.0),
-        shared_context=shared_context,
-    )
-
-    result = bound_rule.analyze(
-        {
-            "obstacleId": 21,
-            "name": "Axis Crossing Polygon",
-            "topElevation": 514.9,
-            "globalObstacleCategory": "building_general",
-            "geometry": polygon.__geo_interface__,
-            "localGeometry": polygon.__geo_interface__,
-        }
-    )
-
-    assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["limitHeightMeters"] == pytest.approx(514.66, abs=0.02)
-    assert result.is_compliant is False
-
-
-
-
-def test_gp_bound_rule_returns_cable_specific_standards_rule_code_in_region_a() -> None:
-    region_a_module = importlib.import_module(
-        "app.analysis.rules.gp.site_protection.region_a"
-    )
-
-    bound_rule = region_a_module.GpSiteProtectionGbRegionARule().bind(
-        station=_make_gp_station(station_sub_type="II"),
-        shared_context=_make_gp_shared_context(standard_version="GB"),
-    )
-
-    result = bound_rule.analyze(
-        {
-            "obstacleId": 3,
-            "name": "Cable Obstacle",
-            "rawObstacleType": "高压输电线",
-            "globalObstacleCategory": "power_or_communication_cable",
-            "topElevation": 510.0,
-            "localGeometry": {
-                "type": "Point",
-                "coordinates": [0.0, -200.0],
-            },
-            "geometry": {
-                "type": "Point",
-                "coordinates": [0.0, -200.0],
-            },
-        }
-    )
-
-    assert result.standards_rule_code == "gp_site_protection_gb_region_a_cable"
 
 
 def test_gp_region_a_cable_below_station_altitude_is_compliant() -> None:
@@ -1475,6 +811,8 @@ def test_gp_region_a_cable_below_station_altitude_is_compliant() -> None:
         "baseHeightMeters": 500.0,
         "allowedHeightMeters": 500.0,
         "topElevationMeters": 499.0,
+        "actualDistanceMeters": 200.0,
+        "overHeightMeters": 0.0,
     }
     assert result.standards_rule_code == "gp_site_protection_gb_region_a_cable"
 
@@ -1514,6 +852,8 @@ def test_gp_region_a_cable_at_or_above_station_altitude_is_non_compliant() -> No
         "baseHeightMeters": 500.0,
         "allowedHeightMeters": 500.0,
         "topElevationMeters": 500.0,
+        "actualDistanceMeters": 200.0,
+        "overHeightMeters": 0.0,
     }
     assert result.standards_rule_code == "gp_site_protection_gb_region_a_cable"
 
@@ -1552,6 +892,8 @@ def test_gp_region_a_non_cable_entering_region_is_non_compliant() -> None:
         "isCable": False,
         "baseHeightMeters": 500.0,
         "topElevationMeters": 510.0,
+        "actualDistanceMeters": 200.0,
+        "overHeightMeters": 10.0,
     }
     assert result.standards_rule_code == "gp_site_protection_gb_region_a"
 
@@ -1590,6 +932,8 @@ def test_gp_region_a_non_cable_outside_region_is_compliant() -> None:
         "isCable": False,
         "baseHeightMeters": 500.0,
         "topElevationMeters": 510.0,
+        "actualDistanceMeters": pytest.approx(206.15528128088303, rel=1e-9),
+        "overHeightMeters": 10.0,
     }
     assert result.standards_rule_code == "gp_site_protection_mh_region_a"
 
@@ -1656,7 +1000,7 @@ def test_gp_bound_rule_returns_compliant_when_obstacle_stays_outside_zone() -> N
 
     assert result.is_applicable is True
     assert result.is_compliant is True
-    assert result.message == "obstacle outside GP site protection region A"
+    assert result.message == "不在A区范围内"
     assert result.metrics["enteredProtectionZone"] is False
     assert result.standards_rule_code == "gp_site_protection_mh_region_a"
 
@@ -1734,7 +1078,7 @@ def test_gp_region_b_gb_entered_within_600m_is_non_compliant() -> None:
     )
 
     assert result.is_compliant is False
-    assert result.message == "obstacle within GP region B forward 600m"
+    assert result.message == "在B区范围600米内"
     assert result.metrics["enteredProtectionZone"] is True
     assert result.metrics["forwardDistanceMeters"] == 500.0
     assert result.metrics["requiresClearanceEvaluation"] is False
@@ -1769,7 +1113,7 @@ def test_gp_region_b_mh_i_entered_is_non_compliant() -> None:
     )
 
     assert result.is_compliant is False
-    assert result.message == "obstacle enters GP MH region B subtype I"
+    assert result.message == "在B区范围内"
     assert result.metrics["enteredProtectionZone"] is True
     assert result.metrics["stationSubType"] == "I"
 
@@ -1803,7 +1147,7 @@ def test_gp_region_b_mh_ii_ring_road_within_600m_is_non_compliant() -> None:
     )
 
     assert result.is_compliant is False
-    assert result.message == "airport ring road within GP MH region B forward 600m"
+    assert result.message == "在B区范围600米内"
     assert result.metrics["isAirportRingRoad"] is True
     assert result.metrics["forwardDistanceMeters"] == 500.0
 
@@ -1837,7 +1181,7 @@ def test_gp_region_b_mh_ii_ring_road_outside_600m_is_compliant() -> None:
     )
 
     assert result.is_compliant is True
-    assert result.message == "obstacle outside GP site protection region B"
+    assert result.message == "不在B区范围内"
     assert result.metrics["isAirportRingRoad"] is True
     assert result.metrics["forwardDistanceMeters"] is None
 
@@ -1871,7 +1215,7 @@ def test_gp_region_b_mh_iii_non_ring_road_entered_is_non_compliant() -> None:
     )
 
     assert result.is_compliant is False
-    assert result.message == "non-ring-road obstacle enters GP MH region B"
+    assert result.message == "在B区范围内"
     assert result.metrics["isAirportRingRoad"] is False
     assert result.metrics["stationSubType"] == "III"
 

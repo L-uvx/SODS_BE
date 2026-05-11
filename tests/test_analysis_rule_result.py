@@ -17,8 +17,8 @@ def test_analysis_rule_result_stores_common_rule_fields() -> None:
         region_name="default",
         is_applicable=True,
         is_compliant=False,
-        message="distance below required threshold",
-        metrics={"actualDistanceMeters": 30.0, "requiredDistanceMeters": 50.0},
+        message="位于NDB 50米最小间距区域内",
+        metrics={"actualDistanceMeters": 30.0, "minimumDistanceMeters": 50.0},
         standards_rule_code="ndb_minimum_distance_50m",
     )
 
@@ -27,4 +27,4 @@ def test_analysis_rule_result_stores_common_rule_fields() -> None:
     assert result.zone_code == "ndb_minimum_distance_50m"
     assert result.region_code == "default"
     assert result.standards_rule_code == "ndb_minimum_distance_50m"
-    assert result.metrics["requiredDistanceMeters"] == 50.0
+    assert result.metrics["minimumDistanceMeters"] == 50.0

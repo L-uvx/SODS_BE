@@ -95,17 +95,14 @@ class BoundMbSiteProtectionRule(BoundObstacleRule):
         )
         relative_height_meters = top_elevation_meters - base_height_meters
 
+        angle = round(vertical_angle_degrees, 2)
         if not entered_protection_zone:
             is_compliant = True
-            message = "obstacle outside MB site protection region"
+            message = f"不位于指点信标台保护区内,垂直张角为{angle}°"
             details = "障碍物位于保护区外。"
         else:
             is_compliant = vertical_angle_degrees <= self.limit_angle_degrees
-            message = (
-                "obstacle within MB site protection limit"
-                if is_compliant
-                else "obstacle exceeds MB site protection limit"
-            )
+            message = f"位于指点信标台保护区内,垂直张角为{angle}°"
             details = f"障碍物{'满足' if is_compliant else '不满足'}仰角限制要求。"
 
         return AnalysisRuleResult(
@@ -131,12 +128,13 @@ class BoundMbSiteProtectionRule(BoundObstacleRule):
             over_distance_meters=0.0,
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
-                "minDistanceMeters": min_distance_meters,
+                "actualDistanceMeters": min_distance_meters,
                 "allowedHeightMeters": allowed_height_meters,
                 "topElevationMeters": top_elevation_meters,
                 "verticalAngleDegrees": vertical_angle_degrees,
                 "limitAngleDegrees": self.limit_angle_degrees,
                 "radiusMeters": self.radius_meters,
+                "overHeightMeters": max(0.0, top_elevation_meters - allowed_height_meters),
             },
             azimuth_degrees=azimuth_degrees,
             max_horizontal_angle_degrees=max_horizontal_angle_degrees,

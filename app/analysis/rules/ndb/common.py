@@ -95,14 +95,15 @@ class BoundNdbMinimumDistanceRule(BoundObstacleRule):
             is_applicable=True,
             is_compliant=is_compliant,
             message=(
-                "distance meets minimum threshold"
-                if is_compliant
-                else "distance below required threshold"
+                f"在{int(self.required_distance_meters)}米以内"
+                if entered_protection_zone
+                else f"在{int(self.required_distance_meters)}米以外"
             ),
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
                 "actualDistanceMeters": actual_distance_meters,
-                "requiredDistanceMeters": self.required_distance_meters,
+                "minimumDistanceMeters": self.required_distance_meters,
+                "topElevationMeters": top_elevation,
             },
             standards_rule_code=standards_rule_code,
             over_distance_meters=over_distance_meters,
@@ -152,18 +153,12 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
 
         allowed_height_meters = base_height_meters
         is_compliant = True
-        message = "top elevation outside conical clearance band"
         if entered_protection_zone:
             allowed_height_meters = base_height_meters + math.tan(
                 math.radians(self.elevation_angle_degrees)
             ) * actual_distance_meters
             is_compliant = (
                 actual_elevation_angle_degrees <= self.elevation_angle_degrees
-            )
-            message = (
-                "top elevation within conical clearance"
-                if is_compliant
-                else "top elevation exceeds conical clearance"
             )
 
         obstacle_centroid = obstacle_shape.centroid
@@ -182,13 +177,15 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
         joined_names = _join_standard_names(gb_name, mh_name)
         angle = self.elevation_angle_degrees
         if not is_compliant:
-            actual_angle = round(actual_elevation_angle_degrees, 2)
+            actual_angle_rounded = round(actual_elevation_angle_degrees, 2)
             details = (
                 f"不满足{joined_names}中'不应有超出台站天线中心底部为基准垂直仰角"
-                f"{angle}°的障碍物'的规定，实际仰角{actual_angle}°。"
+                f"{angle}°的障碍物'的规定，实际仰角{actual_angle_rounded}°。"
             )
         else:
             details = ""
+
+        over_height_meters = max(0.0, top_elevation - allowed_height_meters)
 
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -205,20 +202,21 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=is_compliant,
-            message=message,
+            message=f"与NDB天线中心底部所成仰角为{round(actual_elevation_angle_degrees, 2)}°",
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
                 "actualDistanceMeters": actual_distance_meters,
-                "actualElevationAngleDegrees": actual_elevation_angle_degrees,
                 "baseHeightMeters": base_height_meters,
-                "elevationAngleDegrees": self.elevation_angle_degrees,
+                "elevationAngleDegrees": actual_elevation_angle_degrees,
+                "limitAngleDegrees": self.elevation_angle_degrees,
                 "allowedHeightMeters": allowed_height_meters,
                 "topElevationMeters": top_elevation,
                 "innerRadiusMeters": self.inner_radius_meters,
                 "outerRadiusMeters": self.outer_radius_meters,
+                "overHeightMeters": over_height_meters,
             },
             standards_rule_code=self.protection_zone.rule_code,
-            over_distance_meters=0.0,
+            over_distance_meters=over_height_meters,
             azimuth_degrees=az,
             max_horizontal_angle_degrees=max_h,
             min_horizontal_angle_degrees=min_h,

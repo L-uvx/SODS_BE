@@ -221,13 +221,13 @@ def test_ndb_minimum_distance_rules_return_uniform_results() -> None:
 
     assert result_150.rule_name == "ndb_minimum_distance_150m"
     assert result_150.rule_code == "ndb_minimum_distance_150m"
-    assert result_150.metrics["requiredDistanceMeters"] == 150.0
+    assert result_150.metrics["minimumDistanceMeters"] == 150.0
     assert result_300.rule_name == "ndb_minimum_distance_300m"
     assert result_300.rule_code == "ndb_minimum_distance_300m"
-    assert result_300.metrics["requiredDistanceMeters"] == 300.0
+    assert result_300.metrics["minimumDistanceMeters"] == 300.0
     assert result_500.rule_name == "ndb_minimum_distance_500m"
     assert result_500.rule_code == "ndb_minimum_distance_500m"
-    assert result_500.metrics["requiredDistanceMeters"] == 500.0
+    assert result_500.metrics["minimumDistanceMeters"] == 500.0
 
     assert result_150.over_distance_meters >= 0.0
     assert 0.0 <= result_150.azimuth_degrees < 360.0
@@ -275,7 +275,7 @@ def test_ndb_conical_clearance_rule_returns_uniform_result() -> None:
     assert result.zone_code == "ndb_conical_clearance_3deg"
     assert result.region_code == "default"
     assert result.metrics["baseHeightMeters"] == 500.0
-    assert result.metrics["elevationAngleDegrees"] == 3.0
+    assert result.metrics["limitAngleDegrees"] == 3.0
 
 
 def test_ndb_conical_clearance_rule_triggers_when_obstacle_partly_crosses_50m_boundary() -> None:
@@ -310,7 +310,7 @@ def test_ndb_conical_clearance_rule_triggers_when_obstacle_partly_crosses_50m_bo
 
     assert result.metrics["enteredProtectionZone"] is True
     assert result.metrics["actualDistanceMeters"] == 45.0
-    assert result.metrics["actualElevationAngleDegrees"] == pytest.approx(
+    assert result.metrics["elevationAngleDegrees"] == pytest.approx(
         math.degrees(math.atan((502.0 - 500.0) / 45.0))
     )
 
@@ -397,11 +397,11 @@ def test_ndb_conical_clearance_rule_uses_actual_elevation_angle_instead_of_50m_o
     assert result.metrics["allowedHeightMeters"] == pytest.approx(
         500.0 + math.tan(math.radians(3.0)) * 60.0
     )
-    assert result.metrics["actualElevationAngleDegrees"] == pytest.approx(
+    assert result.metrics["elevationAngleDegrees"] == pytest.approx(
         math.degrees(math.atan((503.0 - 500.0) / 60.0))
     )
-    assert result.metrics["actualElevationAngleDegrees"] < result.metrics[
-        "elevationAngleDegrees"
+    assert result.metrics["elevationAngleDegrees"] < result.metrics[
+        "limitAngleDegrees"
     ]
     assert result.is_compliant is True
 

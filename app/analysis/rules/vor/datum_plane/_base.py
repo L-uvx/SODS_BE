@@ -1,6 +1,8 @@
 # app/analysis/rules/vor/datum_plane/_base.py
 from dataclasses import dataclass
 
+from shapely.geometry import Point
+
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.result_helpers import (
     compute_azimuth_degrees,
@@ -78,11 +80,14 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
 
         is_compliant = top_elevation <= self.benchmark_height or not entered
         if not entered:
-            message = "obstacle outside datum plane zone"
-        elif is_compliant:
-            message = "obstacle within datum plane height limit"
+            message = f"不在VOR {self.radius_meters}m基准面范围内"
         else:
-            message = "obstacle exceeds datum plane height limit"
+            base_h = round(self.benchmark_height, 2)
+            if is_compliant:
+                message = f"基准面高度为{base_h}米，未超出基准面高度"
+            else:
+                diff = round(top_elevation - self.benchmark_height, 2)
+                message = f"基准面高度为{base_h}米，超出基准面高度{diff}米"
 
         obstacle_centroid = shape.centroid
         az = compute_azimuth_degrees(
@@ -102,6 +107,8 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
         else:
             details = f"不满足规定要求，障碍物高度{top_elevation}m，允许高度{self.benchmark_height}m，超出{round(over,2)}m。"
 
+        actual_distance_meters = float(shape.distance(Point(self.station_point)))
+
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
             station_type=self.protection_zone.station_type,
@@ -120,8 +127,11 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
             message=message,
             metrics={
                 "enteredProtectionZone": entered,
+                "actualDistanceMeters": actual_distance_meters,
+                "allowedHeightMeters": self.benchmark_height,
                 "benchmarkHeightMeters": self.benchmark_height,
                 "topElevationMeters": top_elevation,
+                "overHeightMeters": max(0.0, top_elevation - self.benchmark_height),
             },
             standards_rule_code=self.protection_zone.rule_code,
             over_distance_meters=over,

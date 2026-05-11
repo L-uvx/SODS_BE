@@ -34,6 +34,7 @@ class BoundLocRunAreaProtectionRegionDRule(BoundObstacleRule):
         min_h = 0.0
         max_h = 0.0
         relative_height_meters = 0.0
+        top_elevation_meters = 0.0
         if is_applicable:
             obstacle_centroid = obstacle_shape.centroid
             az = compute_azimuth_degrees(
@@ -48,7 +49,22 @@ class BoundLocRunAreaProtectionRegionDRule(BoundObstacleRule):
             relative_height_meters = top_elevation_meters - base_height_meters
 
         region_name = self.protection_zone.region_name
-        details = f"障碍物进入{region_name}区域。" if entered_protection_zone else ""
+        area_type = "敏感区"
+
+        if entered_protection_zone:
+            if is_applicable:
+                details = f"障碍物进入运行保护区{area_type}区域。"
+                message = f"位于运行保护区{area_type}内"
+            else:
+                details = f"障碍物进入{region_name}区域。"
+                message = f"位于运行保护区{area_type}内,但标准未明确对该障碍物类型进行限制"
+        else:
+            if is_applicable:
+                details = ""
+                message = f"不位于运行保护区{area_type}内"
+            else:
+                details = ""
+                message = f"不位于运行保护区{area_type}内,但标准未明确对该障碍物类型进行限制"
 
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -65,21 +81,14 @@ class BoundLocRunAreaProtectionRegionDRule(BoundObstacleRule):
             region_name=region_name,
             is_applicable=is_applicable,
             is_compliant=(not entered_protection_zone) if is_applicable else True,
-            message=(
-                "obstacle type not restricted by run area sensitive standard"
-                if not is_applicable
-                else (
-                    "obstacle outside run area sensitive region"
-                    if not entered_protection_zone
-                    else "obstacle enters run area sensitive region"
-                )
-            ),
+            message=message,
             metrics={
                 "areaType": "sensitive",
                 "enteredProtectionZone": entered_protection_zone,
+                "topElevationMeters": top_elevation_meters,
             },
             standards_rule_code="loc_run_area_protection_sensitive",
-            over_distance_meters=0.0,
+            over_distance_meters=top_elevation_meters,
             azimuth_degrees=az,
             max_horizontal_angle_degrees=max_h,
             min_horizontal_angle_degrees=min_h,

@@ -93,9 +93,9 @@ class BoundAdsbCircleRule(BoundObstacleRule):
             is_applicable=True,
             is_compliant=is_compliant,
             message=(
-                "obstacle outside ads-b protection zone"
-                if is_compliant
-                else "obstacle entered ads-b protection zone"
+                "在平面防护间距要求内"
+                if entered_protection_zone
+                else "不在平面防护间距要求内"
             ),
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
@@ -105,7 +105,7 @@ class BoundAdsbCircleRule(BoundObstacleRule):
                 "boundaryMode": boundary_mode,
             },
             standards_rule_code=standards_rule_code,
-            over_distance_meters=over_distance,
+            over_distance_meters=top_elevation_meters,
             azimuth_degrees=az,
             max_horizontal_angle_degrees=max_h,
             min_horizontal_angle_degrees=min_h,

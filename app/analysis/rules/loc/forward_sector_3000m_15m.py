@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass
 
-from shapely.geometry import Polygon
+from shapely.geometry import Point, Polygon
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.protection_zone_style import resolve_protection_zone_name
@@ -33,16 +33,22 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
         entered_protection_zone = obstacle_shape.intersects(
             self.protection_zone.local_geometry
         )
+        actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
+
+        allowed_height_meters = self.height_limit_meters
+        is_applicable = obstacle_category in LocForwardSector3000m15mRule.SUPPORTED_CATEGORIES
 
         is_compliant = True
-        message = "obstacle outside forward sector"
-        if entered_protection_zone:
-            is_compliant = top_elevation_meters <= self.height_limit_meters
-            message = (
-                "obstacle within forward sector and below height limit"
-                if is_compliant
-                else "obstacle within forward sector above height limit"
-            )
+        if entered_protection_zone and is_applicable:
+            is_compliant = top_elevation_meters <= allowed_height_meters
+
+        height_diff = round(top_elevation_meters - base_height_meters, 2)
+        if not is_applicable:
+            message = f"位于航向信标天线中心前向±10°、距离航向信标天线3000m的区域内，顶部高程与航向信标天线地势高度差为{height_diff}米,但标准未明确对该障碍物类型进行限制"
+        elif not entered_protection_zone:
+            message = "不位于航向信标天线中心前向±10°、距离航向信标天线3000m的区域内"
+        else:
+            message = f"位于航向信标天线中心前向±10°、距离航向信标天线3000m的区域内，顶部高程与航向信标天线地势高度差为{height_diff}米"
 
         obstacle_centroid = obstacle_shape.centroid
         az = compute_azimuth_degrees(
@@ -53,22 +59,19 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
             self.station_point, obstacle_shape,
         )
         relative_height_meters = top_elevation_meters - base_height_meters
-        over_distance_meters = (
-            max(0.0, top_elevation_meters - self.height_limit_meters)
-            if not is_compliant
-            else 0.0
-        )
+        over_height_meters = max(0.0, top_elevation_meters - allowed_height_meters)
+        over_distance_meters = over_height_meters if not is_compliant else 0.0
 
         gb_name, mh_name = _resolve_loc_standard_names(self.protection_zone.rule_code)
         joined_names = _join_loc_standard_names(gb_name, mh_name)
-        limit = round(self.height_limit_meters - base_height_meters, 2)
+        limit = round(allowed_height_meters - base_height_meters, 2)
         if is_compliant:
             details = (
                 f"满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定。"
             )
         else:
             actual = round(top_elevation_meters - base_height_meters, 2)
-            over = round(top_elevation_meters - self.height_limit_meters, 2)
+            over = round(top_elevation_meters - allowed_height_meters, 2)
             details = (
                 f"不满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定，"
                 f"实际高度{actual}m，超出{over}m。"
@@ -87,15 +90,17 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
             zone_name=self.protection_zone.zone_name,
             region_code=self.protection_zone.region_code,
             region_name=self.protection_zone.region_name,
-            is_applicable=True,
+            is_applicable=is_applicable,
             is_compliant=is_compliant,
             message=message,
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
                 "baseHeightMeters": base_height_meters,
                 "topElevationMeters": top_elevation_meters,
-                "heightLimitMeters": self.height_limit_meters,
+                "allowedHeightMeters": allowed_height_meters,
+                "overHeightMeters": over_height_meters,
                 "elevationAngleDegrees": 0.0,
+                "actualDistanceMeters": actual_distance_meters,
             },
             standards_rule_code=self.protection_zone.rule_code,
             over_distance_meters=over_distance_meters,

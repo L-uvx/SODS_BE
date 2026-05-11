@@ -106,12 +106,13 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
         top_elevation = float(raw_top if raw_top is not None else 0.0)
 
         is_compliant = not entered or top_elevation <= allowed_h
+        limit = round(allowed_h, 2)
         if not entered:
-            message = "obstacle outside reflector mask zone"
+            message = "不在VOR 100米阴影区范围内"
         elif is_compliant:
-            message = "obstacle within reflector mask limit"
+            message = f"此处限制顶部高程为{limit}米,未对边带天线相位中心沿反射网边缘延伸至地面的反射路径造成阻挡"
         else:
-            message = "obstacle exceeds reflector mask height limit"
+            message = f"此处限制顶部高程为{limit}米,对边带天线相位中心沿反射网边缘延伸至地面的反射路径造成阻挡"
 
         obstacle_centroid = shape.centroid
         az = compute_azimuth_degrees(
@@ -153,6 +154,8 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
                 "clampedDistanceMeters": x,
                 "allowedHeightMeters": allowed_h,
                 "topElevationMeters": top_elevation,
+                "overHeightMeters": max(0.0, top_elevation - allowed_h),
+                "actualDistanceMeters": max_distance,
                 "shadowRadiusMeters": self.shadow_radius_m,
             },
             standards_rule_code=self.protection_zone.rule_code,

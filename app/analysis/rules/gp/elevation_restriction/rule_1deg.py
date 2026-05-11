@@ -47,7 +47,7 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
 
         if not entered_protection_zone:
             is_compliant = True
-            message = "obstacle outside GP 1 degree elevation restriction zone"
+            message = "不位于下滑信标天线前方信号覆盖范围内"
             over = 0.0
             details = "障碍物未进入GP 1°仰角限制区。"
         else:
@@ -60,11 +60,16 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
                 0.0,
             )
             is_compliant = top_elevation_meters <= limit_height_meters
-            message = (
-                "obstacle within GP 1 degree elevation limit"
-                if is_compliant
-                else "obstacle exceeds GP 1 degree elevation limit"
-            )
+            if obstacle_metrics.effective_forward_distance_meters <= 0:
+                message = f"位于下滑信标天线正前方A区边缘上，限高为A区边缘地势高{round(base_height_meters, 2)}"
+            else:
+                vertical_angle_deg = math.degrees(
+                    math.atan(
+                        (top_elevation_meters - base_height_meters)
+                        / obstacle_metrics.effective_forward_distance_meters
+                    )
+                )
+                message = f"位于下滑信标天线前方信号覆盖范围内，遮蔽角为{round(vertical_angle_deg, 2)}°"
             over = compute_over_distance_meters(top_elevation_meters, limit_height_meters)
             if is_compliant:
                 details = f"满足规定要求，障碍物高度{top_elevation_meters}m，允许高度{round(limit_height_meters,2)}m。"
@@ -77,8 +82,9 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
             message=message,
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
-                "limitHeightMeters": limit_height_meters,
+                "allowedHeightMeters": limit_height_meters,
                 "topElevationMeters": top_elevation_meters,
+                "overHeightMeters": top_elevation_meters - limit_height_meters,
                 "actualDistanceMeters": (
                     None
                     if obstacle_metrics is None

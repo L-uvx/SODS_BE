@@ -43,7 +43,8 @@ class BoundWindRadarElevationAngleRule(BoundObstacleRule):
             "relativeHeightMeters": relative_height_meters,
             "elevationAngleDegrees": angle_degrees,
             "limitAngleDegrees": self.limit_angle_degrees,
-            "limitHeightMeters": limit_height_meters,
+            "allowedHeightMeters": limit_height_meters,
+            "overHeightMeters": max(0.0, top_elevation_meters - limit_height_meters),
         }
         is_compliant = angle_degrees <= self.limit_angle_degrees
 
@@ -73,11 +74,7 @@ class BoundWindRadarElevationAngleRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=is_compliant,
-            message=(
-                "obstacle within wind radar elevation angle limit"
-                if is_compliant
-                else "obstacle exceeds wind radar elevation angle limit"
-            ),
+            message=f"对风廓线雷达阵面形成的遮挡仰角为{round(angle_degrees, 2)}°",
             metrics=metrics,
             standards_rule_code=self.standards_rule_code,
             over_distance_meters=0.0,

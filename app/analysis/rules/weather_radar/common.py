@@ -78,9 +78,9 @@ class BoundWeatherRadarCircleRule(BoundObstacleRule):
             is_applicable=True,
             is_compliant=is_compliant,
             message=(
-                "obstacle outside weather radar protection zone"
-                if is_compliant
-                else "obstacle entered weather radar protection zone"
+                f"在{self.minimum_distance_meters}米范围内"
+                if not is_compliant
+                else f"不在{self.minimum_distance_meters}米范围内"
             ),
             metrics=metrics,
             standards_rule_code=self.standards_rule_code,
@@ -90,7 +90,7 @@ class BoundWeatherRadarCircleRule(BoundObstacleRule):
             relative_height_meters=relative_height_meters,
             is_in_radius=entered_protection_zone,
             is_in_zone=entered_protection_zone,
-            over_distance_meters=over_distance,
+            over_distance_meters=top_elevation_meters,
             details=details,
         )
 def build_weather_radar_circle_protection_zone(

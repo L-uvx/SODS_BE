@@ -32,6 +32,9 @@ class BoundVor300Outside2_5_Rule(BoundVorElevationAngleRule):
         min_distance = float(shape.distance(Point(self.station_point)))
         category = str(obstacle["globalObstacleCategory"])
 
+        raw_top = obstacle.get("topElevation")
+        top_elevation = float(raw_top if raw_top is not None else 0.0)
+
         obstacle_centroid = shape.centroid
         az = compute_azimuth_degrees(
             self.station_point[0], self.station_point[1],
@@ -60,6 +63,8 @@ class BoundVor300Outside2_5_Rule(BoundVorElevationAngleRule):
                 message="obstacle delegated to 300m datum plane",
                 metrics={
                     "enteredProtectionZone": False,
+                    "actualDistanceMeters": min_distance,
+                    "topElevationMeters": top_elevation,
                     "minDistanceMeters": min_distance,
                     "delegatedRule": "vor_300m_datum_plane",
                 },
@@ -93,6 +98,8 @@ class BoundVor300Outside2_5_Rule(BoundVorElevationAngleRule):
                 message="obstacle delegated to 500m datum plane",
                 metrics={
                     "enteredProtectionZone": False,
+                    "actualDistanceMeters": min_distance,
+                    "topElevationMeters": top_elevation,
                     "minDistanceMeters": min_distance,
                     "delegatedRule": "vor_500m_datum_plane",
                 },

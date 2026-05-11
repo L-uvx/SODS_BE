@@ -39,6 +39,8 @@ class BoundSurfaceDetectionRadarRunwayTriangleRule(BoundObstacleRule):
             compute_horizontal_angle_range_from_geometry(self.station_point, obstacle_shape)
         )
         relative_height_meters = top_elevation_meters - self.base_height_meters
+        is_in_runway_triangle = entered_protection_zone
+        runway_number = str(self.runway["runNumber"])
 
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -60,9 +62,9 @@ class BoundSurfaceDetectionRadarRunwayTriangleRule(BoundObstacleRule):
             is_applicable=True,
             is_compliant=not entered_protection_zone,
             message=(
-                "obstacle outside runway triangle"
-                if not entered_protection_zone
-                else "obstacle entered runway triangle"
+                f"障碍物不位于场监雷达与{runway_number}号跑道之间"
+                if not is_in_runway_triangle
+                else f"障碍物位于场监雷达与{runway_number}号跑道之间"
             ),
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
@@ -71,9 +73,10 @@ class BoundSurfaceDetectionRadarRunwayTriangleRule(BoundObstacleRule):
                 "runwayNumber": str(self.runway["runNumber"]),
                 "runwayLengthMeters": float(self.runway["lengthMeters"]),
                 "runwayDirectionDegrees": float(self.runway["directionDegrees"]),
+                "topElevationMeters": top_elevation_meters,
             },
             standards_rule_code=None,
-            over_distance_meters=0.0,
+            over_distance_meters=top_elevation_meters,
             azimuth_degrees=azimuth_degrees,
             max_horizontal_angle_degrees=max_horizontal_angle_degrees,
             min_horizontal_angle_degrees=min_horizontal_angle_degrees,

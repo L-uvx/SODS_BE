@@ -73,14 +73,16 @@ def test_station_rule_dispatcher_dispatches_loc_and_ndb_by_station_type() -> Non
 
     assert [result.rule_name for result in loc_payload.rule_results] == [
         "loc_site_protection",
+        "loc_forward_sector_3000m_15m",
         "loc_run_area_protection_region_a",
         "loc_run_area_protection_region_b",
         "loc_run_area_protection_region_c",
         "loc_run_area_protection_region_d",
     ]
-    assert len(loc_payload.protection_zones) == 5
+    assert len(loc_payload.protection_zones) == 6
     assert {zone.rule_code for zone in loc_payload.protection_zones} == {
         "loc_site_protection",
+        "loc_forward_sector_3000m_15m",
         "loc_run_area_protection_region_a",
         "loc_run_area_protection_region_b",
         "loc_run_area_protection_region_c",
