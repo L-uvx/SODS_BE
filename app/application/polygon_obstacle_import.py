@@ -8,6 +8,10 @@ from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.protection_zone_style import resolve_protection_zone_style
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.spatial_facts import build_airport_spatial_facts
+from app.analysis.rules.runway.electromagnetic_environment import (
+    build_runway_em_protection_zone,
+    build_runway_em_rule_result,
+)
 from app.analysis.station_dispatcher import StationAnalysisDispatcher
 from app.analysis.standards import build_rule_standards
 from app.application.polygon_obstacle_excel_parser import (
@@ -472,6 +476,10 @@ class PolygonObstacleImportService:
                         for station in context.stations
                         if station.longitude is not None and station.latitude is not None
                     },
+                    runway_name_by_id={
+                        runway.id: runway.run_number or str(runway.id)
+                        for runway in context.runways
+                    },
                     protection_zone=protection_zone,
                 )
                 for context, airport_fact in zip(contexts, airport_facts, strict=False)
@@ -541,6 +549,21 @@ class PolygonObstacleImportService:
             )
             protection_zones.extend(station_results.protection_zones)
 
+        # === 跑道级分析：机场电磁环境保护区 ===
+        for rw_ctx in runway_contexts:
+            pz_spec = build_runway_em_protection_zone(projector, rw_ctx)
+            if pz_spec is None:
+                continue
+            protection_zones.append(pz_spec)
+            for obs in airport_facts["obstacles"]:
+                rr = build_runway_em_rule_result(obs, pz_spec)
+                rule_results.append(
+                    self._build_rule_result_payload(
+                        result=rr,
+                        station_name=f"跑道-{rw_ctx.get('runNumber', '')}",
+                    )
+                )
+
         airport_facts["ruleResults"] = rule_results
         airport_facts["protectionZones"] = protection_zones
         return airport_facts
@@ -578,6 +601,8 @@ class PolygonObstacleImportService:
                         if runway.maximum_airworthiness is not None
                         else None
                     ),
+                    "runwayCodeB": getattr(runway, "runway_code_b", None),
+                    "altitude": float(getattr(runway, "altitude", 0) or 0.0),
                 }
             )
         return runway_contexts
@@ -669,15 +694,37 @@ class PolygonObstacleImportService:
         station_altitude_by_id: dict[int, float],
         station_name_by_id: dict[int, str],
         station_coordinates_by_id: dict[int, tuple[float, float]],
+        runway_name_by_id: dict[int, str] | None = None,
         protection_zone: ProtectionZoneSpec,
     ) -> dict[str, object]:
-        station_name = station_name_by_id.get(
-            protection_zone.station_id,
-            f"station-{protection_zone.station_id}",
+        is_runway_zone = protection_zone.runway_id is not None
+        if is_runway_zone:
+            runway_id = protection_zone.runway_id
+            station_name = (
+                f"跑道-{runway_name_by_id.get(runway_id, str(runway_id))}"
+                if runway_name_by_id
+                else f"跑道-{runway_id}"
+            )
+            station_altitude = 0.0
+            station_wgs84 = None
+        else:
+            station_name = station_name_by_id.get(
+                protection_zone.station_id,
+                f"station-{protection_zone.station_id}",
+            )
+            station_altitude = station_altitude_by_id.get(
+                protection_zone.station_id,
+                0.0,
+            )
+            station_wgs84 = station_coordinates_by_id.get(protection_zone.station_id)
+        zone_id_prefix = (
+            f"airport-{airport_id}-runway-{protection_zone.runway_id}"
+            if is_runway_zone
+            else f"airport-{airport_id}-station-{protection_zone.station_id}"
         )
         return {
             "id": (
-                f"airport-{airport_id}-station-{protection_zone.station_id}-"
+                f"{zone_id_prefix}-"
                 f"zone-{protection_zone.zone_code}-region-{protection_zone.region_code}"
             ),
             "airportId": airport_id,
@@ -708,11 +755,8 @@ class PolygonObstacleImportService:
             "vertical": self._build_public_protection_zone_vertical_payload(
                 projector=projector,
                 vertical_definition=protection_zone.vertical_definition,
-                station_altitude_meters=station_altitude_by_id.get(
-                    protection_zone.station_id,
-                    0.0,
-                ),
-                station_wgs84=station_coordinates_by_id.get(protection_zone.station_id),
+                station_altitude_meters=station_altitude,
+                station_wgs84=station_wgs84,
             ),
             "renderGeometry": protection_zone.render_geometry,
         }

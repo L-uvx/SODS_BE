@@ -122,6 +122,7 @@ PROTECTION_ZONE_DISPLAY_NAME_MAPPING = {
     "vor_300m_datum_plane":             "VOR 300米基准面",
     "vor_300_outside_2_5_deg":         "VOR 300米外2.5°仰角",
     "vor_500m_datum_plane":             "VOR 500米基准面",
+    "runway_electromagnetic_environment": "机场电磁环境保护区",
 }
 
 PROTECTION_ZONE_REGION_COLOR_MAPPING = {
@@ -197,6 +198,7 @@ PROTECTION_ZONE_REGION_COLOR_MAPPING = {
     ("vor_300m_datum_plane", "default"): "amber_orange",
     ("vor_300_outside_2_5_deg", "default"): "sky_blue",
     ("vor_500m_datum_plane", "default"): "violet_purple",
+    ("runway_electromagnetic_environment", "default"): "amber_orange",
 }
 
 

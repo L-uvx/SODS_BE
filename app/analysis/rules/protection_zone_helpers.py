@@ -39,6 +39,7 @@ def build_protection_zone_spec(
     local_geometry: Polygon | MultiPolygon,
     vertical_definition: dict[str, object],
     render_geometry: dict[str, object] | None = None,
+    runway_id: int | None = None,
 ) -> ProtectionZoneSpec:
     multipolygon = ensure_multipolygon(ensure_polygonal_geometry(local_geometry))
     return ProtectionZoneSpec(
@@ -54,4 +55,5 @@ def build_protection_zone_spec(
         geometry_definition=build_geometry_definition(multipolygon),
         vertical_definition=vertical_definition,
         render_geometry=render_geometry,
+        runway_id=runway_id,
     )

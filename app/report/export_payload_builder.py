@@ -1,5 +1,6 @@
 from typing import Any
 
+from app.analysis.rules.runway.config import ZONE_CODE as EM_ZONE_CODE
 from app.models.analysis_task import AnalysisTask
 from app.analysis.rules.radar.cumulative_analysis import compute_cumulative_horizontal_mask_angles
 
@@ -102,6 +103,8 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
     for r in rule_results:
         if not r.get("isApplicable", True):
             continue
+        if r.get("zoneCode") == EM_ZONE_CODE:
+            continue
 
         obstacle_name = r.get("obstacleName", "")
         station_name = r.get("stationName", "")
@@ -157,6 +160,8 @@ def _build_summary(rule_results: list[dict], obstacle_count: int) -> str:
     for r in rule_results:
         if not r.get("isApplicable", True):
             continue
+        if r.get("zoneCode") == EM_ZONE_CODE:
+            continue
         if not r.get("isCompliant", True):
             name = r.get("obstacleName", "")
             if name and name not in non_compliant_obstacles:
@@ -177,6 +182,30 @@ def _build_summary(rule_results: list[dict], obstacle_count: int) -> str:
     )
 
 
+# 将电磁环境保护区结果解析为摘要字符串。
+def _build_em_zone_summary(em_zone_result: dict | None) -> str:
+    if not em_zone_result or em_zone_result.get("totalRunways", 0) == 0:
+        return "未发现机场电磁环境保护区。"
+    total = em_zone_result.get("totalObstacles", 0)
+    total_inside = em_zone_result.get("totalInside", 0)
+    total_outside = em_zone_result.get("totalOutside", 0)
+    if total_outside == 0:
+        return "所有障碍物均在机场电磁环境保护区内。"
+    if total_inside == 0:
+        return "所有障碍物均不在机场电磁环境保护区内。"
+    runway_parts: list[str] = []
+    for rw in em_zone_result.get("runways", []):
+        runway_parts.append(
+            f"{rw['runwayName']}（区内{rw['insideCount']}个、"
+            f"区外{rw['outsideCount']}个）"
+        )
+    runways_text = "；".join(runway_parts)
+    return (
+        f"共{total}个障碍物，{total_inside}个在机场电磁环境保护区内，"
+        f"{total_outside}个不在。{runways_text}。"
+    )
+
+
 def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     result_payload = analysis_task.result_payload or {}
     rule_results = result_payload.get("ruleResults", [])
@@ -185,6 +214,8 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     station_names_set: set[str] = set()
     standard_codes: set[str] = set()
     for r in rule_results:
+        if r.get("zoneCode") == EM_ZONE_CODE:
+            continue
         sn = r.get("stationName")
         if sn:
             station_names_set.add(sn)
@@ -211,13 +242,69 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     non_compliant_rows = [row for row in table_rows if row["isCompliant"] == "不满足"]
     compliant_rows = [row for row in table_rows if row["isCompliant"] == "满足"]
 
+    em_zone_results = [
+        r for r in rule_results
+        if r.get("zoneCode") == EM_ZONE_CODE
+    ]
+    em_by_runway: dict[str, dict[str, list]] = {}
+    for r in em_zone_results:
+        rw_name = r.get("stationName", "未知跑道")
+        if rw_name not in em_by_runway:
+            em_by_runway[rw_name] = {"inside": [], "outside": []}
+        is_in_zone = r.get("isInZone", False)
+        target = em_by_runway[rw_name]["inside" if is_in_zone else "outside"]
+        target.append(r)
+
+    total_inside = sum(
+        len(groups["inside"]) for groups in em_by_runway.values()
+    )
+    total_outside = sum(
+        len(groups["outside"]) for groups in em_by_runway.values()
+    )
+
+    def _build_obstacle_entry(item: dict) -> dict:
+        return {
+            "obstacleName": item.get("obstacleName", ""),
+            "obstacleId": item.get("obstacleId"),
+            "isInZone": item.get("isInZone", False),
+        }
+
+    electromagnetic_zone_result = {
+        "totalRunways": len(em_by_runway),
+        "totalObstacles": len(em_zone_results),
+        "totalInside": total_inside,
+        "totalOutside": total_outside,
+        "runways": sorted(
+            [
+                {
+                    "runwayName": rw_name,
+                    "obstacleCount": len(groups["inside"]) + len(groups["outside"]),
+                    "insideCount": len(groups["inside"]),
+                    "outsideCount": len(groups["outside"]),
+                    "obstaclesInside": [
+                        _build_obstacle_entry(item)
+                        for item in groups["inside"]
+                    ],
+                    "obstaclesOutside": [
+                        _build_obstacle_entry(item)
+                        for item in groups["outside"]
+                    ],
+                }
+                for rw_name, groups in em_by_runway.items()
+            ],
+            key=lambda x: x["runwayName"],
+        ),
+    }
+
+    em_zone_summary = _build_em_zone_summary(electromagnetic_zone_result)
+
     return {
         "projectName": analysis_task.import_batch.project.name if analysis_task.import_batch and analysis_task.import_batch.project else "",
         "airportName": airport_name,
         "standardsUsed": standards_used,
         "stationNames": "、".join(sorted(station_names_set)),
         "cumulativeMaskAngleResults": cumulative_mask_angle_results,
-        "electromagneticZoneResult": "待补充",
+        "electromagneticZoneResult": em_zone_summary,
         "obstacleCount": obstacle_count,
         "summary": summary,
         "tableRows": table_rows,

@@ -17,3 +17,4 @@ class ProtectionZoneSpec:
     geometry_definition: dict[str, object]
     vertical_definition: dict[str, object]
     render_geometry: dict[str, object] | None = None
+    runway_id: int | None = None

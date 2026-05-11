@@ -404,6 +404,10 @@ _WIND_RADAR_STANDARD_KEYS: dict[str, tuple[list[str], list[str]]] = {
     ),
 }
 
+_RUNWAY_STANDARD_KEYS: dict[str, tuple[list[str], list[str]]] = {
+    "runway_electromagnetic_environment": ([], []),
+}
+
 _STANDARD_KEYS_BY_STATION_TYPE: dict[
     str, dict[str, tuple[list[str], list[str]]]
 ] = {
@@ -418,6 +422,7 @@ _STANDARD_KEYS_BY_STATION_TYPE: dict[
     "RADAR": _RADAR_STANDARD_KEYS,
     "WeatherRadar": _WEATHER_RADAR_STANDARD_KEYS,
     "WindRadar": _WIND_RADAR_STANDARD_KEYS,
+    "RUNWAY": _RUNWAY_STANDARD_KEYS,
 }
 
 
