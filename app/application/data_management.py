@@ -268,6 +268,7 @@ class DataManagementService:
         for runway in self._repository.list_runways_by_airport_id(airport_id):
             self._repository.delete_runway(runway)
 
+        self._session.flush()
         self._repository.delete_airport(airport)
         self._session.commit()
 
