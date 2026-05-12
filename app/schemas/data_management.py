@@ -60,9 +60,29 @@ class StationTypeOptionResponse(DataManagementBaseModel):
 
 class AirportUpsertRequest(DataManagementBaseModel):
     name: str
-    longitude: float | None = Field(default=None, ge=-180, le=180)
-    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None)
+    latitude: float | None = Field(default=None)
     altitude: float | None = Field(default=None, ge=0)
+
+    @field_validator('longitude', 'latitude', mode='before')
+    @classmethod
+    def parse_coordinate(cls, v):
+        from app.application.data_management_import import _parse_degree
+        return _parse_degree(v)
+
+    @field_validator('longitude')
+    @classmethod
+    def validate_longitude_range(cls, v: float | None) -> float | None:
+        if v is not None and not (-180 <= v <= 180):
+            raise ValueError('longitude must be between -180 and 180')
+        return v
+
+    @field_validator('latitude')
+    @classmethod
+    def validate_latitude_range(cls, v: float | None) -> float | None:
+        if v is not None and not (-90 <= v <= 90):
+            raise ValueError('latitude must be between -90 and 90')
+        return v
 
 
 class AirportResponse(DataManagementBaseModel):
@@ -100,8 +120,8 @@ class RunwayUpsertRequest(DataManagementBaseModel):
     length: float | None = Field(default=None, alias="lengthMeters", ge=0)
     width: float | None = Field(default=None, ge=0)
     altitude: float | None = Field(default=None, ge=0)
-    longitude: float | None = Field(default=None, ge=-180, le=180)
-    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None)
+    latitude: float | None = Field(default=None)
     enter_height: float | None = Field(default=None, alias="enterHeight", ge=0)
     maximum_airworthiness: float | None = Field(
         default=None,
@@ -117,6 +137,26 @@ class RunwayUpsertRequest(DataManagementBaseModel):
     @classmethod
     def validate_run_number_not_empty(cls, value: str) -> str:
         return cls.validate_non_empty_identifier(value)
+
+    @field_validator('longitude', 'latitude', mode='before')
+    @classmethod
+    def parse_coordinate(cls, v):
+        from app.application.data_management_import import _parse_degree
+        return _parse_degree(v)
+
+    @field_validator('longitude')
+    @classmethod
+    def validate_longitude_range(cls, v: float | None) -> float | None:
+        if v is not None and not (-180 <= v <= 180):
+            raise ValueError('longitude must be between -180 and 180')
+        return v
+
+    @field_validator('latitude')
+    @classmethod
+    def validate_latitude_range(cls, v: float | None) -> float | None:
+        if v is not None and not (-90 <= v <= 90):
+            raise ValueError('latitude must be between -90 and 90')
+        return v
 
 
 class RunwayResponse(DataManagementBaseModel):
@@ -165,8 +205,8 @@ class StationUpsertRequest(DataManagementBaseModel):
     station_type: str = Field(alias="stationType")
     station_group: str | None = Field(default=None, alias="stationGroup")
     frequency: float | None = Field(default=None, ge=0)
-    longitude: float | None = Field(default=None, ge=-180, le=180)
-    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None)
+    latitude: float | None = Field(default=None)
     altitude: float | None = Field(default=None, ge=0)
     coverage_radius: float | None = Field(default=None, alias="coverageRadius", ge=0)
     fly_height: float | None = Field(default=None, alias="flyHeight", ge=0)
@@ -192,6 +232,26 @@ class StationUpsertRequest(DataManagementBaseModel):
     @classmethod
     def validate_station_type_not_empty(cls, value: str) -> str:
         return cls.validate_non_empty_identifier(value)
+
+    @field_validator('longitude', 'latitude', mode='before')
+    @classmethod
+    def parse_coordinate(cls, v):
+        from app.application.data_management_import import _parse_degree
+        return _parse_degree(v)
+
+    @field_validator('longitude')
+    @classmethod
+    def validate_longitude_range(cls, v: float | None) -> float | None:
+        if v is not None and not (-180 <= v <= 180):
+            raise ValueError('longitude must be between -180 and 180')
+        return v
+
+    @field_validator('latitude')
+    @classmethod
+    def validate_latitude_range(cls, v: float | None) -> float | None:
+        if v is not None and not (-90 <= v <= 90):
+            raise ValueError('latitude must be between -90 and 90')
+        return v
 
 
 class StationResponse(DataManagementBaseModel):
@@ -253,3 +313,33 @@ class StationUpdateResponse(StationWriteResponse):
 
 class DeleteResponse(DataManagementBaseModel):
     success: bool
+
+
+class AirportImportWarning(DataManagementBaseModel):
+    code: str
+    message: str
+
+
+class AirportImportResponse(DataManagementBaseModel):
+    id: int
+    airport_name: str = Field(alias="airportName")
+    runway_count: int = Field(alias="runwayCount")
+    station_count: int = Field(alias="stationCount")
+    warnings: list[AirportImportWarning] = Field(default_factory=list)
+
+
+class AirportImportItem(DataManagementBaseModel):
+    filename: str = Field(alias="fileName")
+    status: str
+    airport_id: int | None = Field(default=None, alias="airportId")
+    airport_name: str | None = Field(default=None, alias="airportName")
+    runway_count: int = Field(default=0, alias="runwayCount")
+    station_count: int = Field(default=0, alias="stationCount")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+
+
+class AirportImportBatchResponse(DataManagementBaseModel):
+    items: list[AirportImportItem] = Field(default_factory=list)
+    total_files: int = Field(alias="totalFiles")
+    imported_count: int = Field(alias="importedCount")
+    skipped_count: int = Field(alias="skippedCount")

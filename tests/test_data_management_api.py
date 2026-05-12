@@ -175,7 +175,7 @@ def test_create_airport_returns_structured_validation_error_detail() -> None:
     assert response.status_code == 422
     payload = response.json()
     assert payload["detail"][0]["loc"] == ["body", "longitude"]
-    assert payload["detail"][0]["type"] == "less_than_equal"
+    assert payload["detail"][0]["type"] == "value_error"
 
 
 def test_create_airport_maps_service_validation_error_to_structured_422(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1022,25 +1022,22 @@ def test_station_create_returns_created_id_without_warning() -> None:
     }
 
 
-def test_delete_airport_conflict_returns_structured_detail_under_detail() -> None:
+def test_delete_airport_cascades_to_child_runways_and_stations() -> None:
     with _create_test_client() as client:
         _seed_airport(name="Airport One")
         _seed_runway(airport_id=1, name="Runway 18/36", run_number="18")
         _seed_station(airport_id=1, name="NDB Station", station_type="NDB")
         response = client.delete("/data-management/airports/1")
 
-    assert response.status_code == 409
-    assert response.json() == {
-        "detail": {
-            "code": "airport_has_children",
-            "message": "airport has child records",
-            "runwayCount": 1,
-            "stationCount": 1,
-        }
-    }
+    assert response.status_code == 204
+    with _create_test_client() as client:
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            assert session.get(Airport, 1) is None
+            assert session.get(Runway, 1) is None
+            assert session.get(Station, 1) is None
 
 
-def test_delete_runway_conflict_returns_referenced_station_count_detail() -> None:
+def test_delete_runway_cascades_to_referencing_stations() -> None:
     with _create_test_client() as client:
         _seed_airport(name="Airport One")
         _seed_runway(airport_id=1, name="Runway 18/36", run_number="18")
@@ -1052,14 +1049,11 @@ def test_delete_runway_conflict_returns_referenced_station_count_detail() -> Non
             session.commit()
         response = client.delete("/data-management/runways/1")
 
-    assert response.status_code == 409
-    assert response.json() == {
-        "detail": {
-            "code": "runway_has_stations",
-            "message": "runway is referenced by stations",
-            "referencedStationCount": 1,
-        }
-    }
+    assert response.status_code == 204
+    with _create_test_client() as client:
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            assert session.get(Runway, 1) is None
+            assert session.get(Station, 1) is None
 
 
 def test_openapi_documents_data_management_domain_error_responses() -> None:
@@ -1073,9 +1067,9 @@ def test_openapi_documents_data_management_domain_error_responses() -> None:
     stations_get = payload["paths"]["/data-management/stations"]["get"]
 
     assert "422" in airport_post["responses"]
-    assert "409" in runway_delete["responses"]
     assert airport_post["responses"]["422"]["content"]["application/json"]["schema"]["$ref"].endswith("/HTTPValidationError")
-    assert runway_delete["responses"]["409"]["content"]["application/json"]["schema"]["$ref"].endswith("/DomainErrorResponse")
+    assert "404" in runway_delete["responses"]
+    assert "409" not in runway_delete["responses"]
     assert "404" not in stations_get["responses"]
     assert "409" not in stations_get["responses"]
 
@@ -1390,39 +1384,28 @@ def test_service_update_runway_rejects_identity_change_when_referenced_by_statio
     assert exc_info.value.extra == {"referencedStationCount": 1}
 
 
-def test_service_delete_airport_rejects_when_child_records_exist() -> None:
-    from app.application.data_management import (
-        DataManagementConflictError,
-        DataManagementService,
-    )
+def test_service_delete_airport_cascades_when_child_records_exist() -> None:
+    from app.application.data_management import DataManagementService
 
     with _create_test_session() as session:
         airport = Airport(name="Airport One")
         session.add(airport)
         session.flush()
-        session.add_all(
-            [
-                Runway(airport_id=airport.id, name="Runway 18/36", run_number="18"),
-                Station(airport_id=airport.id, name="LOC Station", station_type="LOC"),
-            ]
-        )
+        runway = Runway(airport_id=airport.id, name="Runway 18/36", run_number="18")
+        station = Station(airport_id=airport.id, name="LOC Station", station_type="LOC")
+        session.add_all([runway, station])
         session.commit()
 
         service = DataManagementService(session)
+        service.delete_airport(airport.id)
 
-        with pytest.raises(DataManagementConflictError) as exc_info:
-            service.delete_airport(airport.id)
-
-    assert exc_info.value.code == "airport_has_children"
-    assert exc_info.value.message == "airport has child records"
-    assert exc_info.value.extra == {"runwayCount": 1, "stationCount": 1}
+        assert session.get(Airport, airport.id) is None
+        assert session.get(Runway, runway.id) is None
+        assert session.get(Station, station.id) is None
 
 
-def test_service_delete_runway_rejects_when_station_references_runway_number() -> None:
-    from app.application.data_management import (
-        DataManagementConflictError,
-        DataManagementService,
-    )
+def test_service_delete_runway_cascades_when_station_references_runway_number() -> None:
+    from app.application.data_management import DataManagementService
 
     with _create_test_session() as session:
         airport = Airport(name="Airport One")
@@ -1431,24 +1414,20 @@ def test_service_delete_runway_rejects_when_station_references_runway_number() -
         runway = Runway(airport_id=airport.id, name="Runway 18/36", run_number="18")
         session.add(runway)
         session.flush()
-        session.add(
-            Station(
-                airport_id=airport.id,
-                name="LOC Station",
-                station_type="LOC",
-                runway_no="18",
-            )
+        station = Station(
+            airport_id=airport.id,
+            name="LOC Station",
+            station_type="LOC",
+            runway_no="18",
         )
+        session.add(station)
         session.commit()
 
         service = DataManagementService(session)
+        service.delete_runway(runway.id)
 
-        with pytest.raises(DataManagementConflictError) as exc_info:
-            service.delete_runway(runway.id)
-
-    assert exc_info.value.code == "runway_referenced_by_station"
-    assert exc_info.value.message == "runway is referenced by stations"
-    assert exc_info.value.extra == {"referencedStationCount": 1}
+        assert session.get(Runway, runway.id) is None
+        assert session.get(Station, station.id) is None
 
 
 def test_service_create_station_with_runway_no_returns_empty_warnings() -> None:

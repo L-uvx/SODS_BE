@@ -257,40 +257,28 @@ class DataManagementService:
         self._session.expunge(updated_station)
         return updated_station, []
 
-    # 删除机场，存在子记录时阻断。
+    # 删除机场，级联删除子跑道与子台站。
     def delete_airport(self, airport_id: int) -> None:
         airport = self._repository.get_airport(airport_id)
         if airport is None:
             raise DataManagementNotFoundError("airport_not_found", "airport not found")
 
-        runway_count = self._repository.count_runways_by_airport_id(airport_id)
-        station_count = self._repository.count_stations_by_airport_id(airport_id)
-        if runway_count > 0 or station_count > 0:
-            raise DataManagementConflictError(
-                "airport_has_children",
-                "airport has child records",
-                extra={
-                    "runwayCount": runway_count,
-                    "stationCount": station_count,
-                },
-            )
+        for station in self._repository.list_stations_by_airport_id(airport_id):
+            self._repository.delete_station(station)
+        for runway in self._repository.list_runways_by_airport_id(airport_id):
+            self._repository.delete_runway(runway)
 
         self._repository.delete_airport(airport)
         self._session.commit()
 
-    # 删除跑道，被台站引用时阻断。
+    # 删除跑道，级联删除引用该跑道的台站。
     def delete_runway(self, runway_id: int) -> None:
         runway = self._repository.get_runway(runway_id)
         if runway is None:
             raise DataManagementNotFoundError("runway_not_found", "runway not found")
 
-        referenced_station_count = self._repository.count_stations_referencing_runway(runway_id)
-        if referenced_station_count > 0:
-            raise DataManagementConflictError(
-                "runway_referenced_by_station",
-                "runway is referenced by stations",
-                extra={"referencedStationCount": referenced_station_count},
-            )
+        for station in self._repository.list_stations_referencing_runway(runway_id):
+            self._repository.delete_station(station)
 
         self._repository.delete_runway(runway)
         self._session.commit()
@@ -303,6 +291,83 @@ class DataManagementService:
 
         self._repository.delete_station(station)
         self._session.commit()
+
+    # 从 Excel 文件导入机场（含跑道和台站）。
+    def import_airport_from_excel(
+        self,
+        *,
+        excel_bytes: bytes,
+        original_filename: str,
+    ) -> "AirportImportResponse":
+        from app.application.data_management_import import (
+            AirportImportParseError,
+            _import_airport_from_excel,
+        )
+        from app.schemas.data_management import AirportImportResponse
+        try:
+            result = _import_airport_from_excel(
+                session=self._session,
+                excel_bytes=excel_bytes,
+                original_filename=original_filename,
+            )
+            self._session.commit()
+        except AirportImportParseError as exc:
+            self._session.rollback()
+            raise DataManagementValidationError("import_parse_error", str(exc)) from exc
+        except Exception as exc:
+            self._session.rollback()
+            raise DataManagementValidationError("import_failed", str(exc)) from exc
+        return AirportImportResponse(**result)
+
+    # 批量从多个 Excel 文件导入机场。
+    def import_airports_from_batch(
+        self,
+        files: list[tuple[bytes, str]],
+    ) -> "AirportImportBatchResponse":
+        from app.schemas.data_management import AirportImportBatchResponse, AirportImportItem
+
+        items: list[AirportImportItem] = []
+        imported_count = 0
+        skipped_count = 0
+
+        for file_bytes, filename in files:
+            if not (filename.lower().endswith(".xlsx") or filename.lower().endswith(".xls")):
+                items.append(AirportImportItem(fileName=filename, status="skipped"))
+                skipped_count += 1
+                continue
+
+            if filename.startswith("~$"):
+                items.append(AirportImportItem(fileName=filename, status="skipped"))
+                skipped_count += 1
+                continue
+
+            try:
+                result = self.import_airport_from_excel(
+                    excel_bytes=file_bytes,
+                    original_filename=filename,
+                )
+                items.append(AirportImportItem(
+                    fileName=filename,
+                    status="imported",
+                    airportId=result.id,
+                    airportName=result.airport_name,
+                    runwayCount=result.runway_count,
+                    stationCount=result.station_count,
+                ))
+                imported_count += 1
+            except DataManagementValidationError as exc:
+                items.append(AirportImportItem(
+                    fileName=filename,
+                    status="error",
+                    errorMessage=str(exc),
+                ))
+
+        return AirportImportBatchResponse(
+            items=items,
+            totalFiles=len(files),
+            importedCount=imported_count,
+            skippedCount=skipped_count,
+        )
 
     # 查询机场选项。
     def list_airport_options(self) -> list[OptionItemResponse]:

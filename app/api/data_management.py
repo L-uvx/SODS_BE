@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from typing import List
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session
@@ -9,6 +11,7 @@ from app.application.data_management import (
     DataManagementValidationError,
 )
 from app.schemas.data_management import (
+    AirportImportBatchResponse,
     AirportListResponse,
     AirportResponse,
     AirportUpsertRequest,
@@ -125,7 +128,7 @@ def update_airport(
 @router.delete(
     "/airports/{airport_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=NOT_FOUND_AND_CONFLICT_RESPONSES,
+    responses=NOT_FOUND_RESPONSE,
 )
 def delete_airport(
     airport_id: int,
@@ -134,7 +137,7 @@ def delete_airport(
     service = DataManagementService(session)
     try:
         service.delete_airport(airport_id)
-    except (DataManagementConflictError, DataManagementNotFoundError) as error:
+    except DataManagementNotFoundError as error:
         _raise_api_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -212,7 +215,7 @@ def update_runway(
 @router.delete(
     "/runways/{runway_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=NOT_FOUND_AND_CONFLICT_RESPONSES,
+    responses=NOT_FOUND_RESPONSE,
 )
 def delete_runway(
     runway_id: int,
@@ -221,7 +224,7 @@ def delete_runway(
     service = DataManagementService(session)
     try:
         service.delete_runway(runway_id)
-    except (DataManagementConflictError, DataManagementNotFoundError) as error:
+    except DataManagementNotFoundError as error:
         _raise_api_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -311,6 +314,24 @@ def delete_station(
     except DataManagementNotFoundError as error:
         _raise_api_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# 批量导入机场 Excel（含跑道和台站）。
+@router.post(
+    "/import/airports",
+    response_model=AirportImportBatchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def import_airports(
+    excel_files: List[UploadFile] = File(alias="excelFiles"),
+    session: Session = Depends(get_db_session),
+) -> AirportImportBatchResponse:
+    service = DataManagementService(session)
+    files = [
+        (file.file.read(), file.filename or "unknown.xlsx")
+        for file in excel_files
+    ]
+    return service.import_airports_from_batch(files)
 
 
 # 查询机场选项。

@@ -183,6 +183,31 @@ class DataManagementRepository:
         statement = select(func.count()).select_from(Station).where(Station.airport_id == airport_id)
         return int(self._session.scalar(statement) or 0)
 
+    # 列出机场下全部跑道。
+    def list_runways_by_airport_id(self, airport_id: int) -> list[Runway]:
+        statement = select(Runway).where(Runway.airport_id == airport_id)
+        return list(self._session.scalars(statement).all())
+
+    # 列出机场下全部台站。
+    def list_stations_by_airport_id(self, airport_id: int) -> list[Station]:
+        statement = select(Station).where(Station.airport_id == airport_id)
+        return list(self._session.scalars(statement).all())
+
+    # 列出引用指定跑道编号的台站。
+    def list_stations_referencing_runway(self, runway_id: int) -> list[Station]:
+        runway = self.get_runway(runway_id)
+        if runway is None or runway.run_number is None:
+            return []
+
+        statement = (
+            select(Station)
+            .where(
+                Station.airport_id == runway.airport_id,
+                Station.runway_no == runway.run_number,
+            )
+        )
+        return list(self._session.scalars(statement).all())
+
     # 统计引用跑道编号的台站数量。
     def count_stations_referencing_runway(self, runway_id: int) -> int:
         runway = self.get_runway(runway_id)
