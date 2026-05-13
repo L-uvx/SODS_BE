@@ -666,3 +666,111 @@ def test_station_rule_dispatcher_dispatches_surface_detection_radar_by_station_t
         "surface_detection_radar_runway_triangle",
         "radar_minimum_distance_460m",
     }
+
+
+def test_bind_station_protection_zones_returns_zones_for_all_station_types() -> None:
+    """验证 dispatcher.bind_station_protection_zones 对所有台站类型都能返回保护区。"""
+    from app.analysis.protection_zone_spec import ProtectionZoneSpec
+
+    dispatcher = StationAnalysisDispatcher()
+    runway_context = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, 100.0),
+        "directionDegrees": 180.0,
+        "lengthMeters": 400.0,
+        "widthMeters": 45.0,
+        "maximumAirworthiness": 2,
+    }
+    runways = [runway_context]
+
+    # 有跑道的类型
+    for station_type, altitude, runway_no, extras in [
+        ("LOC", 500.0, "18", {"station_sub_type": "II", "unit_number": "18"}),
+        ("GP", 12.0, "18", {"antenna_hag": 3.5, "station_sub_type": "M"}),
+        ("MB", 500.0, "18", {}),
+        ("Surface_Detection_Radar", 500.0, "18", {}),
+    ]:
+        attrs = {"id": 1, "name": f"{station_type} Station",
+                 "station_type": station_type, "altitude": altitude,
+                 "runway_no": runway_no,
+                 "longitude": 120.0, "latitude": 30.0}
+        attrs.update(extras)
+        station = type("Station", (), attrs)()
+        zones = dispatcher.bind_station_protection_zones(
+            station=station,
+            station_point=(0.0, 0.0),
+            runways=runways,
+        )
+        assert isinstance(zones, list)
+        for zone in zones:
+            assert isinstance(zone, ProtectionZoneSpec)
+        assert len(zones) > 0, f"Expected zones for {station_type}"
+
+    # 无跑道类型
+    for station_type, altitude, extras in [
+        ("NDB", 500.0, {}),
+        ("ADS_B", 500.0, {}),
+        ("HF", 500.0, {}),
+        ("VHF", 500.0, {}),
+        ("VOR", 10.0, {"b_to_center_distance": 3.0, "reflection_diameter": 30.0,
+                        "b_antenna_h": 2.0, "reflection_net_hag": 5.0,
+                        "coverage_radius": 1800.0, "longitude": 120.0, "latitude": 30.0}),
+        ("RADAR", 500.0, {"longitude": 120.0, "latitude": 30.0, "coverage_radius": 30000.0}),
+        ("WeatherRadar", 500.0, {"longitude": 120.0, "latitude": 30.0, "coverage_radius": 50000.0}),
+        ("WindRadar", 500.0, {"longitude": 120.0, "latitude": 30.0,
+                               "antenna_hag": 5.0, "coverage_radius": 30000.0}),
+    ]:
+        attrs = {"id": 2, "name": f"{station_type} Station",
+                 "station_type": station_type, "altitude": altitude,
+                 "longitude": 120.0, "latitude": 30.0}
+        attrs.update(extras)
+        station = type("Station", (), attrs)()
+        zones = dispatcher.bind_station_protection_zones(
+            station=station,
+            station_point=(0.0, 0.0),
+            runways=[],
+        )
+        assert isinstance(zones, list)
+        for zone in zones:
+            assert isinstance(zone, ProtectionZoneSpec)
+        assert len(zones) > 0, f"Expected zones for {station_type}"
+
+
+def test_bind_station_protection_zones_returns_empty_for_unknown_station_type() -> None:
+    """验证 dispatcher.bind_station_protection_zones 对未知台站类型返回空列表。"""
+    dispatcher = StationAnalysisDispatcher()
+    station = type(
+        "Station", (),
+        {"id": 1, "name": "Unknown Station", "station_type": "UnknownType", "altitude": 500.0},
+    )()
+    zones = dispatcher.bind_station_protection_zones(
+        station=station,
+        station_point=(0.0, 0.0),
+        runways=[],
+    )
+    assert zones == []
+
+
+def test_bind_station_protection_zones_returns_empty_for_no_runway_match() -> None:
+    """验证有跑道类型台站在无匹配跑道时 bind_station_protection_zones 返回空列表。"""
+    dispatcher = StationAnalysisDispatcher()
+    station = type(
+        "Station", (),
+        {"id": 1, "name": "LOC Station", "station_type": "LOC",
+         "altitude": 500.0, "runway_no": "36"},
+    )()
+    runways = [{
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, 100.0),
+        "directionDegrees": 180.0,
+        "lengthMeters": 400.0,
+        "widthMeters": 45.0,
+    }]
+    zones = dispatcher.bind_station_protection_zones(
+        station=station,
+        station_point=(0.0, 0.0),
+        runways=runways,
+    )
+    assert zones == []

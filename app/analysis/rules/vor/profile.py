@@ -150,6 +150,54 @@ class VorRuleProfile:
             protection_zones=protection_zones,
         )
 
+    # 无条件绑定 VOR 全部规则并返回所有保护区（不含障碍物分析）。
+    def bind_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+    ) -> list[ProtectionZoneSpec]:
+        protection_zones: list[ProtectionZoneSpec] = []
+
+        bound_reflector = self._reflector_mask_rule.bind(
+            station=station, station_point=station_point,
+        )
+        if bound_reflector is not None:
+            protection_zones.append(bound_reflector.protection_zone)
+
+        for rule in (
+            self._datum_plane_100m,
+            self._datum_plane_200m,
+        ):
+            bound = rule.bind(station=station, station_point=station_point)
+            if bound is not None:
+                protection_zones.append(bound.protection_zone)
+
+        bound_200m_hv = self._datum_plane_200m_hv.bind(
+            station=station, station_point=station_point,
+        )
+        if bound_200m_hv is not None:
+            protection_zones.append(bound_200m_hv.protection_zone)
+
+        for rule in (
+            self._datum_plane_300m,
+            self._datum_plane_500m,
+        ):
+            bound = rule.bind(station=station, station_point=station_point)
+            if bound is not None:
+                protection_zones.append(bound.protection_zone)
+
+        for rule in (
+            self._elevation_angle_100_200,
+            self._elevation_angle_200_300,
+            self._elevation_angle_300_outside,
+        ):
+            bound = rule.bind(station=station, station_point=station_point)
+            if bound is not None:
+                protection_zones.append(bound.protection_zone)
+
+        return protection_zones
+
 
 _SKIP_HIGH_VOLTAGE_AND_RAILWAY = frozenset({
     "power_line_high_voltage_35kv_below",

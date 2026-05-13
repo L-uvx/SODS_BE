@@ -479,6 +479,19 @@ class AnalysisProtectionZoneResponse(BaseModel):
     )
 
 
+class AirportProtectionZonesResponse(BaseModel):
+    airport_id: int = Field(alias="airportId")
+    airport_name: str = Field(alias="airportName")
+    protection_zones: list[AnalysisProtectionZoneResponse] = Field(
+        alias="protectionZones",
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
 class AnalysisTaskResultResponse(BaseModel):
     analysis_task_id: str = Field(alias="analysisTaskId")
     status: str
@@ -491,10 +504,6 @@ class AnalysisTaskResultResponse(BaseModel):
     summary: str
     rule_results: list[AnalysisRuleResultResponse] = Field(
         alias="ruleResults",
-        default_factory=list,
-    )
-    protection_zones: list[AnalysisProtectionZoneResponse] = Field(
-        alias="protectionZones",
         default_factory=list,
     )
 

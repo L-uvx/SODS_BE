@@ -4,6 +4,7 @@ from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.mb.config import MB_SITE_PROTECTION
 from app.analysis.rules.mb.site_protection import MbSiteProtectionRule
+from app.analysis.rules.runway_contexts import resolve_runway_context
 
 
 @dataclass(slots=True)
@@ -26,7 +27,7 @@ class MbRuleProfile:
         station_point: tuple[float, float],
         runways: list[dict[str, object]],
     ) -> MbStationAnalysisPayload:
-        runway_context = self._resolve_runway_context(station=station, runways=runways)
+        runway_context = resolve_runway_context(station=station, runways=runways)
         if runway_context is None:
             return MbStationAnalysisPayload(rule_results=[], protection_zones=[])
 
@@ -48,21 +49,27 @@ class MbRuleProfile:
             protection_zones=[rule.protection_zone for rule in bound_rules],
         )
 
-    # 按跑道号解析 MB 所属跑道上下文。
-    def _resolve_runway_context(
+    # 无条件绑定 MB 全部规则并返回所有保护区（不含障碍物分析）。
+    def bind_protection_zones(
         self,
         *,
         station: object,
+        station_point: tuple[float, float],
         runways: list[dict[str, object]],
-    ) -> dict[str, object] | None:
-        runway_no = getattr(station, "runway_no", None)
-        if runway_no is None:
-            return None
+    ) -> list[ProtectionZoneSpec]:
+        runway_context = resolve_runway_context(station=station, runways=runways)
+        if runway_context is None:
+            return []
 
-        for runway in runways:
-            if runway.get("runNumber") == runway_no:
-                return runway
-        return None
+        return [
+            self._site_protection_rule.bind(
+                station=station,
+                station_point=station_point,
+                runway_direction_degrees=float(runway_context["directionDegrees"]),
+                region_definition=region_definition,
+            ).protection_zone
+            for region_definition in MB_SITE_PROTECTION["regions"]
+        ]
 
 
 __all__ = ["MbRuleProfile", "MbStationAnalysisPayload"]

@@ -88,3 +88,29 @@ class SurfaceDetectionRadarRuleProfile:
             rule_results=[*triangle_results, *gated_base_results],
             protection_zones=protection_zones,
         )
+
+    # 无条件绑定场监雷达全部规则并返回所有保护区（不含障碍物分析）。
+    def bind_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+        runways: list[dict[str, object]],
+    ) -> list[ProtectionZoneSpec]:
+        runway = find_matching_runway(station=station, runways=runways)
+        if runway is None:
+            return []
+
+        protection_zones: list[ProtectionZoneSpec] = []
+
+        radar_zones = self._radar_profile.bind_protection_zones(
+            station=station, station_point=station_point,
+        )
+        protection_zones.extend(radar_zones)
+
+        bound_triangle = self._runway_triangle_rule.bind(
+            station=station, station_point=station_point, runway=runway,
+        )
+        protection_zones.append(bound_triangle.protection_zone)
+
+        return protection_zones

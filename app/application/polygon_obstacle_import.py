@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.analysis.context_builder import build_airport_analysis_context
@@ -32,6 +33,7 @@ from app.report.docx_builder import build_analysis_report_docx
 from app.report.export_payload_builder import build_export_payload
 from app.repository.import_batch_repository import ImportBatchRepository
 from app.schemas.polygon_obstacle import (
+    AirportProtectionZonesResponse,
     AnalysisProtectionZoneResponse,
     AnalysisResultTargetResponse,
     AnalysisRuleResultResponse,
@@ -336,7 +338,101 @@ class PolygonObstacleImportService:
             ],
         )
 
-    # 查询导入任务关联的候选机场列表。
+    # 查询指定机场下全部台站和跑道的规则保护区几何。
+    def get_airport_protection_zones(
+        self, airport_id: int
+    ) -> "AirportProtectionZonesResponse":
+        airports = self._repository.list_airports_by_ids([airport_id])
+        if not airports:
+            raise HTTPException(status_code=404, detail="airport not found")
+        airport = airports[0]
+        if airport.longitude is None or airport.latitude is None:
+            raise HTTPException(
+                status_code=422,
+                detail="airport has no coordinates",
+            )
+
+        runways = self._repository.list_runways_by_airport_id(airport_id)
+        stations = self._repository.list_stations_by_airport_id(airport_id)
+
+        projector = AirportLocalProjector(
+            float(airport.longitude), float(airport.latitude)
+        )
+        runway_contexts = self._build_runway_contexts(
+            projector=projector,
+            runways=runways,
+        )
+
+        station_altitude_by_id = {
+            station.id: float(station.altitude or 0.0)
+            for station in stations
+        }
+        station_name_by_id = {station.id: station.name for station in stations}
+        station_coordinates_by_id = {
+            station.id: (
+                float(station.longitude),
+                float(station.latitude),
+            )
+            for station in stations
+            if station.longitude is not None and station.latitude is not None
+        }
+        runway_name_by_id = {
+            runway.id: runway.run_number or str(runway.id)
+            for runway in runways
+        }
+
+        dispatcher = StationAnalysisDispatcher()
+        all_zones: list[dict[str, object]] = []
+
+        for station in stations:
+            if station.longitude is None or station.latitude is None:
+                continue
+
+            station_point = projector.project_point(
+                float(station.longitude),
+                float(station.latitude),
+            )
+            zone_specs = dispatcher.bind_station_protection_zones(
+                station=station,
+                station_point=station_point,
+                runways=runway_contexts,
+            )
+            for spec in zone_specs:
+                payload = self._build_protection_zone_payload(
+                    airport_id=airport_id,
+                    airport_name=airport.name,
+                    projector=projector,
+                    station_altitude_by_id=station_altitude_by_id,
+                    station_name_by_id=station_name_by_id,
+                    station_coordinates_by_id=station_coordinates_by_id,
+                    runway_name_by_id=runway_name_by_id,
+                    protection_zone=spec,
+                )
+                all_zones.append(payload)
+
+        for rw_ctx in runway_contexts:
+            em_spec = build_runway_em_protection_zone(projector, rw_ctx)
+            if em_spec is not None:
+                payload = self._build_protection_zone_payload(
+                    airport_id=airport_id,
+                    airport_name=airport.name,
+                    projector=projector,
+                    station_altitude_by_id=station_altitude_by_id,
+                    station_name_by_id=station_name_by_id,
+                    station_coordinates_by_id=station_coordinates_by_id,
+                    runway_name_by_id=runway_name_by_id,
+                    protection_zone=em_spec,
+                )
+                all_zones.append(payload)
+
+        return AirportProtectionZonesResponse(
+            airportId=airport_id,
+            airportName=airport.name,
+            protectionZones=[
+                AnalysisProtectionZoneResponse(**zone)
+                for zone in all_zones
+            ],
+        )
     def get_import_targets(self, task_id: str) -> list[ImportTargetResponse] | None:
         import_batch = self._repository.get_import_batch(task_id)
         if import_batch is None:
@@ -455,36 +551,6 @@ class PolygonObstacleImportService:
             airport_facts = [
                 self._build_airport_analysis_result(context) for context in contexts
             ]
-            protection_zones = [
-                self._build_protection_zone_payload(
-                    airport_id=context.airport.id,
-                    airport_name=context.airport.name,
-                    projector=AirportLocalProjector(
-                        float(context.airport.longitude),
-                        float(context.airport.latitude),
-                    ),
-                    station_altitude_by_id={
-                        station.id: float(station.altitude or 0.0)
-                        for station in context.stations
-                    },
-                    station_name_by_id={station.id: station.name for station in context.stations},
-                    station_coordinates_by_id={
-                        station.id: (
-                            float(station.longitude),
-                            float(station.latitude),
-                        )
-                        for station in context.stations
-                        if station.longitude is not None and station.latitude is not None
-                    },
-                    runway_name_by_id={
-                        runway.id: runway.run_number or str(runway.id)
-                        for runway in context.runways
-                    },
-                    protection_zone=protection_zone,
-                )
-                for context, airport_fact in zip(contexts, airport_facts, strict=False)
-                for protection_zone in airport_fact.get("protectionZones", [])
-            ]
             obstacle_count = len(
                 self._repository.list_obstacles_by_batch_id(
                     analysis_task.import_batch_id
@@ -501,7 +567,6 @@ class PolygonObstacleImportService:
                         for airport_fact in airport_facts
                         for rule_result in airport_fact.get("ruleResults", [])
                     ],
-                    "protectionZones": protection_zones,
                 },
             )
         except Exception as exc:
@@ -1179,10 +1244,6 @@ class PolygonObstacleImportService:
             ruleResults=[
                 AnalysisRuleResultResponse(**item)
                 for item in rule_results
-            ],
-            protectionZones=[
-                AnalysisProtectionZoneResponse(**item)
-                for item in result_payload.get("protectionZones", [])
             ],
         )
 

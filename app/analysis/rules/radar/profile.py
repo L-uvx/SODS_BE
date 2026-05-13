@@ -90,3 +90,34 @@ class RadarRuleProfile:
             rule_results=rule_results,
             protection_zones=protection_zones,
         )
+
+    # 无条件绑定 Radar A/B/C 全部规则并返回所有保护区（不含障碍物分析）。
+    def bind_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+    ) -> list[ProtectionZoneSpec]:
+        protection_zones: list[ProtectionZoneSpec] = []
+
+        bound_site = self._site_protection_rule.bind(
+            station=station,
+            station_point=station_point,
+            radius_meters=RADAR_A_SITE_PROTECTION_RADIUS_METERS,
+            vertical_limit_angle_degrees=RADAR_A_VERTICAL_LIMIT_ANGLE_DEGREES,
+            horizontal_limit_angle_degrees=RADAR_A_HORIZONTAL_LIMIT_ANGLE_DEGREES,
+        )
+        if bound_site is not None:
+            protection_zones.append(bound_site.protection_zone)
+
+        for _radius, rule in self._minimum_distance_rules_by_radius.items():
+            bound = rule.bind(station=station, station_point=station_point)
+            protection_zones.append(bound.protection_zone)
+
+        bound_rotating = self._rotating_reflector_rule.bind(
+            station=station,
+            station_point=station_point,
+        )
+        protection_zones.append(bound_rotating.protection_zone)
+
+        return protection_zones

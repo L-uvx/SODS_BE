@@ -1025,7 +1025,6 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
     assert payload["obstacleCount"] == 2
     assert payload["summary"] == "已完成局部坐标系与最小空间事实计算。"
     assert payload["ruleResults"] == []
-    assert payload["protectionZones"] == []
 
 
 def test_get_analysis_task_result_omits_spatial_facts_after_worker_runs() -> None:
@@ -1072,7 +1071,6 @@ def test_get_analysis_task_result_omits_spatial_facts_after_worker_runs() -> Non
     assert payload["status"] == "succeeded"
     assert "spatialFacts" not in payload
     assert payload["ruleResults"] == []
-    assert payload["protectionZones"] == []
 
 
 def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
@@ -1135,88 +1133,6 @@ def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
     assert "zoneDefinition" not in rule_results[0]
 
 
-def test_get_analysis_task_result_returns_protection_zones() -> None:
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=104.123456,
-                    latitude=30.123456,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="NDB Station",
-                    airport_id=1,
-                    station_type="NDB",
-                    longitude=104.123456,
-                    latitude=30.123456,
-                    altitude=500.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    protection_zone = response.json()["protectionZones"][0]
-    assert protection_zone["airportId"] == 1
-    assert protection_zone["airportName"] == "Airport A"
-    assert protection_zone["stationId"] == 101
-    assert protection_zone["stationName"] == "NDB Station"
-    assert protection_zone["stationType"] == "NDB"
-    assert protection_zone["ruleCode"] == "ndb_minimum_distance_50m"
-    assert protection_zone["ruleName"] == "ndb_minimum_distance_50m"
-    assert protection_zone["zoneCode"] == "ndb_minimum_distance_50m"
-    assert protection_zone["zoneName"] == "NDB 50米最小间距"
-    assert protection_zone["regionCode"] == "default"
-    assert protection_zone["regionName"] == "default"
-    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
-    assert "center" not in protection_zone["geometry"]
-    assert len(protection_zone["geometry"]["coordinates"]) == 1
-    assert len(protection_zone["geometry"]["coordinates"][0][0]) > 8
-    assert protection_zone["vertical"] == {
-        "mode": "flat",
-        "baseReference": "station",
-        "baseHeightMeters": 500.0,
-    }
-    assert protection_zone["style"] == {
-        "colorKey": "sky_blue",
-        "fill": "rgba(96, 165, 250, 0.5)",
-        "stroke": "rgba(96, 165, 250, 0.9)",
-    }
-    assert protection_zone["properties"] == {
-        "label": "NDB Station NDB 50米最小间距 default"
-    }
-    assert protection_zone["renderGeometry"] is None
-
-
 def test_analysis_protection_zone_response_rejects_legacy_circle_geometry() -> None:
     try:
         AnalysisProtectionZoneResponse(
@@ -1254,277 +1170,6 @@ def test_analysis_protection_zone_response_rejects_legacy_circle_geometry() -> N
         assert "coordinates" in str(exc)
     else:
         raise AssertionError("legacy circle geometry should be rejected")
-
-
-def test_get_analysis_task_result_returns_radial_band_analytic_surface_protection_zone() -> (
-    None
-):
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=104.123456,
-                    latitude=30.123456,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="NDB Station",
-                    airport_id=1,
-                    station_type="NDB",
-                    longitude=104.123456,
-                    latitude=30.123456,
-                    altitude=500.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "top_elevation": 520.0,
-                    "raw_payload": json.dumps(
-                        {
-                            "localGeometry": {
-                                "type": "MultiPolygon",
-                                "coordinates": [
-                                    [
-                                        [
-                                            [-20.0, 1000.0],
-                                            [20.0, 1000.0],
-                                            [20.0, 1040.0],
-                                            [-20.0, 1040.0],
-                                            [-20.0, 1000.0],
-                                        ]
-                                    ]
-                                ],
-                            }
-                        }
-                    ),
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    radial_band_zone = next(
-        item
-        for item in response.json()["protectionZones"]
-        if item["ruleCode"] == "ndb_conical_clearance_3deg"
-    )
-    assert radial_band_zone["geometry"]["shapeType"] == "multipolygon"
-    assert "center" not in radial_band_zone["geometry"]
-    assert len(radial_band_zone["geometry"]["coordinates"]) == 1
-    assert len(radial_band_zone["geometry"]["coordinates"][0]) == 2
-    assert radial_band_zone["vertical"] == {
-        "mode": "analytic_surface",
-        "baseReference": "station",
-        "baseHeightMeters": 500.0,
-        "surface": {
-            "type": "distance_parameterized",
-            "distanceSource": {
-                "kind": "point",
-                "point": [104.123456, 30.123456],
-            },
-            "distanceMetric": "radial",
-            "clampRange": {
-                "startMeters": 50.0,
-                "endMeters": 37040.0,
-            },
-            "heightModel": {
-                "type": "angle_linear_rise",
-                "angleDegrees": 3.0,
-                "distanceOffsetMeters": 0.0,
-                "maskAngleDegrees": None,
-                "distanceKilometersCorrectionDivisor": None,
-            },
-        },
-    }
-    assert radial_band_zone["style"] == {
-        "colorKey": "emerald_green",
-        "fill": "rgba(16, 185, 129, 0.5)",
-        "stroke": "rgba(16, 185, 129, 0.9)",
-    }
-    assert radial_band_zone["renderGeometry"] is None
-
-
-def test_get_analysis_task_result_returns_offset_ndb_distance_source_point() -> None:
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        airport_longitude = 104.123456
-        airport_latitude = 30.123456
-        station_longitude = 104.124456
-        station_latitude = 30.123456
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=airport_longitude,
-                    latitude=airport_latitude,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="NDB Station",
-                    airport_id=1,
-                    station_type="NDB",
-                    longitude=station_longitude,
-                    latitude=station_latitude,
-                    altitude=500.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "top_elevation": 520.0,
-                    "raw_payload": json.dumps(
-                        {
-                            "localGeometry": {
-                                "type": "MultiPolygon",
-                                "coordinates": [
-                                    [
-                                        [
-                                            [-20.0, 1000.0],
-                                            [20.0, 1000.0],
-                                            [20.0, 1040.0],
-                                            [-20.0, 1040.0],
-                                            [-20.0, 1000.0],
-                                        ]
-                                    ]
-                                ],
-                            }
-                        }
-                    ),
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    conical_rule_result = next(
-        item
-        for item in response.json()["ruleResults"]
-        if item["ruleCode"] == "ndb_conical_clearance_3deg"
-    )
-    radial_band_zone = next(
-        item
-        for item in response.json()["protectionZones"]
-        if item["ruleCode"] == "ndb_conical_clearance_3deg"
-    )
-    distance_source_point = radial_band_zone["vertical"]["surface"]["distanceSource"][
-        "point"
-    ]
-
-    assert distance_source_point == [station_longitude, station_latitude]
-    assert conical_rule_result["metrics"]["actualDistanceMeters"] == pytest.approx(
-        1002.9112711944047
-    )
-    assert conical_rule_result["metrics"]["allowedHeightMeters"] == pytest.approx(
-        500.0
-        + math.tan(math.radians(3.0))
-        * conical_rule_result["metrics"]["actualDistanceMeters"]
-    )
-
-
-def test_get_analysis_task_result_centers_ndb_protection_zone_on_station_point() -> None:
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=104.123456,
-                    latitude=30.123456,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="NDB Station",
-                    airport_id=1,
-                    station_type="NDB",
-                    longitude=104.124456,
-                    latitude=30.123456,
-                    altitude=500.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    protection_zone = next(
-        item
-        for item in response.json()["protectionZones"]
-        if item["ruleCode"] == "ndb_minimum_distance_50m"
-    )
-    first_point = protection_zone["geometry"]["coordinates"][0][0][0]
-    assert first_point[0] > 104.1248
-    assert abs(first_point[1] - 30.123456) < 0.001
 
 
 def test_get_analysis_task_result_returns_ndb_300m_rule_result_for_hill() -> None:
@@ -1743,224 +1388,6 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_conical_ru
     }
 
 
-def test_get_analysis_task_result_returns_loc_site_protection_zone_as_multipolygon() -> None:
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Runway(
-                    id=201,
-                    airport_id=1,
-                    run_number="18",
-                    name="Runway 18/36",
-                    longitude=103.975864,
-                    latitude=30.507381,
-                    direction=180.0,
-                    length=600.0,
-                    width=45.0,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="LOC Station",
-                    airport_id=1,
-                    station_type="LOC",
-                    runway_no="18",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    loc_rule = response.json()["ruleResults"][0]
-    assert loc_rule["stationType"] == "LOC"
-    assert loc_rule["ruleName"] == "loc_site_protection"
-    assert loc_rule["zoneCode"] == "loc_site_protection"
-    assert loc_rule["regionCode"] == "default"
-    assert "zoneDefinition" not in loc_rule
-    assert loc_rule["standards"] == {
-        "gb": [{
-            "code": "GB_ILSLOC_场地保护区",
-            "text": "在航向信标台场地保护区内不应有障碍物存在。",
-            "isCompliant": False,
-        }],
-        "mh": [{
-            "code": "MH_ILSLOC_场地保护区",
-            "text": "在航向信标台场地保护区内除必需的助航设施和滑行道外，不应有树木、建筑物（航向信标台机房除外）、道路、金属栅栏和架空线缆等障碍物。",
-            "isCompliant": False,
-        }],
-    }
-
-    protection_zone = response.json()["protectionZones"][0]
-    assert protection_zone["stationType"] == "LOC"
-    assert protection_zone["ruleCode"] == "loc_site_protection"
-    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
-    assert len(protection_zone["geometry"]["coordinates"]) == 1
-    assert protection_zone["vertical"] == {
-        "mode": "flat",
-        "baseReference": "station",
-        "baseHeightMeters": 500.0,
-    }
-    assert protection_zone["renderGeometry"] is None
-
-
-def test_get_analysis_task_result_returns_loc_forward_sector_zone() -> None:
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Runway(
-                    id=201,
-                    airport_id=1,
-                    run_number="18",
-                    name="Runway 18/36",
-                    longitude=103.975864,
-                    latitude=30.507381,
-                    direction=180.0,
-                    length=600.0,
-                    width=45.0,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="LOC Station",
-                    airport_id=1,
-                    station_type="LOC",
-                    runway_no="18",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "top_elevation": 520.0,
-                    "raw_payload": json.dumps(
-                        {
-                            "localGeometry": {
-                                "type": "MultiPolygon",
-                                "coordinates": [
-                                    [
-                                        [
-                                            [-20.0, 1000.0],
-                                            [20.0, 1000.0],
-                                            [20.0, 1040.0],
-                                            [-20.0, 1040.0],
-                                            [-20.0, 1000.0],
-                                        ]
-                                    ]
-                                ],
-                            }
-                        }
-                    ),
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    payload = response.json()
-    loc_rule = next(
-        item
-        for item in payload["ruleResults"]
-        if item["ruleName"] == "loc_forward_sector_3000m_15m"
-    )
-    assert loc_rule["stationType"] == "LOC"
-    assert loc_rule["zoneCode"] == "loc_forward_sector_3000m_15m"
-    assert loc_rule["standards"] == {
-        "gb": [{
-            "code": "GB_ILSLOC_前向正负10°，3000米区域",
-            "text": "在航向信标天线中心前向±10°、距离航向信标天线3km的区域内，不应有高于15m的建筑物、大型金属反射物和高压输电线存在。",
-            "isCompliant": False,
-        }],
-        "mh": [{
-            "code": "MH_ILSLOC_前向正负10°，3000米区域",
-            "text": "在航向信标天线中心前向±10°、距离航向信标天线3000m的区域内，不应有高于15m的建筑物、大型金属反射物和高压输电线。",
-            "isCompliant": False,
-        }],
-    }
-
-    protection_zone = next(
-        item
-        for item in payload["protectionZones"]
-        if item["ruleCode"] == "loc_forward_sector_3000m_15m"
-    )
-    assert protection_zone["stationType"] == "LOC"
-    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
-    assert len(protection_zone["geometry"]["coordinates"]) == 1
-    assert protection_zone["vertical"] == {
-        "mode": "flat",
-        "baseReference": "station",
-        "baseHeightMeters": 515.0,
-    }
-    assert protection_zone["renderGeometry"] is None
-
-
 def test_public_flat_vertical_payload_keeps_station_based_height_for_station_reference() -> None:
     from app.application.polygon_obstacle_import import PolygonObstacleImportService
 
@@ -2166,666 +1593,6 @@ def test_public_radar_mask_angle_payload_falls_back_for_unsupported_surface_type
     assert payload["surface"]["heightModel"]["type"] == "radar_site_protection_mask_angle"
 
 
-def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_3() -> (
-    None
-):
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Runway(
-                    id=201,
-                    airport_id=1,
-                    run_number="18",
-                    name="Runway 18/36",
-                    longitude=103.975864,
-                    latitude=30.512271,
-                    direction=180.0,
-                    length=600.0,
-                    width=45.0,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="LOC Station",
-                    airport_id=1,
-                    station_type="LOC",
-                    runway_no="18",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "top_elevation": 571.0,
-                    "raw_payload": json.dumps(
-                        {
-                            "localGeometry": {
-                                "type": "MultiPolygon",
-                                "coordinates": [
-                                    [
-                                        [
-                                            [-20.0, 3000.0],
-                                            [20.0, 3000.0],
-                                            [20.0, 3040.0],
-                                            [-20.0, 3040.0],
-                                            [-20.0, 3000.0],
-                                        ]
-                                    ]
-                                ],
-                            }
-                        }
-                    ),
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    payload = response.json()
-    loc_rule = next(
-        item
-        for item in payload["ruleResults"]
-        if item["ruleName"] == "loc_building_restriction_zone_region_3"
-    )
-    assert loc_rule["zoneCode"] == "loc_building_restriction_zone"
-    assert loc_rule["zoneName"] == "LOC 建筑物限制区"
-    assert loc_rule["regionCode"] == "3"
-    assert loc_rule["standards"] == {
-        "gb": None,
-        "mh": [{
-            "code": "MH_ILSLOC_建筑物限制区_Ⅲ",
-            "text": "航向信标台建筑物限制区：对于Ⅲ类运行或规划Ⅲ类运行的跑道，飞行区与建筑物限制区重叠范围内规划建设超过高度限制的机库、航站楼等大型建筑物，应采用计算机仿真的方式确定建筑物的尺寸；飞行区外的建筑物限制区范围内规划建设超过高度限制的民用设施等大型建筑物，宜采用计算机仿真的方式确定建筑物的尺寸。",
-            "isCompliant": False,
-        }],
-    }
-
-    protection_zone = next(
-        item
-        for item in payload["protectionZones"]
-        if item["ruleCode"] == "loc_building_restriction_zone_region_3"
-    )
-    assert protection_zone["zoneCode"] == "loc_building_restriction_zone"
-    assert protection_zone["zoneName"] == "LOC 建筑物限制区"
-    assert protection_zone["regionCode"] == "3"
-    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
-    assert protection_zone["vertical"]["mode"] == "analytic_surface"
-    assert protection_zone["vertical"]["baseReference"] == "station"
-    assert protection_zone["vertical"]["baseHeightMeters"] == 500.0
-    assert protection_zone["vertical"]["surface"]["type"] == (
-        "loc_building_restriction_zone_region_3"
-    )
-    surface = protection_zone["vertical"]["surface"]
-    assert surface["arcHeightMeters"] == 570.0
-    assert surface["alphaDegrees"] > 0.0
-    assert surface["stationPoint"] == [103.975864, 30.506881]
-    assert surface["apexPoint"][0] == pytest.approx(103.975864, abs=1e-6)
-    assert surface["apexPoint"][1] > surface["stationPoint"][1]
-    assert surface["rootLeftPoint"][0] < surface["rootRightPoint"][0]
-    assert surface["rootLeftPoint"][1] == pytest.approx(
-        surface["rootRightPoint"][1],
-        abs=1e-9,
-    )
-    assert surface["arcRadiusMeters"] > 0.0
-    assert len(surface["arcPoints"]) >= 2
-    assert all(len(point) == 2 for point in surface["arcPoints"])
-    assert surface["arcPoints"][0][0] < surface["arcPoints"][-1][0]
-    assert all(
-        point[1] > surface["stationPoint"][1] for point in surface["arcPoints"]
-    )
-    assert protection_zone["style"] == {
-        "colorKey": "danger_red",
-        "fill": "rgba(245, 108, 108, 0.5)",
-        "stroke": "rgba(245, 108, 108, 0.9)",
-    }
-    assert protection_zone["renderGeometry"] is None
-
-
-def test_get_analysis_task_result_returns_loc_building_restriction_zone_region_4() -> (
-    None
-):
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Runway(
-                    id=201,
-                    airport_id=1,
-                    run_number="18",
-                    name="Runway 18/36",
-                    longitude=103.975864,
-                    latitude=30.512271,
-                    direction=180.0,
-                    length=600.0,
-                    width=45.0,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="LOC Station",
-                    airport_id=1,
-                    station_type="LOC",
-                    runway_no="18",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type, top_elevation = :top_elevation, raw_payload = :raw_payload WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "top_elevation": 501.0,
-                    "raw_payload": json.dumps(
-                        {
-                            "localGeometry": {
-                                "type": "MultiPolygon",
-                                "coordinates": [
-                                    [
-                                        [
-                                            [-20.0, 100.0],
-                                            [20.0, 100.0],
-                                            [20.0, 140.0],
-                                            [-20.0, 140.0],
-                                            [-20.0, 100.0],
-                                        ]
-                                    ]
-                                ],
-                            }
-                        }
-                    ),
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    payload = response.json()
-    loc_rule = next(
-        item
-        for item in payload["ruleResults"]
-        if item["ruleName"] == "loc_building_restriction_zone_region_4"
-    )
-    assert loc_rule["zoneCode"] == "loc_building_restriction_zone"
-    assert loc_rule["zoneName"] == "LOC 建筑物限制区"
-    assert loc_rule["regionCode"] == "4"
-    assert loc_rule["standards"]["gb"] is None
-    assert loc_rule["standards"]["mh"] is not None
-    assert loc_rule["standards"]["mh"][0]["code"] == "MH_ILSLOC_建筑物限制区_Ⅲ"
-
-    protection_zone = next(
-        item
-        for item in payload["protectionZones"]
-        if item["ruleCode"] == "loc_building_restriction_zone_region_4"
-    )
-    assert protection_zone["zoneCode"] == "loc_building_restriction_zone"
-    assert protection_zone["zoneName"] == "LOC 建筑物限制区"
-    assert protection_zone["regionCode"] == "4"
-    assert protection_zone["geometry"]["shapeType"] == "multipolygon"
-    assert protection_zone["vertical"] == {
-        "mode": "flat",
-        "baseReference": "station",
-        "baseHeightMeters": 500.0,
-    }
-    assert protection_zone["renderGeometry"] is None
-
-
-def test_get_analysis_task_result_keeps_ndb_and_loc_outputs_stable_with_mixed_station_types() -> None:
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Runway(
-                    id=201,
-                    airport_id=1,
-                    run_number="18",
-                    name="Runway 18/36",
-                    longitude=103.975864,
-                    latitude=30.507381,
-                    direction=180.0,
-                    length=600.0,
-                    width=45.0,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="NDB Station",
-                    airport_id=1,
-                    station_type="NDB",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=102,
-                    name="LOC Station",
-                    airport_id=1,
-                    station_type="LOC",
-                    runway_no="18",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    payload = response.json()
-    rule_names_by_station_type = {
-        (item["stationType"], item["ruleName"])
-        for item in payload["ruleResults"]
-    }
-    assert ("NDB", "ndb_minimum_distance_50m") in rule_names_by_station_type
-    assert ("NDB", "ndb_conical_clearance_3deg") in rule_names_by_station_type
-    assert ("LOC", "loc_site_protection") in rule_names_by_station_type
-    assert ("LOC", "loc_forward_sector_3000m_15m") in rule_names_by_station_type
-
-    loc_rule = next(
-        item
-        for item in payload["ruleResults"]
-        if item["stationType"] == "LOC"
-    )
-    assert loc_rule["zoneCode"] == "loc_site_protection"
-    assert loc_rule["standards"]["gb"][0]["code"] == "GB_ILSLOC_场地保护区"
-
-    ndb_rule = next(
-        item
-        for item in payload["ruleResults"]
-        if item["stationType"] == "NDB"
-        and item["ruleName"] == "ndb_minimum_distance_50m"
-    )
-    assert ndb_rule["standards"]["gb"][0]["code"] == "GB_NDB_50m最小间距区域_50"
-
-    protection_zone_shapes = {
-        (item["stationType"], item["geometry"]["shapeType"])
-        for item in payload["protectionZones"]
-    }
-    assert ("LOC", "multipolygon") in protection_zone_shapes
-    assert ("NDB", "multipolygon") in protection_zone_shapes
-
-
-def test_get_analysis_task_result_returns_radar_site_protection_vertical_payload() -> None:
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="Radar Station",
-                    airport_id=1,
-                    station_type="RADAR",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                    antenna_hag=20.0,
-                    station_sub_type="PSR",
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    payload = response.json()
-    protection_zone = next(
-        item
-        for item in payload["protectionZones"]
-        if item["stationType"] == "RADAR"
-        and item["zoneCode"] == "radar_site_protection"
-    )
-    assert "surface" in protection_zone["vertical"]
-    assert (
-        protection_zone["vertical"]["surface"]["type"]
-        == "radial_cone_surface"
-    )
-    assert (
-        protection_zone["vertical"]["surface"]["heightModel"]["type"]
-        == "radar_site_protection_mask_angle"
-    )
-    assert (
-        protection_zone["vertical"]["surface"]["heightModel"]["maskAngleDegrees"]
-        == 0.25
-    )
-    assert (
-        protection_zone["vertical"]["surface"]["heightModel"][
-            "distanceKilometersCorrectionDivisor"
-        ]
-        == 16970.0
-    )
-
-
-def test_get_analysis_task_result_returns_gp_dual_standard_protection_zones() -> None:
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Runway(
-                    id=201,
-                    airport_id=1,
-                    run_number="18",
-                    name="Runway 18/36",
-                    longitude=103.975864,
-                    latitude=30.501481,
-                    direction=0.0,
-                    length=600.0,
-                    width=40.0,
-                    altitude=500.0,
-                    maximum_airworthiness=1,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="GP Station",
-                    airport_id=1,
-                    station_type="GP",
-                    runway_no="18",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                    station_sub_type="II",
-                    distance_v_to_runway=180.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "车辆/航空器/机械",
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    payload = response.json()
-    gp_protection_zones = [
-        item
-        for item in payload["protectionZones"]
-        if item["zoneCode"]
-        in {
-            "gp_site_protection_gb",
-            "gp_site_protection_mh",
-            "gp_run_area_protection",
-        }
-    ]
-
-    assert len(gp_protection_zones) == 8
-    assert {item["zoneCode"] for item in gp_protection_zones} == {
-        "gp_site_protection_gb",
-        "gp_site_protection_mh",
-        "gp_run_area_protection",
-    }
-    assert {
-        item["zoneCode"]: {
-            zone["regionCode"]
-            for zone in gp_protection_zones
-            if zone["zoneCode"] == item["zoneCode"]
-        }
-        for item in gp_protection_zones
-    } == {
-        "gp_site_protection_gb": {"A", "B", "C"},
-        "gp_site_protection_mh": {"A", "B", "C"},
-        "gp_run_area_protection": {"A", "B"},
-    }
-    assert all(item["stationType"] == "GP" for item in gp_protection_zones)
-    assert all(item["geometry"]["shapeType"] == "multipolygon" for item in gp_protection_zones)
-    assert all(item["style"]["colorKey"] for item in gp_protection_zones)
-    assert all(item["style"]["fill"].startswith("rgba(") for item in gp_protection_zones)
-    assert all(item["style"]["stroke"].startswith("rgba(") for item in gp_protection_zones)
-
-    gp_run_area_rules = [
-        item
-        for item in payload["ruleResults"]
-        if item["zoneCode"] == "gp_run_area_protection"
-    ]
-    assert {item["ruleCode"] for item in gp_run_area_rules} == {
-        "gp_run_area_protection_region_a",
-        "gp_run_area_protection_region_b",
-    }
-    assert {item["standards"]["mh"][0]["code"] for item in gp_run_area_rules} == {
-        "MH_ILSGP_运行保护区_临界",
-        "MH_ILSGP_运行保护区_敏感",
-    }
-
-
-def test_get_analysis_task_result_returns_gp_1deg_front_reference_line_surface() -> None:
-    with _create_test_client() as client:
-        import_task_id = _create_succeeded_import_task(client)
-
-        with next(iter(app.dependency_overrides[get_db_session]())) as session:
-            session.add(
-                Airport(
-                    id=1,
-                    name="Airport A",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Runway(
-                    id=201,
-                    airport_id=1,
-                    run_number="18",
-                    name="Runway 18/36",
-                    longitude=103.975864,
-                    latitude=30.501481,
-                    direction=0.0,
-                    length=600.0,
-                    width=40.0,
-                    altitude=500.0,
-                )
-            )
-            session.add(
-                Station(
-                    id=101,
-                    name="GP Station",
-                    airport_id=1,
-                    station_type="GP",
-                    runway_no="18",
-                    longitude=103.975864,
-                    latitude=30.506881,
-                    altitude=500.0,
-                    station_sub_type="II",
-                    distance_v_to_runway=180.0,
-                )
-            )
-            session.commit()
-
-            obstacle = session.execute(
-                text(
-                    "SELECT id FROM obstacles WHERE source_batch_id = :source_batch_id ORDER BY id LIMIT 1"
-                ),
-                {"source_batch_id": import_task_id},
-            ).scalar_one()
-            session.execute(
-                text(
-                    "UPDATE obstacles SET obstacle_type = :obstacle_type WHERE id = :obstacle_id"
-                ),
-                {
-                    "obstacle_type": "建筑物/构建物",
-                    "obstacle_id": obstacle,
-                },
-            )
-            session.commit()
-
-        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
-        _run_analysis_task(client, analysis_task_id)
-
-        response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
-
-    assert response.status_code == 200
-    payload = response.json()
-    protection_zone = next(
-        item
-        for item in payload["protectionZones"]
-        if item["zoneCode"] == "gp_elevation_restriction_1deg"
-    )
-    assert protection_zone["vertical"]["surface"]["distanceSource"] == {
-        "kind": "front_reference_line",
-        "stationPoint": [103.975864, 30.506881],
-        "centerPoint": [103.975864, 30.503643],
-        "leftPoint": [103.976371, 30.503643],
-        "rightPoint": [103.975357, 30.503643],
-    }
-    assert protection_zone["vertical"]["surface"]["distanceMetric"] == (
-        "axial_from_reference_line"
-    )
-    assert protection_zone["vertical"]["surface"]["planarControl"] == {
-        "frontOffsetMeters": 360.0,
-        "halfAngleDegrees": 8.0,
-        "radiusMeters": 18520.0,
-    }
-
-
 def test_build_airport_analysis_result_returns_only_internal_fields_still_in_use() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)
@@ -2910,6 +1677,7 @@ def test_build_airport_analysis_result_returns_only_internal_fields_still_in_use
     assert "geometry" in airport_result["obstacles"][0]
     assert "distanceToAirportMeters" not in airport_result["obstacles"][0]
     assert "localBoundingBox" not in airport_result["obstacles"][0]
+
 def test_run_analysis_task_skips_station_without_coordinates() -> None:
     with _create_test_client() as client:
         import_task_id = _create_succeeded_import_task(client)
@@ -2943,7 +1711,6 @@ def test_run_analysis_task_skips_station_without_coordinates() -> None:
     payload = response.json()
     assert "spatialFacts" not in payload
     assert payload["ruleResults"] == []
-    assert payload["protectionZones"] == []
 
 
 def test_run_analysis_task_returns_empty_for_surface_detection_radar_without_matching_runway() -> None:
@@ -2979,7 +1746,6 @@ def test_run_analysis_task_returns_empty_for_surface_detection_radar_without_mat
     payload = response.json()
     assert payload["status"] == "succeeded"
     assert payload["ruleResults"] == []
-    assert payload["protectionZones"] == []
 
 
 def test_run_analysis_task_fails_when_airport_has_no_coordinates() -> None:
@@ -3086,7 +1852,6 @@ def test_get_analysis_task_result_returns_empty_payload_before_completion() -> N
         "obstacleCount": 0,
         "summary": "",
         "ruleResults": [],
-        "protectionZones": [],
     }
 
 
@@ -3096,3 +1861,223 @@ def test_get_analysis_task_result_returns_404_for_unknown_task() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "analysis task not found"}
+
+
+# ---------------------------------------------------------------------------
+# Fixture for in‑memory SQLite session (used by TestAirportProtectionZones)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def db_session() -> Generator[Session, None, None]:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    testing_session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            Project.__table__,
+            ImportBatch.__table__,
+            AnalysisTask.__table__,
+            Airport.__table__,
+            Runway.__table__,
+            Station.__table__,
+        ],
+    )
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE obstacles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id INTEGER NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    obstacle_type VARCHAR(100),
+                    source_batch_id VARCHAR(100),
+                    source_row_no INTEGER,
+                    top_elevation NUMERIC(10, 2),
+                    raw_payload JSON,
+                    geom TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+                """
+            )
+        )
+
+    session = testing_session_local()
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(
+            bind=engine,
+            tables=[
+                Station.__table__,
+                Runway.__table__,
+                Airport.__table__,
+                AnalysisTask.__table__,
+                ImportBatch.__table__,
+                Project.__table__,
+            ],
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestAirportProtectionZones
+# ---------------------------------------------------------------------------
+
+
+class TestAirportProtectionZones:
+    def test_returns_zones_for_airport_with_stations(
+        self, db_session: Session
+    ) -> None:
+        from app.application.polygon_obstacle_import import (
+            PolygonObstacleImportService,
+        )
+        from app.models.airport import Airport
+        from app.models.runway import Runway
+        from app.models.station import Station
+
+        airport = Airport(
+            name="测试机场",
+            longitude=120.0,
+            latitude=30.0,
+        )
+        db_session.add(airport)
+        db_session.flush()
+
+        station = Station(
+            name="测试NDB",
+            station_type="NDB",
+            longitude=120.01,
+            latitude=30.01,
+            altitude=100.0,
+            airport_id=airport.id,
+        )
+        db_session.add(station)
+        db_session.flush()
+
+        service = PolygonObstacleImportService(db_session)
+        result = service.get_airport_protection_zones(airport.id)
+
+        assert result.airport_id == airport.id
+        assert result.airport_name == "测试机场"
+        assert len(result.protection_zones) > 0
+
+        zone = result.protection_zones[0]
+        assert zone.station_type == "NDB"
+        assert zone.geometry.shape_type == "multipolygon"
+        assert "coordinates" in zone.geometry.model_dump(by_alias=True)
+        assert zone.style is not None
+        assert zone.style.color_key != ""
+
+    def test_airport_not_found_raises_404(
+        self, db_session: Session
+    ) -> None:
+        from app.application.polygon_obstacle_import import (
+            PolygonObstacleImportService,
+        )
+        from fastapi import HTTPException
+
+        service = PolygonObstacleImportService(db_session)
+        with pytest.raises(HTTPException) as exc_info:
+            service.get_airport_protection_zones(99999)
+        assert exc_info.value.status_code == 404
+
+    def test_airport_without_coordinates_raises_422(
+        self, db_session: Session
+    ) -> None:
+        from app.application.polygon_obstacle_import import (
+            PolygonObstacleImportService,
+        )
+        from app.models.airport import Airport
+        from fastapi import HTTPException
+
+        airport = Airport(
+            name="无坐标机场",
+            longitude=None,
+            latitude=None,
+        )
+        db_session.add(airport)
+        db_session.flush()
+
+        service = PolygonObstacleImportService(db_session)
+        with pytest.raises(HTTPException) as exc_info:
+            service.get_airport_protection_zones(airport.id)
+        assert exc_info.value.status_code == 422
+
+    def test_station_without_coordinates_is_skipped(
+        self, db_session: Session
+    ) -> None:
+        from app.application.polygon_obstacle_import import (
+            PolygonObstacleImportService,
+        )
+        from app.models.airport import Airport
+        from app.models.station import Station
+
+        airport = Airport(
+            name="测试机场",
+            longitude=120.0,
+            latitude=30.0,
+        )
+        db_session.add(airport)
+        db_session.flush()
+
+        station_no_coords = Station(
+            name="无坐标台站",
+            station_type="NDB",
+            longitude=None,
+            latitude=None,
+            altitude=50.0,
+            airport_id=airport.id,
+        )
+        db_session.add(station_no_coords)
+        db_session.flush()
+
+        service = PolygonObstacleImportService(db_session)
+        result = service.get_airport_protection_zones(airport.id)
+
+        # No zones from the coordless station (may still have runway EM zones)
+        station_zone_ids = [
+            z.station_id for z in result.protection_zones
+            if z.station_id == station_no_coords.id
+        ]
+        assert len(station_zone_ids) == 0
+
+    def test_analysis_result_no_longer_returns_protection_zones(
+        self, db_session: Session
+    ) -> None:
+        from app.application.polygon_obstacle_import import (
+            PolygonObstacleImportService,
+        )
+        from app.models.analysis_task import AnalysisTask
+
+        # Create a mock completed analysis task with old payload including protectionZones
+        task = AnalysisTask(
+            id="test-no-pz-001",
+            import_batch_id="batch-001",
+            status="SUCCEEDED",
+            status_message="succeeded",
+            selected_target_ids=[1],
+            result_payload={
+                "selectedTargets": [],
+                "obstacleCount": 0,
+                "summary": "test",
+                "ruleResults": [],
+                "protectionZones": [
+                    {"id": "old-zone", "airportId": 1, "airportName": "X"}
+                ],
+            },
+        )
+        db_session.add(task)
+        db_session.flush()
+
+        service = PolygonObstacleImportService(db_session)
+        result = service.get_analysis_task_result("test-no-pz-001")
+
+        # protectionZones should NOT be in the response
+        assert not hasattr(result, "protectionZones") or result.protectionZones == []

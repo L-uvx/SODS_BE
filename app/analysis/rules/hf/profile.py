@@ -87,3 +87,19 @@ class HfRuleProfile:
             rule_results=rule_results,
             protection_zones=protection_zones,
         )
+
+    # 无条件绑定 HF 全部规则并返回所有保护区（不含障碍物分析）。
+    def bind_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+    ) -> list[ProtectionZoneSpec]:
+        protection_zones: list[ProtectionZoneSpec] = []
+        for rule_code in HF_RULE_CODES_IN_BIND_ORDER:
+            bound_rule = self._rules_by_code[rule_code].bind(
+                station=station,
+                station_point=station_point,
+            )
+            protection_zones.append(bound_rule.protection_zone)
+        return protection_zones

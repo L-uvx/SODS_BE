@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db_session
 from app.application.polygon_obstacle_import import PolygonObstacleImportService
 from app.schemas.polygon_obstacle import (
+    AirportProtectionZonesResponse,
     AnalysisTaskCreateRequest,
     AnalysisTaskResultResponse,
     AnalysisTaskStatusResponse,
@@ -32,6 +33,19 @@ def get_bootstrap(
 ) -> BootstrapResponse:
     service = PolygonObstacleImportService(session)
     return service.get_bootstrap()
+
+
+# 查询指定机场下全部台站和跑道的规则保护区几何。
+@router.get(
+    "/airport/{airport_id}/protection-zones",
+    response_model=AirportProtectionZonesResponse,
+)
+def get_airport_protection_zones(
+    airport_id: int,
+    session: Session = Depends(get_db_session),
+) -> AirportProtectionZonesResponse:
+    service = PolygonObstacleImportService(session)
+    return service.get_airport_protection_zones(airport_id)
 
 
 # 创建障碍物导入任务。

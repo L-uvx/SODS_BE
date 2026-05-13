@@ -43,3 +43,17 @@ class WindRadarRuleProfile:
             rule_results=rule_results,
             protection_zones=protection_zones,
         )
+
+    # 无条件绑定 WindRadar 规则并返回保护区（不含障碍物分析）。
+    def bind_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+    ) -> list[ProtectionZoneSpec]:
+        bound = self._elevation_angle_15deg_rule.bind(
+            station=station, station_point=station_point,
+        )
+        if bound is None:
+            return []
+        return [bound.protection_zone]

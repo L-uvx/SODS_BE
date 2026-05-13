@@ -30,6 +30,8 @@ from app.analysis.rules.loc.run_area_protection import (
     build_loc_run_area_shared_context,
 )
 from app.analysis.rules.loc.site_protection import LocSiteProtectionRule
+from app.analysis.rules.runway_contexts import resolve_runway_context
+
 
 
 @dataclass(slots=True)
@@ -65,7 +67,7 @@ class LocRuleProfile:
         station_point: tuple[float, float],
         runways: list[dict[str, object]],
     ) -> LocStationAnalysisPayload:
-        runway_context = self._resolve_runway_context(station=station, runways=runways)
+        runway_context = resolve_runway_context(station=station, runways=runways)
         if runway_context is None:
             return LocStationAnalysisPayload(rule_results=[], protection_zones=[])
 
@@ -81,13 +83,11 @@ class LocRuleProfile:
             station_point=station_point,
             runway_context=runway_context,
         )
-        forward_sector_rule = None
-        if True:
-            forward_sector_rule = self._forward_sector_rule.bind(
-                station=station,
-                station_point=station_point,
-                runway_context=runway_context,
-            )
+        forward_sector_rule = self._forward_sector_rule.bind(
+            station=station,
+            station_point=station_point,
+            runway_context=runway_context,
+        )
         run_area_shared_context = None
         run_area_rules = []
         if self._run_area_rules and (
@@ -161,6 +161,61 @@ class LocRuleProfile:
             protection_zones=protection_zones,
         )
 
+    # 无条件绑定 LOC 全部规则并返回所有保护区（不含障碍物分析）。
+    def bind_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+        runways: list[dict[str, object]],
+    ) -> list[ProtectionZoneSpec]:
+        runway_context = resolve_runway_context(station=station, runways=runways)
+        if runway_context is None:
+            return []
+
+        protection_zones: list[ProtectionZoneSpec] = []
+
+        bound_site = self._site_protection_rule.bind(
+            station=station, station_point=station_point, runway_context=runway_context,
+        )
+        protection_zones.append(bound_site.protection_zone)
+
+        bound_forward = self._forward_sector_rule.bind(
+            station=station, station_point=station_point, runway_context=runway_context,
+        )
+        protection_zones.append(bound_forward.protection_zone)
+
+        shared_ctx = build_loc_building_restriction_zone_shared_context(
+            station_point=station_point,
+            runway_context=runway_context,
+        )
+        for rule in self._building_restriction_rules:
+            bound = rule.bind(
+                station=station,
+                station_point=station_point,
+                runway_context=runway_context,
+                shared_context=shared_ctx,
+            )
+            protection_zones.append(bound.protection_zone)
+
+        run_area_shared = build_loc_run_area_shared_context(
+            station=station,
+            station_point=station_point,
+            runway_context=runway_context,
+        )
+        if run_area_shared is not None:
+            for rule in self._run_area_rules:
+                try:
+                    bound = rule.bind(
+                        station=station,
+                        shared_context=run_area_shared,
+                    )
+                    protection_zones.append(bound.protection_zone)
+                except ValueError:
+                    continue
+
+        return protection_zones
+
     # 校验障碍物是否适用建筑物限制区规则。
     def _is_building_restriction_applicable(self, obstacle: dict[str, object]) -> bool:
         category = obstacle.get("globalObstacleCategory")
@@ -170,19 +225,3 @@ class LocRuleProfile:
     def _is_run_area_applicable(self, obstacle: dict[str, object]) -> bool:
         category = obstacle.get("globalObstacleCategory")
         return str(category) in loc_run_area_protection_module.SUPPORTED_CATEGORIES
-
-    # 按跑道号解析 LOC 所属跑道上下文。
-    def _resolve_runway_context(
-        self,
-        *,
-        station: object,
-        runways: list[dict[str, object]],
-    ) -> dict[str, object] | None:
-        runway_no = getattr(station, "runway_no", None)
-        if runway_no is None:
-            return None
-
-        for runway in runways:
-            if runway.get("runNumber") == runway_no:
-                return runway
-        return None

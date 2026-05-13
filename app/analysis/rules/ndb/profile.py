@@ -88,3 +88,36 @@ class NdbRuleProfile:
             rule_results=results,
             protection_zones=protection_zones,
         )
+
+    # 无条件绑定 NDB 全部规则并返回所有保护区（不含障碍物分析）。
+    def bind_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+    ) -> list[ProtectionZoneSpec]:
+        station_altitude = (
+            float(station.altitude) if station.altitude is not None else None
+        )
+        protection_zones: list[ProtectionZoneSpec] = []
+        seen_rule_codes: set[str] = set()
+
+        for _category, rule in self._rules.items():
+            rule_code = self._resolve_rule_code(rule)
+            if rule_code in seen_rule_codes:
+                continue
+            bound_rule = rule.bind(
+                station=station,
+                station_point=station_point,
+            )
+            seen_rule_codes.add(rule_code)
+            protection_zones.append(bound_rule.protection_zone)
+
+        bound_conical = self._conical_rule.bind(
+            station=station,
+            station_point=station_point,
+            station_altitude=station_altitude,
+        )
+        protection_zones.append(bound_conical.protection_zone)
+
+        return protection_zones

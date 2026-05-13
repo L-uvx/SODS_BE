@@ -99,3 +99,30 @@ class WeatherRadarRuleProfile:
             rule_results=rule_results,
             protection_zones=protection_zones,
         )
+
+    # 无条件绑定 WeatherRadar 全部规则并返回所有保护区（不含障碍物分析）。
+    def bind_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+    ) -> list[ProtectionZoneSpec]:
+        protection_zones: list[ProtectionZoneSpec] = []
+
+        bound_450m = self._minimum_distance_450m_rule.bind(
+            station=station, station_point=station_point,
+        )
+        protection_zones.append(bound_450m.protection_zone)
+
+        bound_800m = self._minimum_distance_800m_rule.bind(
+            station=station, station_point=station_point,
+        )
+        protection_zones.append(bound_800m.protection_zone)
+
+        bound_1deg = self._elevation_angle_1deg_rule.bind(
+            station=station, station_point=station_point,
+        )
+        if bound_1deg is not None:
+            protection_zones.append(bound_1deg.protection_zone)
+
+        return protection_zones

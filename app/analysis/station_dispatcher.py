@@ -37,6 +37,20 @@ class StationAnalysisDispatcher:
         self._weather_radar_profile = WeatherRadarRuleProfile()
         self._wind_radar_profile = WindRadarRuleProfile()
         self._surface_detection_radar_profile = SurfaceDetectionRadarRuleProfile()
+        self._bind_paths: dict[str, tuple[object, bool]] = {
+            "ADS_B": (self._adsb_profile, False),
+            "LOC": (self._loc_profile, True),
+            "NDB": (self._ndb_profile, False),
+            "HF": (self._hf_profile, False),
+            "MB": (self._mb_profile, True),
+            "GP": (self._gp_profile, True),
+            "VOR": (self._vor_profile, False),
+            "VHF": (self._vhf_profile, False),
+            "RADAR": (self._radar_profile, False),
+            "WeatherRadar": (self._weather_radar_profile, False),
+            "WindRadar": (self._wind_radar_profile, False),
+            "Surface_Detection_Radar": (self._surface_detection_radar_profile, True),
+        }
 
     # 按台站类型执行分析并返回规则结果与保护区集合。
     def analyze_station(
@@ -177,3 +191,23 @@ class StationAnalysisDispatcher:
                 protection_zones=payload.protection_zones,
             )
         return StationAnalysisPayload(rule_results=[], protection_zones=[])
+
+    # 按台站类型绑定全部规则并返回保护区集合（不含障碍物分析）。
+    def bind_station_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+        runways: list[dict[str, object]],
+    ) -> list[ProtectionZoneSpec]:
+        path = self._bind_paths.get(station.station_type)
+        if path is None:
+            return []
+        profile, needs_runways = path
+        if needs_runways:
+            return profile.bind_protection_zones(
+                station=station, station_point=station_point, runways=runways,
+            )
+        return profile.bind_protection_zones(
+            station=station, station_point=station_point,
+        )

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import app.analysis.rules.gp.run_area_protection as gp_run_area_protection_module
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.rule_result import AnalysisRuleResult
+from app.analysis.rules.runway_contexts import resolve_runway_context
 from app.analysis.rules.gp.elevation_restriction import (
     GpElevationRestriction1DegRule,
     build_gp_1deg_shared_context,
@@ -57,7 +58,7 @@ class GpRuleProfile:
         station_point: tuple[float, float],
         runways: list[dict[str, object]],
     ) -> GpStationAnalysisPayload:
-        runway_context = self._resolve_runway_context(station=station, runways=runways)
+        runway_context = resolve_runway_context(station=station, runways=runways)
         if runway_context is None:
             return GpStationAnalysisPayload(rule_results=[], protection_zones=[])
 
@@ -139,26 +140,60 @@ class GpRuleProfile:
             ],
         )
 
+    # 无条件绑定 GP 全部规则并返回所有保护区（不含障碍物分析）。
+    def bind_protection_zones(
+        self,
+        *,
+        station: object,
+        station_point: tuple[float, float],
+        runways: list[dict[str, object]],
+    ) -> list[ProtectionZoneSpec]:
+        runway_context = resolve_runway_context(station=station, runways=runways)
+        if runway_context is None:
+            return []
+
+        protection_zones: list[ProtectionZoneSpec] = []
+
+        gb_shared = build_gp_site_protection_shared_context(
+            station=station, station_point=station_point,
+            runway_context=runway_context, standard_version="GB",
+        )
+        mh_shared = build_gp_site_protection_shared_context(
+            station=station, station_point=station_point,
+            runway_context=runway_context, standard_version="MH",
+        )
+        elev_shared = build_gp_1deg_shared_context(
+            station=station, station_point=station_point,
+            runway_context=runway_context,
+        )
+
+        for rule in self._gb_rules:
+            bound = rule.bind(station=station, shared_context=gb_shared)
+            protection_zones.append(bound.protection_zone)
+
+        for rule in self._mh_rules:
+            bound = rule.bind(station=station, shared_context=mh_shared)
+            protection_zones.append(bound.protection_zone)
+
+        for rule in self._elevation_restriction_rules:
+            bound = rule.bind(station=station, shared_context=elev_shared)
+            protection_zones.append(bound.protection_zone)
+
+        run_area_shared = build_gp_run_area_shared_context(
+            station=station, station_point=station_point,
+            runway_context=runway_context,
+        )
+        if run_area_shared is not None:
+            for rule in self._run_area_rules:
+                bound = rule.bind(station=station, shared_context=run_area_shared)
+                protection_zones.append(bound.protection_zone)
+
+        return protection_zones
+
     # 校验障碍物是否适用运行保护区规则。
     def _is_run_area_applicable(self, obstacle: dict[str, object]) -> bool:
         category = obstacle.get("globalObstacleCategory")
         return str(category) in gp_run_area_protection_module.SUPPORTED_CATEGORIES
-
-    # 按跑道号解析 GP 所属跑道上下文。
-    def _resolve_runway_context(
-        self,
-        *,
-        station: object,
-        runways: list[dict[str, object]],
-    ) -> dict[str, object] | None:
-        runway_no = getattr(station, "runway_no", None)
-        if runway_no is None:
-            return None
-
-        for runway in runways:
-            if runway.get("runNumber") == runway_no:
-                return runway
-        return None
 
 
 __all__ = [
