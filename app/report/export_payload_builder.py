@@ -118,6 +118,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
 
         # Priority 4: isMid or isFilterLimit → special display
         is_special_no_judge = bool(r.get("isMid") or r.get("isFilterLimit"))
+        is_compliant: bool = bool(r.get("isCompliant", True))
 
         # Priority 5: LOC building restriction zone special message
         is_loc_brz_special = (
@@ -134,11 +135,11 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
         skip_overheight_tracking = is_special_no_judge or is_loc_brz_special or is_radar_16km_special
 
         if is_special_no_judge:
-            compliant_text = "不判断"
+            compliance_status = "不判断"
             height_limit_display = "/"
             over_height_display = "/"
         elif is_loc_brz_special:
-            compliant_text = (
+            compliance_status = (
                 "建议结合MH4003.1-2021《民用航空通信导航监视台(站)设置场地规范 "
                 "第1部分:导航》标准要求确定是否开展计算机仿真工作"
             )
@@ -147,7 +148,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
             over = _float_or_none(metrics.get("overHeightMeters"))
             over_height_display = round(over or 0, 2)
         elif is_radar_16km_special:
-            compliant_text = (
+            compliance_status = (
                 "位于台站16km范围内，根据MHT4003.2-2014《民用航空通信导航监视台(站)"
                 "设置场地规范 第2部分:监视》要求，需论证是否影响雷达正常工作"
             )
@@ -156,8 +157,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
             over = _float_or_none(metrics.get("overHeightMeters"))
             over_height_display = round(over or 0, 2)
         else:
-            is_compliant = r.get("isCompliant", True)
-            compliant_text = "满足" if is_compliant else "不满足"
+            compliance_status = "满足" if is_compliant else "不满足"
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
             height_limit_display = round(height_val or 0, 2)
             over = _float_or_none(metrics.get("overHeightMeters"))
@@ -174,7 +174,8 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                     "standardClause": s.get("text", ""),
                     "analysisDetail": details,
                     "heightLimit": height_limit_display,
-                    "isCompliant": compliant_text,
+                    "isCompliant": is_compliant,
+                    "complianceStatus": compliance_status,
                     "overHeight": over_height_display,
                 }
                 rows.append(row)
@@ -326,8 +327,8 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     obstacle_count = result_payload.get("obstacleCount", 0)
     table_rows = _flatten_rule_results(rule_results)
     summary = _build_summary(rule_results, obstacle_count, radar_unmet_names)
-    non_compliant_rows = [row for row in table_rows if row["isCompliant"] == "不满足"]
-    compliant_rows = [row for row in table_rows if row["isCompliant"] == "满足"]
+    non_compliant_rows = [row for row in table_rows if not row["isCompliant"]]
+    compliant_rows = [row for row in table_rows if row["isCompliant"]]
 
     em_zone_results = [
         r for r in rule_results

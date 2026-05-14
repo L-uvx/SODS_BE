@@ -664,7 +664,8 @@ class TestFlattenRuleResultsSpecialDisplay:
         rows = _flatten_rule_results([r])
         assert len(rows) == 1
         row = rows[0]
-        assert row["isCompliant"] == "不判断"
+        assert row["isCompliant"] is False
+        assert row["complianceStatus"] == "不判断"
         assert row["heightLimit"] == "/"
         assert row["overHeight"] == "/"
         assert row["finalOverHeight"] == 0
@@ -675,7 +676,8 @@ class TestFlattenRuleResultsSpecialDisplay:
         rows = _flatten_rule_results([r])
         assert len(rows) == 1
         row = rows[0]
-        assert row["isCompliant"] == "不判断"
+        assert row["isCompliant"] is False
+        assert row["complianceStatus"] == "不判断"
         assert row["heightLimit"] == "/"
         assert row["overHeight"] == "/"
         assert row["finalOverHeight"] == 0
@@ -699,7 +701,7 @@ class TestFlattenRuleResultsSpecialDisplay:
         rows = _flatten_rule_results([r])
         assert len(rows) == 1
         row = rows[0]
-        assert "建议结合MH4003.1-2021" in row["isCompliant"]
+        assert "建议结合MH4003.1-2021" in row["complianceStatus"]
         assert row["heightLimit"] == 80.0
         assert row["overHeight"] == 12.5
         assert row["finalOverHeight"] == 0
@@ -718,7 +720,7 @@ class TestFlattenRuleResultsSpecialDisplay:
         rows = _flatten_rule_results([r])
         assert len(rows) == 1
         row = rows[0]
-        assert "16km范围内" in row["isCompliant"]
+        assert "16km范围内" in row["complianceStatus"]
         assert row["heightLimit"] == 200.0
         assert row["overHeight"] == 8.0
         assert row["finalOverHeight"] == 0
@@ -729,7 +731,8 @@ class TestFlattenRuleResultsSpecialDisplay:
         rows = _flatten_rule_results([r])
         assert len(rows) == 1
         row = rows[0]
-        assert row["isCompliant"] == "不判断"
+        assert row["isCompliant"] is False
+        assert row["complianceStatus"] == "不判断"
 
     # ---- T6b: isApplicable=False without isMid is skipped ----
     def test_is_applicable_false_without_isMid_is_skipped(self):
