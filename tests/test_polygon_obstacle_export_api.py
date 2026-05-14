@@ -723,6 +723,20 @@ class TestFlattenRuleResultsSpecialDisplay:
         assert row["overHeight"] == 8.0
         assert row["finalOverHeight"] == 0
 
+    # ---- T6a: isApplicable=False with isMid still shows row ----
+    def test_is_applicable_false_with_isMid_still_shows_row(self):
+        r = self._make_rule(isApplicable=False, isMid=True, isCompliant=False)
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["isCompliant"] == "不判断"
+
+    # ---- T6b: isApplicable=False without isMid is skipped ----
+    def test_is_applicable_false_without_isMid_is_skipped(self):
+        r = self._make_rule(isApplicable=False, isMid=False, isCompliant=False)
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 0
+
     # ---- T6: isMid not tracked for finalOverHeight ----
     def test_is_mid_not_tracked_in_final_over_height(self):
         normal = self._make_rule(

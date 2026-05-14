@@ -1095,6 +1095,73 @@ def test_loc_profile_skips_forward_sector_rule_for_non_applicable_obstacle() -> 
     assert forward_result.is_compliant is True
 
 
+def test_forward_sector_returns_is_mid_when_type_not_supported() -> None:
+    station = type(
+        "Station", (),
+        {"id": 101, "station_type": "LOC", "altitude": 500.0, "runway_no": "18"},
+    )()
+    runway = {
+        "runwayId": 201, "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0), "directionDegrees": 0.0,
+        "lengthMeters": 600.0, "widthMeters": 45.0, "maximumAirworthiness": 2,
+    }
+    bound_rule = LocForwardSector3000m15mRule().bind(
+        station=station, station_point=(0.0, 0.0), runway_context=runway,
+    )
+    # tree_or_forest is NOT in SUPPORTED_CATEGORIES
+    from shapely.geometry import MultiPolygon, Polygon
+    zone_geom = bound_rule.protection_zone.local_geometry
+    point = zone_geom.representative_point()
+    inside_obstacle = {
+        "obstacleId": 999,
+        "name": "Tree Inside Zone",
+        "rawObstacleType": "树木/森林",
+        "globalObstacleCategory": "tree_or_forest",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[float(point.x - 2), float(point.y - 2)],
+                               [float(point.x + 2), float(point.y - 2)],
+                               [float(point.x + 2), float(point.y + 2)],
+                               [float(point.x - 2), float(point.y + 2)],
+                               [float(point.x - 2), float(point.y - 2)]]]],
+        },
+    }
+    result = bound_rule.analyze(inside_obstacle)
+    assert result.is_mid is True
+    assert result.is_applicable is False
+    assert result.metrics["enteredProtectionZone"] is True
+
+
+def test_run_area_region_a_returns_is_mid_when_type_not_supported() -> None:
+    station, shared_context = _make_loc_run_area_shared_context()
+    bound_rule = LocRunAreaProtectionRegionARule().bind(
+        station=station, shared_context=shared_context,
+    )
+    from shapely.geometry import MultiPolygon, Polygon
+    zone_geom = bound_rule.protection_zone.local_geometry
+    point = zone_geom.representative_point()
+    inside_obstacle = {
+        "obstacleId": 888,
+        "name": "Tree Inside Run Area A",
+        "rawObstacleType": "树木/森林",
+        "globalObstacleCategory": "tree_or_forest",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[float(point.x - 2), float(point.y - 2)],
+                               [float(point.x + 2), float(point.y - 2)],
+                               [float(point.x + 2), float(point.y + 2)],
+                               [float(point.x - 2), float(point.y + 2)],
+                               [float(point.x - 2), float(point.y - 2)]]]],
+        },
+    }
+    result = bound_rule.analyze(inside_obstacle)
+    assert result.is_mid is True
+    assert result.is_applicable is False
+    assert result.metrics["enteredProtectionZone"] is True
+
+
 def _make_loc_profile_station() -> object:
     return type(
         "Station",

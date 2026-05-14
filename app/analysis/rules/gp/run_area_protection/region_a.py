@@ -39,6 +39,8 @@ class BoundGpRunAreaProtectionRegionARule(BoundObstacleRule):
         )
         top_elevation_meters = float(obstacle.get("topElevation") or 0.0)
 
+        is_mid = entered_protection_zone and not is_applicable
+
         if is_applicable and entered_protection_zone:
             details = "障碍物进入运行保护区关键区域。"
         elif not is_applicable:
@@ -61,6 +63,7 @@ class BoundGpRunAreaProtectionRegionARule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=is_applicable,
             is_compliant=(not entered_protection_zone) if is_applicable else True,
+            is_mid=is_mid,
             message=(
                 "在运行保护区范围内,但标准未明确对该障碍物类型进行限制"
                 if not is_applicable

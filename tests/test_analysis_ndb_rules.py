@@ -792,3 +792,40 @@ def test_ndb_conical_rule_returns_bound_protection_zone_spec() -> None:
     assert bound_rule.protection_zone.rule_code == "ndb_conical_clearance_3deg"
     assert bound_rule.protection_zone.geometry_definition["shapeType"] == "multipolygon"
     assert bound_rule.protection_zone.vertical_definition["mode"] == "analytic_surface"
+
+
+def test_ndb_minimum_distance_rule_has_is_filter_limit() -> None:
+    rule = NdbMinimumDistance50mRule()
+    bound = rule.bind(
+        station=type("Station", (), {"id": 1, "station_type": "NDB"})(),
+        station_point=(0.0, 0.0),
+    )
+    result = bound.analyze({
+        "obstacleId": 1,
+        "name": "test",
+        "rawObstacleType": "test",
+        "globalObstacleCategory": "building_general",
+        "geometry": {"type": "Point", "coordinates": [100.0, 0.0]},
+        "localGeometry": {"type": "Point", "coordinates": [100.0, 0.0]},
+        "topElevation": 0.0,
+    })
+    assert result.is_filter_limit is True
+
+
+def test_ndb_conical_clearance_does_not_have_is_filter_limit() -> None:
+    station = type("Station", (), {"id": 1, "station_type": "NDB", "altitude": 500.0})()
+    obstacle = {
+        "obstacleId": 2,
+        "name": "test",
+        "rawObstacleType": "test",
+        "globalObstacleCategory": "building_general",
+        "geometry": {"type": "Point", "coordinates": [100.0, 0.0]},
+        "localGeometry": {"type": "Point", "coordinates": [100.0, 0.0]},
+        "topElevation": 0.0,
+    }
+    result = NdbConicalClearance3DegRule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        station_altitude=500.0,
+    ).analyze(obstacle)
+    assert result.is_filter_limit is False

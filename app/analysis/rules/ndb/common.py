@@ -94,6 +94,7 @@ class BoundNdbMinimumDistanceRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=is_compliant,
+            is_filter_limit=True,
             message=(
                 f"在{int(self.required_distance_meters)}米以内"
                 if entered_protection_zone

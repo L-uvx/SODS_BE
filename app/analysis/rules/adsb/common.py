@@ -92,6 +92,7 @@ class BoundAdsbCircleRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=is_compliant,
+            is_filter_limit=True,
             message=(
                 "在平面防护间距要求内"
                 if entered_protection_zone

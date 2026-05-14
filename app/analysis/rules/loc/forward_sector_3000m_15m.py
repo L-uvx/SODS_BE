@@ -42,6 +42,7 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
         if entered_protection_zone and is_applicable:
             is_compliant = top_elevation_meters <= allowed_height_meters
 
+        is_mid = entered_protection_zone and not is_applicable
         height_diff = round(top_elevation_meters - base_height_meters, 2)
         if not is_applicable:
             message = f"位于航向信标天线中心前向±10°、距离航向信标天线3000m的区域内，顶部高程与航向信标天线地势高度差为{height_diff}米,但标准未明确对该障碍物类型进行限制"
@@ -92,6 +93,7 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=is_applicable,
             is_compliant=is_compliant,
+            is_mid=is_mid,
             message=message,
             metrics={
                 "enteredProtectionZone": entered_protection_zone,

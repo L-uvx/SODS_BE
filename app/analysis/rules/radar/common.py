@@ -89,6 +89,7 @@ class BoundRadarCircleRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=is_compliant,
+            is_filter_limit=True,
             message=(
                 f"距离台站{round(actual_distance_meters, 2)}米"
             ),

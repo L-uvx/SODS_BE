@@ -143,6 +143,7 @@ def build_runway_em_rule_result(
         region_name=REGION_NAME,
         is_applicable=True,
         is_compliant=True,
+        is_mid=True,
         message="在机场电磁环境保护区内" if is_in_zone else "不在机场电磁环境保护区内",
         is_in_zone=is_in_zone,
         over_distance_meters=0.0,

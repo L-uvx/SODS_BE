@@ -104,7 +104,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
         # Priority 1: isFilterIntersect skip
         if r.get("isFilterIntersect"):
             continue
-        if not r.get("isApplicable", True):
+        if not r.get("isApplicable", True) and not (r.get("isMid") or r.get("isFilterLimit")):
             continue
         if r.get("zoneCode") == EM_ZONE_CODE:
             continue

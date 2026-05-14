@@ -48,6 +48,7 @@ class BoundLocRunAreaProtectionRegionBRule(BoundObstacleRule):
             top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
             relative_height_meters = top_elevation_meters - base_height_meters
 
+        is_mid = entered_protection_zone and not is_applicable
         region_name = self.protection_zone.region_name
         area_type = "敏感区"
 
@@ -81,6 +82,7 @@ class BoundLocRunAreaProtectionRegionBRule(BoundObstacleRule):
             region_name=region_name,
             is_applicable=is_applicable,
             is_compliant=(not entered_protection_zone) if is_applicable else True,
+            is_mid=is_mid,
             message=message,
             metrics={
                 "areaType": "sensitive",

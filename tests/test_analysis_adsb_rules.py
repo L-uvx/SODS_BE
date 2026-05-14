@@ -259,3 +259,13 @@ def test_adsb_shared_rule_band_uses_category_specific_standards_rule_code() -> N
         "high_voltage_substation_500kv_and_above": "adsb_minimum_distance_1_2km_500kv_substation",
         "high_frequency_welding_machine": "adsb_minimum_distance_1_2km_high_frequency_welding_machine",
     }
+
+
+def test_adsb_circle_rule_has_is_filter_limit() -> None:
+    from app.analysis.rules.adsb.minimum_distance_0_5km import AdsbMinimumDistance0_5kmRule
+    bound = AdsbMinimumDistance0_5kmRule().bind(
+        station=_make_station(),
+        station_point=(0.0, 0.0),
+    )
+    result = bound.analyze(_make_obstacle(category="railway_non_electrified", local_geometry=_point_geometry(600.0, 0.0)))
+    assert result.is_filter_limit is True

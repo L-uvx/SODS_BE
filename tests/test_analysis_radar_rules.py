@@ -755,3 +755,34 @@ def test_radar_c_does_not_return_result_for_non_whitelist_category() -> None:
     )
 
     assert not any(result.rule_code == "radar_rotating_reflector_16km" for result in payload.rule_results)
+
+
+def test_radar_minimum_distance_rule_has_is_filter_limit() -> None:
+    bound = RadarMinimumDistanceRule(minimum_distance_meters=500.0).bind(
+        station=_make_station(),
+        station_point=(0.0, 0.0),
+    )
+    result = bound.analyze(_make_obstacle(category="building_general", local_geometry=_point_geometry(600.0, 0.0)))
+    assert result.is_filter_limit is True
+
+
+def test_radar_rotating_reflector_16km_rule_has_is_filter_limit() -> None:
+    bound = RadarRotatingReflector16kmRule().bind(
+        station=_make_station(),
+        station_point=(0.0, 0.0),
+    )
+    result = bound.analyze(_make_obstacle(category="large_rotating_reflector", local_geometry=_point_geometry(1000.0, 0.0)))
+    assert result.is_filter_limit is True
+
+
+def test_radar_site_protection_does_not_have_is_filter_limit() -> None:
+    bound = RadarSiteProtectionRule().bind(
+        station=_make_station(station_sub_type="PSR", altitude=10.0, antenna_hag=15.0),
+        station_point=(0.0, 0.0),
+        radius_meters=30000.0,
+        vertical_limit_angle_degrees=0.25,
+        horizontal_limit_angle_degrees=1.5,
+    )
+    assert bound is not None
+    result = bound.analyze(_make_obstacle(category="building_general", local_geometry=_point_geometry(1000.0, 0.0)))
+    assert result.is_filter_limit is False

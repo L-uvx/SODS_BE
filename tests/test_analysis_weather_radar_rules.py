@@ -194,3 +194,24 @@ def test_weather_radar_1deg_protection_zone_uses_analytic_surface_vertical_defin
     assert vertical_definition["surface"]["type"] == "radial_cone_surface"
     assert vertical_definition["surface"]["heightModel"]["type"] == "angle_linear_rise"
     assert vertical_definition["surface"]["heightModel"]["angleDegrees"] == 1.0
+
+
+def test_weather_radar_minimum_distance_rule_has_is_filter_limit() -> None:
+    from app.analysis.rules.weather_radar.minimum_distance_450m import WeatherRadarMinimumDistance450mRule
+    bound = WeatherRadarMinimumDistance450mRule().bind(
+        station=_make_station(),
+        station_point=(0.0, 0.0),
+    )
+    result = bound.analyze(_make_obstacle(category="building_general", local_geometry=_point_geometry(600.0, 0.0)))
+    assert result.is_filter_limit is True
+
+
+def test_weather_radar_elevation_angle_does_not_have_is_filter_limit() -> None:
+    from app.analysis.rules.weather_radar.elevation_angle_1deg import WeatherRadarElevationAngle1degRule
+    bound = WeatherRadarElevationAngle1degRule().bind(
+        station=_make_station(coverage_radius=1800.0),
+        station_point=(0.0, 0.0),
+    )
+    assert bound is not None
+    result = bound.analyze(_make_obstacle(category="building_general", local_geometry=_point_geometry(1000.0, 0.0), top_elevation=20.0))
+    assert result.is_filter_limit is False

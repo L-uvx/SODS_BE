@@ -287,3 +287,13 @@ def test_hf_shared_rule_band_uses_category_specific_standards_rule_code() -> Non
         assert standards.gb
         assert standards.gb[0].code == expected_key
         assert standards.mh == []
+
+
+def test_hf_circle_rule_has_is_filter_limit() -> None:
+    from app.analysis.rules.hf.minimum_distance_1km import HfMinimumDistance1kmRule
+    bound = HfMinimumDistance1kmRule().bind(
+        station=_make_station(),
+        station_point=(0.0, 0.0),
+    )
+    result = bound.analyze(_make_obstacle(category="road", local_geometry=_point_geometry(1500.0, 0.0)))
+    assert result.is_filter_limit is True

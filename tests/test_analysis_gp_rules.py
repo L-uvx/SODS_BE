@@ -1343,6 +1343,122 @@ def test_gp_region_b_gb_entered_outside_600m_with_available_clearance_can_be_non
     assert result.metrics["overHeightMeters"] == 10.0
 
 
+def test_gp_run_area_region_a_returns_is_mid_when_type_not_supported() -> None:
+    region_a_module = importlib.import_module(
+        "app.analysis.rules.gp.run_area_protection.region_a"
+    )
+    helpers = importlib.import_module(
+        "app.analysis.rules.gp.run_area_protection.helpers"
+    )
+
+    station = type(
+        "Station", (),
+        {
+            "id": 301,
+            "station_type": "GP",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+            "distance_v_to_runway": 180.0,
+        },
+    )()
+    runway_context = {
+        "runNumber": "18",
+        "directionDegrees": 0.0,
+        "widthMeters": 45.0,
+        "lengthMeters": 600.0,
+        "localCenterPoint": (0.0, -600.0),
+        "maximumAirworthiness": 0,
+    }
+    shared_context = helpers.build_gp_run_area_shared_context(
+        station=station, station_point=(0.0, 0.0), runway_context=runway_context,
+    )
+    assert shared_context is not None
+
+    bound_rule = region_a_module.GpRunAreaProtectionRegionARule().bind(
+        station=station, shared_context=shared_context,
+    )
+    zone_geom = bound_rule.protection_zone.local_geometry
+    point = zone_geom.representative_point()
+    inside_obstacle = {
+        "obstacleId": 777,
+        "name": "Building Inside Run Area A",
+        "rawObstacleType": "建筑物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 510.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[float(point.x - 2), float(point.y - 2)],
+                               [float(point.x + 2), float(point.y - 2)],
+                               [float(point.x + 2), float(point.y + 2)],
+                               [float(point.x - 2), float(point.y + 2)],
+                               [float(point.x - 2), float(point.y - 2)]]]],
+        },
+    }
+    result = bound_rule.analyze(inside_obstacle)
+    assert result.is_mid is True
+    assert result.is_applicable is False
+    assert result.metrics["enteredProtectionZone"] is True
+
+
+def test_gp_run_area_region_b_returns_is_mid_when_type_not_supported() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.run_area_protection.region_b"
+    )
+    helpers = importlib.import_module(
+        "app.analysis.rules.gp.run_area_protection.helpers"
+    )
+
+    station = type(
+        "Station", (),
+        {
+            "id": 302,
+            "station_type": "GP",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+            "distance_v_to_runway": 180.0,
+        },
+    )()
+    runway_context = {
+        "runNumber": "18",
+        "directionDegrees": 0.0,
+        "widthMeters": 45.0,
+        "lengthMeters": 600.0,
+        "localCenterPoint": (0.0, -600.0),
+        "maximumAirworthiness": 0,
+    }
+    shared_context = helpers.build_gp_run_area_shared_context(
+        station=station, station_point=(0.0, 0.0), runway_context=runway_context,
+    )
+    assert shared_context is not None
+
+    bound_rule = region_b_module.GpRunAreaProtectionRegionBRule().bind(
+        station=station, shared_context=shared_context,
+    )
+    zone_geom = bound_rule.protection_zone.local_geometry
+    point = zone_geom.representative_point()
+    inside_obstacle = {
+        "obstacleId": 778,
+        "name": "Building Inside Run Area B",
+        "rawObstacleType": "建筑物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 510.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[float(point.x - 2), float(point.y - 2)],
+                               [float(point.x + 2), float(point.y - 2)],
+                               [float(point.x + 2), float(point.y + 2)],
+                               [float(point.x - 2), float(point.y + 2)],
+                               [float(point.x - 2), float(point.y - 2)]]]],
+        },
+    }
+    result = bound_rule.analyze(inside_obstacle)
+    assert result.is_mid is True
+    assert result.is_applicable is False
+    assert result.metrics["enteredProtectionZone"] is True
+
+
 def _make_gp_shared_context(*, standard_version: str):
     helpers = importlib.import_module("app.analysis.rules.gp.site_protection.helpers")
     return helpers.build_gp_site_protection_shared_context(

@@ -77,6 +77,7 @@ class BoundWeatherRadarCircleRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=is_compliant,
+            is_filter_limit=True,
             message=(
                 f"在{self.minimum_distance_meters}米范围内"
                 if not is_compliant
