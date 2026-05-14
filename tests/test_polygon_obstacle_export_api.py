@@ -2,6 +2,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
+import pytest
 from docx import Document
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -947,7 +948,28 @@ class TestBuildSummaryRadarIntegration:
         assert "不满足标准限高要求" in result
         assert "其余障碍物均满足标准要求，可按报批高度进行审批" in result
 
-    # ---- T16: _collect_radar_unmet_obstacles ----
+    # ---- T16: 同一障碍物多条不满足规则时，取 MIN allowedHeightMeters ----
+    @pytest.mark.parametrize("heights,expected_in,expected_not_in", [
+        ([(50.0, "zone_A"), (30.0, "zone_B")], "30.00", "50.00"),
+        ([(30.0, "zone_A"), (50.0, "zone_B")], "30.00", "50.00"),
+    ])
+    def test_build_summary_multiple_rules_same_obstacle_takes_min_height(self, heights, expected_in, expected_not_in):
+        """同一障碍物多条不满足规则时，限高应取各规则中的最小值（与规则顺序无关）"""
+        rr = [
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "obs_X",
+                "zoneCode": zone,
+                "metrics": {"allowedHeightMeters": height},
+            }
+            for height, zone in heights
+        ]
+        result = _build_summary(rr, obstacle_count=1, radar_unmet_obstacle_names=set())
+        assert expected_in in result
+        assert expected_not_in not in result
+
+    # ---- T17: _collect_radar_unmet_obstacles ----
     def test_collect_radar_unmet_obstacles(self):
         cumulative_results = [
             {"isCompliant": "满足", "obstacleNames": ["ok_obs"]},
@@ -956,3 +978,69 @@ class TestBuildSummaryRadarIntegration:
         ]
         result = _collect_radar_unmet_obstacles(cumulative_results)
         assert result == {"bad_a", "bad_b", "bad_c"}
+
+
+class TestPrecisionHelpers:
+    def test_floor2_rounds_down(self):
+        from app.report.export_payload_builder import _floor2
+        assert _floor2(1.234) == 1.23
+        assert _floor2(1.239) == 1.23
+        assert _floor2(1.200) == 1.20
+        assert _floor2(0.0) == 0.0
+
+    def test_ceil2_rounds_up(self):
+        from app.report.export_payload_builder import _ceil2
+        assert _ceil2(1.231) == 1.24
+        assert _ceil2(1.230) == 1.23
+        assert _ceil2(1.200) == 1.20
+        assert _ceil2(0.0) == 0.0
+
+
+class TestEmptyExportPayload:
+    def test_build_export_payload_empty_returns_isEmpty_flag(self):
+        """空 tableRows 时 build_export_payload 应返回 isEmpty=True 和 emptyMessage"""
+        from unittest.mock import MagicMock
+
+        mock_task = MagicMock()
+        mock_task.result_payload = {
+            "ruleResults": [],
+            "obstacleCount": 0,
+            "selectedTargets": [{"name": "测试机场"}],
+        }
+        mock_task.import_batch = None
+
+        result = build_export_payload(mock_task)
+        assert result["isEmpty"] is True
+        assert "测试机场" in result["emptyMessage"]
+        assert "通信、导航、监视" in result["emptyMessage"]
+        assert result["tableRows"] == []
+        assert result["summary"] == ""
+
+    def test_template_renders_empty_result(self):
+        """空结果时模板应正常渲染 emptyMessage"""
+        from pathlib import Path
+        from docxtpl import DocxTemplate
+
+        template_path = Path("app/report/templates/analysis_report_template.docx")
+        doc = DocxTemplate(str(template_path))
+        context = {
+            "projectName": "测试",
+            "airportName": "测试机场",
+            "standardsUsed": "",
+            "stationNames": "",
+            "cumulativeMaskAngleResults": [],
+            "electromagneticZoneResult": "",
+            "isEmpty": True,
+            "emptyMessage": "该项目不位于测试机场通信、导航、监视台站场地保护区内。",
+            "obstacleCount": 0,
+            "summary": "",
+            "tableRows": [],
+            "nonCompliantRows": [],
+            "compliantRows": [],
+        }
+        doc.render(context)
+        # Verify rendered output contains the empty message and excludes table structure
+        body_xml = doc.docx.element.body.xml
+        assert "通信、导航、监视台站场地保护区" in body_xml
+        # Verify nonCompliantRows template tag is NOT in output (should have been skipped via {% else %})
+        assert "nonCompliantRows" not in body_xml

@@ -1,8 +1,17 @@
+import math
 from typing import Any
 
 from app.analysis.rules.runway.config import ZONE_CODE as EM_ZONE_CODE
 from app.models.analysis_task import AnalysisTask
 from app.analysis.rules.radar.cumulative_analysis import compute_cumulative_horizontal_mask_angles
+
+def _floor2(value: float) -> float:
+    return math.floor(value * 100) / 100
+
+
+def _ceil2(value: float) -> float:
+    return math.ceil(value * 100) / 100
+
 
 _STANDARD_NAME_BY_PREFIX: list[tuple[str, str]] = [
     ("MH_PSRSSR_", "MH/T 4003.2-2014"),
@@ -144,24 +153,24 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                 "第1部分:导航》标准要求确定是否开展计算机仿真工作"
             )
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
-            height_limit_display = round(height_val or 0, 2)
+            height_limit_display = _floor2(height_val or 0)
             over = _float_or_none(metrics.get("overHeightMeters"))
-            over_height_display = round(over or 0, 2)
+            over_height_display = _ceil2(over or 0)
         elif is_radar_16km_special:
             compliance_status = (
                 "位于台站16km范围内，根据MHT4003.2-2014《民用航空通信导航监视台(站)"
                 "设置场地规范 第2部分:监视》要求，需论证是否影响雷达正常工作"
             )
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
-            height_limit_display = round(height_val or 0, 2)
+            height_limit_display = _floor2(height_val or 0)
             over = _float_or_none(metrics.get("overHeightMeters"))
-            over_height_display = round(over or 0, 2)
+            over_height_display = _ceil2(over or 0)
         else:
             compliance_status = "满足" if is_compliant else "不满足"
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
-            height_limit_display = round(height_val or 0, 2)
+            height_limit_display = _floor2(height_val or 0)
             over = _float_or_none(metrics.get("overHeightMeters"))
-            over_height_display = round(over or 0, 2)
+            over_height_display = _ceil2(over or 0)
 
         for std_key in ("gb", "mh"):
             for s in _normalize_standards(r.get("standards", {}).get(std_key)):
@@ -182,12 +191,12 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                 if not skip_overheight_tracking:
                     key = (obstacle_name, station_name)
                     track_over = _float_or_none(metrics.get("overHeightMeters"))
-                    obstacle_station_overheights.setdefault(key, []).append(round(track_over or 0, 2))
+                    obstacle_station_overheights.setdefault(key, []).append(_ceil2(track_over or 0))
 
     for row in rows:
         key = (row["obstacleName"], row["stationName"])
         dists = obstacle_station_overheights.get(key, [0])
-        row["finalOverHeight"] = round(max(dists), 2)
+        row["finalOverHeight"] = _ceil2(max(dists))
 
     return rows
 
@@ -228,15 +237,20 @@ def _build_summary(rule_results: list[dict], obstacle_count: int, radar_unmet_ob
 
         if not r.get("isCompliant", True):
             name = r.get("obstacleName", "")
-            if name and name not in non_compliant_obstacles:
-                non_compliant_obstacles[name] = _get_metrics_height(metrics)
+            if not name:
+                continue
+            height = _get_metrics_height(metrics)
+            if height is None:
+                continue
+            prev = non_compliant_obstacles.get(name)
+            non_compliant_obstacles[name] = min(prev, height) if prev is not None else height
 
     if not non_compliant_obstacles:
         base = f"共分析障碍物{obstacle_count}个，均满足标准限高要求。"
     else:
         names = sorted(non_compliant_obstacles)
         heights = [
-            f"{non_compliant_obstacles[n]:.2f}" if non_compliant_obstacles[n] is not None else ""
+            f"{_floor2(non_compliant_obstacles[n]):.2f}"
             for n in names
         ]
         base = (
@@ -296,8 +310,6 @@ def _build_em_zone_summary(em_zone_result: dict | None) -> str:
 def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     result_payload = analysis_task.result_payload or {}
     rule_results = result_payload.get("ruleResults", [])
-    cumulative_mask_angle_results = compute_cumulative_horizontal_mask_angles(rule_results)
-    radar_unmet_names = _collect_radar_unmet_obstacles(cumulative_mask_angle_results)
 
     station_names_set: set[str] = set()
     standard_codes: set[str] = set()
@@ -326,7 +338,29 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
 
     obstacle_count = result_payload.get("obstacleCount", 0)
     table_rows = _flatten_rule_results(rule_results)
+    project_name = analysis_task.import_batch.project.name if analysis_task.import_batch and analysis_task.import_batch.project else ""
+
+    if not table_rows:
+        return {
+            "projectName": project_name,
+            "airportName": airport_name,
+            "standardsUsed": standards_used,
+            "stationNames": "、".join(sorted(station_names_set)),
+            "cumulativeMaskAngleResults": [],
+            "electromagneticZoneResult": "",
+            "isEmpty": True,
+            "emptyMessage": f"该项目不位于{airport_name}通信、导航、监视台站场地保护区内。",
+            "obstacleCount": obstacle_count,
+            "summary": "",
+            "tableRows": [],
+            "nonCompliantRows": [],
+            "compliantRows": [],
+        }
+
+    cumulative_mask_angle_results = compute_cumulative_horizontal_mask_angles(rule_results)
+    radar_unmet_names = _collect_radar_unmet_obstacles(cumulative_mask_angle_results)
     summary = _build_summary(rule_results, obstacle_count, radar_unmet_names)
+
     non_compliant_rows = [row for row in table_rows if not row["isCompliant"]]
     compliant_rows = [row for row in table_rows if row["isCompliant"]]
 
@@ -387,7 +421,7 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     em_zone_summary = _build_em_zone_summary(electromagnetic_zone_result)
 
     return {
-        "projectName": analysis_task.import_batch.project.name if analysis_task.import_batch and analysis_task.import_batch.project else "",
+        "projectName": project_name,
         "airportName": airport_name,
         "standardsUsed": standards_used,
         "stationNames": "、".join(sorted(station_names_set)),
