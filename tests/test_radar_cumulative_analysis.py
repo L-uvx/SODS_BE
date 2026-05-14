@@ -312,3 +312,38 @@ class TestEndToEnd:
         ])
         assert len(results) == 1
         assert results[0]["cumulativeHorizontalAngleDegrees"] == pytest.approx(20.0)
+
+    def test_obstacle_names_deduplicated(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                obstacleId=1,
+                obstacleName="obs_a",
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+            ),
+            _make_result(
+                obstacleId=1,
+                obstacleName="obs_a",
+                minHorizontalAngleDegrees=15.0,
+                maxHorizontalAngleDegrees=25.0,
+            ),
+            _make_result(
+                obstacleId=2,
+                obstacleName="obs_b",
+                minHorizontalAngleDegrees=40.0,
+                maxHorizontalAngleDegrees=50.0,
+            ),
+        ])
+        assert len(results) == 1
+        assert "obstacleNames" in results[0]
+        assert sorted(results[0]["obstacleNames"]) == ["obs_a", "obs_b"]
+
+    def test_obstacle_names_empty_when_no_spans(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                minHorizontalAngleDegrees=None,
+                maxHorizontalAngleDegrees=None,
+                metrics={"verticalMaskAngleDegrees": 0.5},
+            ),
+        ])
+        assert results == []

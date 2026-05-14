@@ -30,4 +30,7 @@ class AnalysisRuleResult:
     relative_height_meters: float = 0.0
     is_in_radius: bool = False
     is_in_zone: bool = False
+    is_mid: bool = False
+    is_filter_limit: bool = False
+    is_filter_intersect: bool = False
     details: str = ""

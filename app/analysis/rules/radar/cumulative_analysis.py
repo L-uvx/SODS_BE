@@ -244,6 +244,13 @@ def compute_cumulative_horizontal_mask_angles(
                 "cumulativeDegrees": round(snap.cumulative, 4),
             })
 
+        obstacle_names: list[str] = []
+        seen_names: set[str] = set()
+        for s in spans:
+            if s.obstacle_name and s.obstacle_name not in seen_names:
+                seen_names.add(s.obstacle_name)
+                obstacle_names.append(s.obstacle_name)
+
         results.append({
             "stationId": station_data["stationId"],
             "stationName": station_data["stationName"],
@@ -255,6 +262,7 @@ def compute_cumulative_horizontal_mask_angles(
             "isCompliant": "满足" if is_compliant else "不满足",
             "conclusion": conclusion,
             "clusters": clusters,
+            "obstacleNames": obstacle_names,
         })
 
     return results

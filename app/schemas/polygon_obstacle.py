@@ -216,6 +216,9 @@ class AnalysisRuleResultResponse(BaseModel):
     relative_height_meters: float = Field(alias="relativeHeightMeters", default=0.0)
     is_in_radius: bool = Field(alias="isInRadius", default=False)
     is_in_zone: bool = Field(alias="isInZone", default=False)
+    is_mid: bool = Field(alias="isMid", default=False)
+    is_filter_limit: bool = Field(alias="isFilterLimit", default=False)
+    is_filter_intersect: bool = Field(alias="isFilterIntersect", default=False)
     details: str = ""
 
     model_config = ConfigDict(

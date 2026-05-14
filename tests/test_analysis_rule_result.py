@@ -1,6 +1,57 @@
 from app.analysis.rule_result import AnalysisRuleResult
 
 
+def test_analysis_rule_result_defaults_is_mid_is_filter_fields_to_false() -> None:
+    result = AnalysisRuleResult(
+        station_id=1,
+        station_type="NDB",
+        obstacle_id=2,
+        obstacle_name="Obstacle A",
+        raw_obstacle_type="建筑物/构建物",
+        global_obstacle_category="building_general",
+        rule_code="ndb_minimum_distance_50m",
+        rule_name="ndb_minimum_distance_50m",
+        zone_code="ndb_minimum_distance_50m",
+        zone_name="NDB 50m minimum distance zone",
+        region_code="default",
+        region_name="default",
+        is_applicable=True,
+        is_compliant=False,
+        message="位于NDB 50米最小间距区域内",
+        metrics={"actualDistanceMeters": 30.0, "minimumDistanceMeters": 50.0},
+    )
+
+    assert result.is_mid is False
+    assert result.is_filter_limit is False
+    assert result.is_filter_intersect is False
+
+
+def test_analysis_rule_result_sets_is_mid_true() -> None:
+    result = AnalysisRuleResult(
+        station_id=1,
+        station_type="NDB",
+        obstacle_id=2,
+        obstacle_name="Obstacle A",
+        raw_obstacle_type="建筑物/构建物",
+        global_obstacle_category="building_general",
+        rule_code="ndb_minimum_distance_50m",
+        rule_name="ndb_minimum_distance_50m",
+        zone_code="ndb_minimum_distance_50m",
+        zone_name="NDB 50m minimum distance zone",
+        region_code="default",
+        region_name="default",
+        is_applicable=True,
+        is_compliant=False,
+        message="位于NDB 50米最小间距区域内",
+        metrics={"actualDistanceMeters": 30.0, "minimumDistanceMeters": 50.0},
+        is_mid=True,
+    )
+
+    assert result.is_mid is True
+    assert result.is_filter_limit is False
+    assert result.is_filter_intersect is False
+
+
 def test_analysis_rule_result_stores_common_rule_fields() -> None:
     result = AnalysisRuleResult(
         station_id=1,

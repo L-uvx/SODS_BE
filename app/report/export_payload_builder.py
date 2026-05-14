@@ -101,6 +101,9 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
     obstacle_station_overheights: dict[tuple[str, str], list[float]] = {}
 
     for r in rule_results:
+        # Priority 1: isFilterIntersect skip
+        if r.get("isFilterIntersect"):
+            continue
         if not r.get("isApplicable", True):
             continue
         if r.get("zoneCode") == EM_ZONE_CODE:
@@ -109,18 +112,59 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
         obstacle_name = r.get("obstacleName", "")
         station_name = r.get("stationName", "")
         obstacle_type = r.get("rawObstacleType", "")
-        is_compliant = r.get("isCompliant", True)
-        compliant_text = "满足" if is_compliant else "不满足"
         metrics = r.get("metrics") or {}
         details = r.get("message") or r.get("details") or ""
         relative_position = _build_relative_position(metrics, r)
 
+        # Priority 4: isMid or isFilterLimit → special display
+        is_special_no_judge = bool(r.get("isMid") or r.get("isFilterLimit"))
+
+        # Priority 5: LOC building restriction zone special message
+        is_loc_brz_special = (
+            r.get("zoneCode") == "loc_building_restriction_zone"
+            and metrics.get("enteredProtectionZone") is True
+        )
+
+        # Priority 6: Radar 16KM special message
+        is_radar_16km_special = (
+            r.get("ruleCode") == "radar_rotating_reflector_16km"
+            and metrics.get("enteredProtectionZone") is True
+        )
+
+        skip_overheight_tracking = is_special_no_judge or is_loc_brz_special or is_radar_16km_special
+
+        if is_special_no_judge:
+            compliant_text = "不判断"
+            height_limit_display = "/"
+            over_height_display = "/"
+        elif is_loc_brz_special:
+            compliant_text = (
+                "建议结合MH4003.1-2021《民用航空通信导航监视台(站)设置场地规范 "
+                "第1部分:导航》标准要求确定是否开展计算机仿真工作"
+            )
+            height_val = _float_or_none(metrics.get("allowedHeightMeters"))
+            height_limit_display = round(height_val or 0, 2)
+            over = _float_or_none(metrics.get("overHeightMeters"))
+            over_height_display = round(over or 0, 2)
+        elif is_radar_16km_special:
+            compliant_text = (
+                "位于台站16km范围内，根据MHT4003.2-2014《民用航空通信导航监视台(站)"
+                "设置场地规范 第2部分:监视》要求，需论证是否影响雷达正常工作"
+            )
+            height_val = _float_or_none(metrics.get("allowedHeightMeters"))
+            height_limit_display = round(height_val or 0, 2)
+            over = _float_or_none(metrics.get("overHeightMeters"))
+            over_height_display = round(over or 0, 2)
+        else:
+            is_compliant = r.get("isCompliant", True)
+            compliant_text = "满足" if is_compliant else "不满足"
+            height_val = _float_or_none(metrics.get("allowedHeightMeters"))
+            height_limit_display = round(height_val or 0, 2)
+            over = _float_or_none(metrics.get("overHeightMeters"))
+            over_height_display = round(over or 0, 2)
+
         for std_key in ("gb", "mh"):
             for s in _normalize_standards(r.get("standards", {}).get(std_key)):
-                over = _float_or_none(metrics.get("overHeightMeters"))
-
-                height_val = _float_or_none(metrics.get("allowedHeightMeters"))
-
                 row = {
                     "obstacleName": obstacle_name,
                     "obstacleType": obstacle_type,
@@ -129,13 +173,15 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                     "standardName": f"《{_extract_standard_name(s.get('code', ''))}》",
                     "standardClause": s.get("text", ""),
                     "analysisDetail": details,
-                    "heightLimit": round(height_val or 0, 2),
+                    "heightLimit": height_limit_display,
                     "isCompliant": compliant_text,
-                    "overHeight": round(over or 0, 2),
+                    "overHeight": over_height_display,
                 }
                 rows.append(row)
-                key = (obstacle_name, station_name)
-                obstacle_station_overheights.setdefault(key, []).append(round(over or 0, 2))
+                if not skip_overheight_tracking:
+                    key = (obstacle_name, station_name)
+                    track_over = _float_or_none(metrics.get("overHeightMeters"))
+                    obstacle_station_overheights.setdefault(key, []).append(round(track_over or 0, 2))
 
     for row in rows:
         key = (row["obstacleName"], row["stationName"])
@@ -155,31 +201,71 @@ def _get_metrics_height(metrics: dict) -> float | None:
     return None
 
 
-def _build_summary(rule_results: list[dict], obstacle_count: int) -> str:
+def _collect_radar_unmet_obstacles(cumulative_results: list[dict]) -> set[str]:
+    names: set[str] = set()
+    for cr in cumulative_results:
+        if cr.get("isCompliant") == "不满足":
+            for name in cr.get("obstacleNames", []):
+                names.add(str(name))
+    return names
+
+
+def _build_summary(rule_results: list[dict], obstacle_count: int, radar_unmet_obstacle_names: set[str]) -> str:
     non_compliant_obstacles: dict[str, float | None] = {}
     for r in rule_results:
         if not r.get("isApplicable", True):
             continue
         if r.get("zoneCode") == EM_ZONE_CODE:
             continue
+        metrics = r.get("metrics") or {}
+        if r.get("isMid") or r.get("isFilterLimit") or r.get("isFilterIntersect"):
+            continue
+        if r.get("zoneCode") == "loc_building_restriction_zone" and metrics.get("enteredProtectionZone") is True:
+            continue
+        if r.get("ruleCode") == "radar_rotating_reflector_16km" and metrics.get("enteredProtectionZone") is True:
+            continue
+
         if not r.get("isCompliant", True):
             name = r.get("obstacleName", "")
             if name and name not in non_compliant_obstacles:
-                metrics = r.get("metrics") or {}
                 non_compliant_obstacles[name] = _get_metrics_height(metrics)
 
     if not non_compliant_obstacles:
-        return f"共分析障碍物{obstacle_count}个，均满足标准限高要求。"
+        base = f"共分析障碍物{obstacle_count}个，均满足标准限高要求。"
+    else:
+        names = sorted(non_compliant_obstacles)
+        heights = [
+            f"{non_compliant_obstacles[n]:.2f}" if non_compliant_obstacles[n] is not None else ""
+            for n in names
+        ]
+        base = (
+            f"共分析障碍物{obstacle_count}个，其中{','.join(names)}"
+            f"不满足标准限高要求，限制顶部高程为 {'、'.join(heights)}米。"
+        )
 
-    names = sorted(non_compliant_obstacles)
-    heights = [
-        f"{non_compliant_obstacles[n]:.2f}" if non_compliant_obstacles[n] is not None else ""
-        for n in names
-    ]
-    return (
-        f"共分析障碍物{obstacle_count}个，其中{','.join(names)}"
-        f"不满足标准限高要求，限制顶部高程为 {'、'.join(heights)}米。"
-    )
+    all_unmet = set(non_compliant_obstacles.keys()) | radar_unmet_obstacle_names
+
+    if radar_unmet_obstacle_names:
+        radar_names_str = "、".join(sorted(radar_unmet_obstacle_names))
+        if len(all_unmet) == obstacle_count:
+            suffix = f"，{radar_names_str}不满足雷达累计水平遮蔽角的要求，建议根据具体情况分析顶部限高"
+        elif obstacle_count == 1:
+            suffix = f"，{radar_names_str}不满足雷达累计水平遮蔽角的要求，建议根据具体情况分析顶部限高"
+        else:
+            suffix = f"，{radar_names_str}不满足雷达累计水平遮蔽角的要求，建议根据具体情况分析顶部限高，其余障碍物均满足标准要求，可按报批高度进行审批"
+    else:
+        if not non_compliant_obstacles:
+            if obstacle_count == 1:
+                suffix = "，满足标准要求，可按报批高度进行审批"
+            else:
+                suffix = "，均满足标准要求，可按报批高度进行审批"
+        else:
+            if len(non_compliant_obstacles) < obstacle_count:
+                suffix = "，其余障碍物均满足标准要求，可按报批高度进行审批"
+            else:
+                suffix = ""
+
+    return base + suffix
 
 
 # 将电磁环境保护区结果解析为摘要字符串。
@@ -210,6 +296,7 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     result_payload = analysis_task.result_payload or {}
     rule_results = result_payload.get("ruleResults", [])
     cumulative_mask_angle_results = compute_cumulative_horizontal_mask_angles(rule_results)
+    radar_unmet_names = _collect_radar_unmet_obstacles(cumulative_mask_angle_results)
 
     station_names_set: set[str] = set()
     standard_codes: set[str] = set()
@@ -238,7 +325,7 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
 
     obstacle_count = result_payload.get("obstacleCount", 0)
     table_rows = _flatten_rule_results(rule_results)
-    summary = _build_summary(rule_results, obstacle_count)
+    summary = _build_summary(rule_results, obstacle_count, radar_unmet_names)
     non_compliant_rows = [row for row in table_rows if row["isCompliant"] == "不满足"]
     compliant_rows = [row for row in table_rows if row["isCompliant"] == "满足"]
 

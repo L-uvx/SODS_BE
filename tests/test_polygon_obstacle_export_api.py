@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_db_session
 from app.core import runtime
+from app.analysis.rule_result import AnalysisRuleResult
 from app.db.base import Base
 from app.main import app
 from app.models.airport import Airport
@@ -20,7 +21,7 @@ from app.models.project import Project
 from app.models.report_export import ReportExport
 from app.models.runway import Runway
 from app.models.station import Station
-from app.report.export_payload_builder import build_export_payload
+from app.report.export_payload_builder import _flatten_rule_results, _build_summary, _collect_radar_unmet_obstacles, build_export_payload
 
 
 def _read_valid_excel_bytes() -> bytes:
@@ -557,3 +558,384 @@ def test_run_export_task_succeeds_when_runtime_settings_are_uninitialized() -> N
         f"/polygon-obstacle/exports/{export_task_id}/download"
     )
     assert response.json()["errorMessage"] is None
+
+
+def test_build_rule_result_payload_includes_is_mid_is_filter_fields() -> None:
+    with _create_test_client() as _:
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+            service = PolygonObstacleImportService(session)
+
+            result = AnalysisRuleResult(
+                station_id=1,
+                station_type="NDB",
+                obstacle_id=2,
+                obstacle_name="Obstacle A",
+                raw_obstacle_type="建筑物/构建物",
+                global_obstacle_category="building_general",
+                rule_code="ndb_minimum_distance_50m",
+                rule_name="ndb_minimum_distance_50m",
+                zone_code="ndb_minimum_distance_50m",
+                zone_name="NDB 50m minimum distance zone",
+                region_code="default",
+                region_name="default",
+                is_applicable=True,
+                is_compliant=False,
+                message="位于NDB 50米最小间距区域内",
+                metrics={"actualDistanceMeters": 30.0, "minimumDistanceMeters": 50.0},
+                is_mid=True,
+                is_filter_limit=True,
+                is_filter_intersect=False,
+                standards_rule_code="ndb_minimum_distance_50m",
+            )
+
+            payload = service._build_rule_result_payload(
+                result=result,
+                station_name="NDB Station",
+            )
+
+            assert payload["isMid"] is True
+            assert payload["isFilterLimit"] is True
+            assert payload["isFilterIntersect"] is False
+
+
+def test_build_rule_result_payload_defaults_is_mid_fields_to_false() -> None:
+    with _create_test_client() as _:
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+            service = PolygonObstacleImportService(session)
+
+            result = AnalysisRuleResult(
+                station_id=1,
+                station_type="NDB",
+                obstacle_id=2,
+                obstacle_name="Obstacle A",
+                raw_obstacle_type="建筑物/构建物",
+                global_obstacle_category="building_general",
+                rule_code="ndb_minimum_distance_50m",
+                rule_name="ndb_minimum_distance_50m",
+                zone_code="ndb_minimum_distance_50m",
+                zone_name="NDB 50m minimum distance zone",
+                region_code="default",
+                region_name="default",
+                is_applicable=True,
+                is_compliant=False,
+                message="位于NDB 50米最小间距区域内",
+                metrics={"actualDistanceMeters": 30.0, "minimumDistanceMeters": 50.0},
+            )
+
+            payload = service._build_rule_result_payload(
+                result=result,
+                station_name="NDB Station",
+            )
+
+            assert payload["isMid"] is False
+            assert payload["isFilterLimit"] is False
+            assert payload["isFilterIntersect"] is False
+
+
+class TestFlattenRuleResultsSpecialDisplay:
+    """T1-T6: Special display logic in _flatten_rule_results."""
+
+    def _make_rule(self, **overrides):
+        base = {
+            "isApplicable": True,
+            "isCompliant": True,
+            "zoneCode": "ndb_minimum_distance_50m",
+            "ruleCode": "ndb_minimum_distance_50m",
+            "obstacleName": "Test Obstacle",
+            "rawObstacleType": "building_general",
+            "stationName": "Test Station",
+            "metrics": {"allowedHeightMeters": 100.0, "overHeightMeters": 5.0},
+            "standards": {
+                "gb": [{"code": "GB_TEST", "text": "test clause"}],
+                "mh": [],
+            },
+            "message": "",
+        }
+        base.update(overrides)
+        return base
+
+    # ---- T1: isMid shows "不判断" ----
+    def test_is_mid_shows_no_judge(self):
+        r = self._make_rule(isMid=True, isCompliant=False)
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["isCompliant"] == "不判断"
+        assert row["heightLimit"] == "/"
+        assert row["overHeight"] == "/"
+        assert row["finalOverHeight"] == 0
+
+    # ---- T2: isFilterLimit same as isMid ----
+    def test_is_filter_limit_shows_no_judge(self):
+        r = self._make_rule(isFilterLimit=True, isCompliant=False)
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["isCompliant"] == "不判断"
+        assert row["heightLimit"] == "/"
+        assert row["overHeight"] == "/"
+        assert row["finalOverHeight"] == 0
+
+    # ---- T3: isFilterIntersect skipped ----
+    def test_is_filter_intersect_skipped(self):
+        r = self._make_rule(isFilterIntersect=True)
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 0
+
+    # ---- T4: LOC building restriction special message ----
+    def test_loc_building_restriction_special_message(self):
+        r = self._make_rule(
+            zoneCode="loc_building_restriction_zone",
+            metrics={
+                "enteredProtectionZone": True,
+                "allowedHeightMeters": 80.0,
+                "overHeightMeters": 12.5,
+            },
+        )
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        row = rows[0]
+        assert "建议结合MH4003.1-2021" in row["isCompliant"]
+        assert row["heightLimit"] == 80.0
+        assert row["overHeight"] == 12.5
+        assert row["finalOverHeight"] == 0
+
+    # ---- T5: Radar 16KM special message ----
+    def test_radar_16km_special_message(self):
+        r = self._make_rule(
+            ruleCode="radar_rotating_reflector_16km",
+            zoneCode="radar_rotating_reflector_16km",
+            metrics={
+                "enteredProtectionZone": True,
+                "allowedHeightMeters": 200.0,
+                "overHeightMeters": 8.0,
+            },
+        )
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        row = rows[0]
+        assert "16km范围内" in row["isCompliant"]
+        assert row["heightLimit"] == 200.0
+        assert row["overHeight"] == 8.0
+        assert row["finalOverHeight"] == 0
+
+    # ---- T6: isMid not tracked for finalOverHeight ----
+    def test_is_mid_not_tracked_in_final_over_height(self):
+        normal = self._make_rule(
+            obstacleName="Obstacle X",
+            stationName="Station Y",
+            metrics={
+                "allowedHeightMeters": 50.0,
+                "overHeightMeters": 10.0,
+            },
+        )
+        mid_rule = self._make_rule(
+            isMid=True,
+            isCompliant=False,
+            obstacleName="Obstacle X",
+            stationName="Station Y",
+            metrics={
+                "allowedHeightMeters": 999.0,
+                "overHeightMeters": 99.0,
+            },
+        )
+        rows = _flatten_rule_results([normal, mid_rule])
+        assert len(rows) == 2
+        for row in rows:
+            assert row["finalOverHeight"] == 10.0
+
+
+class TestBuildSummaryRadarIntegration:
+    """T7-T16: _build_summary skip logic and radar conclusion integration."""
+
+    # ---- T7: _build_summary skips isMid rules ----
+    def test_build_summary_skips_is_mid(self):
+        rr = [
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "BadObs",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 10.0},
+                "isMid": True,
+            },
+        ]
+        result = _build_summary(rr, obstacle_count=1, radar_unmet_obstacle_names=set())
+        assert "均满足标准限高要求" in result
+
+    # ---- T8: _build_summary skips LOC BRZ special ----
+    def test_build_summary_skips_loc_brz_entered(self):
+        rr = [
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "BadObs",
+                "zoneCode": "loc_building_restriction_zone",
+                "metrics": {"allowedHeightMeters": 10.0, "enteredProtectionZone": True},
+            },
+        ]
+        result = _build_summary(rr, obstacle_count=1, radar_unmet_obstacle_names=set())
+        assert "均满足标准限高要求" in result
+
+    # ---- T9: _build_summary skips Radar 16KM special ----
+    def test_build_summary_skips_radar_16km_entered(self):
+        rr = [
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "BadObs",
+                "zoneCode": "some_radar_zone",
+                "ruleCode": "radar_rotating_reflector_16km",
+                "metrics": {"allowedHeightMeters": 10.0, "enteredProtectionZone": True},
+            },
+        ]
+        result = _build_summary(rr, obstacle_count=1, radar_unmet_obstacle_names=set())
+        assert "均满足标准限高要求" in result
+
+    # ---- T10: radar unmet (all fail) ----
+    def test_build_summary_radar_all_fail(self):
+        rr = [
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "obs_a",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 10.0},
+            },
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "obs_b",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 8.0},
+            },
+        ]
+        radar = {"obs_a", "obs_b"}
+        result = _build_summary(rr, obstacle_count=2, radar_unmet_obstacle_names=radar)
+        assert "obs_a、obs_b不满足雷达累计水平遮蔽角的要求" in result
+        assert "其余障碍物均满足" not in result
+
+    # ---- T11: radar unmet (partial) ----
+    def test_build_summary_radar_partial_unmet(self):
+        rr = [
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "obs_a",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 10.0},
+            },
+            {
+                "isApplicable": True,
+                "isCompliant": True,
+                "obstacleName": "obs_b",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 100.0},
+            },
+            {
+                "isApplicable": True,
+                "isCompliant": True,
+                "obstacleName": "obs_c",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 200.0},
+            },
+        ]
+        radar = {"obs_a"}
+        result = _build_summary(rr, obstacle_count=3, radar_unmet_obstacle_names=radar)
+        assert "obs_a不满足雷达累计水平遮蔽角的要求" in result
+        assert "其余障碍物均满足标准要求，可按报批高度进行审批" in result
+
+    # ---- T12: radar unmet (single obstacle) ----
+    def test_build_summary_radar_single_unmet(self):
+        rr: list = []
+        radar = {"only_obs"}
+        result = _build_summary(rr, obstacle_count=1, radar_unmet_obstacle_names=radar)
+        assert "only_obs不满足雷达累计水平遮蔽角的要求" in result
+        assert "其余障碍物均满足" not in result
+
+    # ---- T13: no radar unmet (all compliant, multi) ----
+    def test_build_summary_no_radar_all_compliant_multi(self):
+        rr = [
+            {
+                "isApplicable": True,
+                "isCompliant": True,
+                "obstacleName": "obs_a",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 100.0},
+            },
+            {
+                "isApplicable": True,
+                "isCompliant": True,
+                "obstacleName": "obs_b",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 200.0},
+            },
+        ]
+        result = _build_summary(rr, obstacle_count=2, radar_unmet_obstacle_names=set())
+        assert "均满足标准限高要求" in result
+        assert "均满足标准要求，可按报批高度进行审批" in result
+
+    # ---- T14: no radar unmet (all non-compliant) ----
+    def test_build_summary_no_radar_all_noncompliant(self):
+        rr = [
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "obs_a",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 10.0},
+            },
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "obs_b",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 8.0},
+            },
+        ]
+        result = _build_summary(rr, obstacle_count=2, radar_unmet_obstacle_names=set())
+        assert "不满足标准限高要求" in result
+        assert "满足标准要求，可按报批高度进行审批" not in result
+
+    # ---- T15: no radar unmet (mixed compliance) ----
+    def test_build_summary_no_radar_mixed(self):
+        rr = [
+            {
+                "isApplicable": True,
+                "isCompliant": False,
+                "obstacleName": "obs_a",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 10.0},
+            },
+            {
+                "isApplicable": True,
+                "isCompliant": True,
+                "obstacleName": "obs_b",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 200.0},
+            },
+            {
+                "isApplicable": True,
+                "isCompliant": True,
+                "obstacleName": "obs_c",
+                "zoneCode": "some_zone",
+                "metrics": {"allowedHeightMeters": 300.0},
+            },
+        ]
+        result = _build_summary(rr, obstacle_count=3, radar_unmet_obstacle_names=set())
+        assert "不满足标准限高要求" in result
+        assert "其余障碍物均满足标准要求，可按报批高度进行审批" in result
+
+    # ---- T16: _collect_radar_unmet_obstacles ----
+    def test_collect_radar_unmet_obstacles(self):
+        cumulative_results = [
+            {"isCompliant": "满足", "obstacleNames": ["ok_obs"]},
+            {"isCompliant": "不满足", "obstacleNames": ["bad_a", "bad_b"]},
+            {"isCompliant": "不满足", "obstacleNames": ["bad_a", "bad_c"]},
+        ]
+        result = _collect_radar_unmet_obstacles(cumulative_results)
+        assert result == {"bad_a", "bad_b", "bad_c"}

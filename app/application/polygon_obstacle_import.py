@@ -710,6 +710,9 @@ class PolygonObstacleImportService:
             "relativeHeightMeters": result.relative_height_meters,
             "isInRadius": result.is_in_radius,
             "isInZone": result.is_in_zone,
+            "isMid": result.is_mid,
+            "isFilterLimit": result.is_filter_limit,
+            "isFilterIntersect": result.is_filter_intersect,
             "details": result.details,
             "standards": {
                 "gb": (
@@ -1259,6 +1262,9 @@ class PolygonObstacleImportService:
         result.setdefault("relativeHeightMeters", 0.0)
         result.setdefault("isInRadius", False)
         result.setdefault("isInZone", False)
+        result.setdefault("isMid", False)
+        result.setdefault("isFilterLimit", False)
+        result.setdefault("isFilterIntersect", False)
         result.setdefault("details", "")
         standards = result.get("standards")
         if not isinstance(standards, dict):
