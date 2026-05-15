@@ -311,13 +311,13 @@ class TestParseRunwaySheet:
         assert r["runway_type"] == "精密进近跑道"
         assert r["runway_code_a"] == "4"
         assert r["runway_code_b"] == "F"
-        assert r["station_sub_type"] == "I类"
+        assert r["station_sub_type"] == "I"
 
     def test_last_runway_fields(self, dualiang_xlsx_bytes: bytes) -> None:
         rows = _parse_runway_sheet(dualiang_xlsx_bytes)
         r = rows[3]
         assert r["run_number"] == "02L"
-        assert r["station_sub_type"] == "II类"
+        assert r["station_sub_type"] == "II"
 
     def test_empty_sheet_returns_empty_list(self, empty_airport_xlsx_bytes: bytes) -> None:
         rows = _parse_runway_sheet(empty_airport_xlsx_bytes)

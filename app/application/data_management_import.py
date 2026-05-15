@@ -138,11 +138,100 @@ def _safe_str(value: Any) -> str | None:
     return text if text else None
 
 
-def _headers_match(actual: list[Any], expected: list[str]) -> bool:
-    for i in range(min(len(expected), len(actual))):
-        if str(actual[i] or "").strip() != expected[i]:
-            return False
-    return True
+_MAXIMUM_AIRWORTHINESS_MAP: dict[str, float] = {
+    '车辆（H≤6米）': 0,
+    '车辆(H≤6米)': 0,
+    '中型航空器(6米≤H≤14米)': 1,
+    '大型航空器(14米≤H≤20米)': 2,
+    '特大型航空器(20米≤H≤25米)': 3,
+}
+
+
+def _map_maximum_airworthiness(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f"cannot parse boolean as number: {value}")
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    result = _MAXIMUM_AIRWORTHINESS_MAP.get(text)
+    if result is not None:
+        return result
+    return _get_number_from_string(value)
+
+
+_RUNWAY_ENUM_MAPS: dict[str, dict[str | int | float, str]] = {
+    'runway_type': {
+        '非仪表跑道': '非仪表跑道', 0: '非仪表跑道',
+        '非精密进近跑道': '非精密进近跑道', 1: '非精密进近跑道',
+        '精密进近跑道': '精密进近跑道', 2: '精密进近跑道',
+    },
+    'station_sub_type': {
+        'I类': 'I', 0: 'I',
+        'II类': 'II', 1: 'II',
+        'III类': 'III', 2: 'III',
+    },
+    'maximum_type_aircraft': {
+        'D类和D类以上': 'D类和D类以上', 0: 'D类和D类以上',
+        'C类和C类以下': 'C类和C类以下', 1: 'C类和C类以下',
+        'B类和B类以下': 'B类和B类以下', 2: 'B类和B类以下',
+    },
+}
+
+_ANTENNA_UNIT_NUMBER_MAP: dict[str | int | float, str] = {
+    '小孔径（11单元及以下）': '10',
+    'S': '10', 0: '10',
+    '中孔径（12至15单元）': '14',
+    'M': '14', 1: '14',
+    '大孔径（16单元及以上）': '20',
+    'L': '20', 2: '20',
+}
+
+
+def _map_enum_field(value: Any, mapping: dict[str | int | float, str]) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text in mapping:
+        return mapping[text]
+    try:
+        num = float(text)
+        if num in mapping:
+            return mapping[num]
+    except ValueError:
+        pass
+    return text
+
+
+def _map_antenna_unit_number(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f"cannot parse boolean: {value}")
+    if isinstance(value, (int, float)):
+        result = _ANTENNA_UNIT_NUMBER_MAP.get(int(value))
+        if result is not None:
+            return result
+        return str(int(value)) if isinstance(value, (int, float)) else str(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    result = _ANTENNA_UNIT_NUMBER_MAP.get(text)
+    if result is not None:
+        return result
+    try:
+        num = float(text)
+        int_result = _ANTENNA_UNIT_NUMBER_MAP.get(int(num))
+        if int_result is not None:
+            return int_result
+    except ValueError:
+        pass
+    return text
 
 
 def _parse_runway_sheet(excel_bytes: bytes) -> list[dict[str, Any]]:
@@ -150,17 +239,6 @@ def _parse_runway_sheet(excel_bytes: bytes) -> list[dict[str, Any]]:
     if 'Sheet1' not in workbook.sheetnames:
         raise AirportImportParseError("缺少跑道工作表 Sheet1")
     ws = workbook['Sheet1']
-
-    expected_headers = [
-        '跑道号码', '跑道真方位（°）', '跑道长度（米）', '跑道宽度（米）',
-        '跑道入口标高（米）', '最大适航机型（H：航空器高度）',
-        '跑道中心点经度', '跑道中心点纬度', '机场基准点标高（米）',
-        '跑道类型', '编码A', '编码B', '仪表着陆系统类别',
-        '最大可起降航空器类别类别',
-    ]
-    actual_headers = [ws.cell(row=1, column=c).value for c in range(1, len(expected_headers) + 1)]
-    if not _headers_match(actual_headers, expected_headers):
-        raise AirportImportParseError("跑道表头格式不正确")
 
     rows: list[dict[str, Any]] = []
     row_index = 2
@@ -180,14 +258,15 @@ def _parse_runway_sheet(excel_bytes: bytes) -> list[dict[str, Any]]:
                 'length': _get_number_from_string(ws.cell(row=row_index, column=3).value),
                 'width': _get_number_from_string(ws.cell(row=row_index, column=4).value),
                 'enter_height': enter_height,
-                'maximum_airworthiness': _get_number_from_string(ws.cell(row=row_index, column=6).value),
+                'maximum_airworthiness': _map_maximum_airworthiness(ws.cell(row=row_index, column=6).value),
                 'longitude': _parse_degree(ws.cell(row=row_index, column=7).value),
                 'latitude': _parse_degree(ws.cell(row=row_index, column=8).value),
                 'altitude': _get_number_from_string(ws.cell(row=row_index, column=9).value),
-                'runway_type': _safe_str(ws.cell(row=row_index, column=10).value),
+                'runway_type': _map_enum_field(ws.cell(row=row_index, column=10).value, _RUNWAY_ENUM_MAPS['runway_type']),
                 'runway_code_a': _safe_str(ws.cell(row=row_index, column=11).value),
                 'runway_code_b': _safe_str(ws.cell(row=row_index, column=12).value),
-                'station_sub_type': _safe_str(ws.cell(row=row_index, column=13).value),
+                'station_sub_type': _map_enum_field(ws.cell(row=row_index, column=13).value, _RUNWAY_ENUM_MAPS['station_sub_type']),
+                'maximum_type_aircraft': _map_enum_field(ws.cell(row=row_index, column=14).value, _RUNWAY_ENUM_MAPS['maximum_type_aircraft']),
             })
         except AirportImportParseError:
             raise
@@ -247,7 +326,7 @@ def _read_station_base_fields(ws, row_index: int) -> dict[str, Any]:
         'altitude': _read_altitude(ws, row_index),
         'coverage_radius_raw': _get_number_from_string(ws.cell(row=row_index, column=7).value),
         'antenna_hag_raw': _get_number_from_string(ws.cell(row=row_index, column=8).value),
-        'unit_number': _safe_str(ws.cell(row=row_index, column=9).value),
+        'unit_number': _map_antenna_unit_number(ws.cell(row=row_index, column=9).value),
     }
 
 
@@ -401,6 +480,7 @@ _STATION_PARSERS: dict[str, Any] = {
     'MB': _parse_mb,
     'PSR/SSR': _parse_radar,
     'RADAR': _parse_radar,
+    'Radar': _parse_radar,
     'SMR': _parse_surface_detection_radar,
     'Surface_Detection_Radar': _parse_surface_detection_radar,
     'ADS-B': _make_40_type_parser('ADS_B'),
