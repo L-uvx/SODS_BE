@@ -4,11 +4,11 @@ import pytest
 from app.analysis.rules.radar.cumulative_analysis import (
     ObstacleAngleSpan,
     AngleSnapshot,
-    StationCumulativeResult,
     _unwrap_angles,
     _merge_overlapping,
     _scan_sector,
     _evaluate_threshold,
+    _build_conclusion,
     compute_cumulative_horizontal_mask_angles,
 )
 
@@ -164,38 +164,41 @@ class TestScanSector:
 
 class TestEvaluateThreshold:
     def test_small_span_compliant(self):
-        ok, conclusion, max_15, max_45 = _evaluate_threshold(10.0, 1.0, [])
+        ok, max_15_d, max_45_d = _evaluate_threshold(10.0, 1.0, [])
         assert ok is True
-        assert "1.5" in conclusion
-        assert max_15 == 1.0
-        assert max_45 == 0.0
+        assert max_15_d == 1.0
+        assert max_45_d == 1.0
 
     def test_small_span_not_compliant(self):
-        ok, conclusion, max_15, max_45 = _evaluate_threshold(10.0, 2.0, [])
+        ok, max_15_d, max_45_d = _evaluate_threshold(10.0, 2.0, [])
         assert ok is False
-        assert "1.5" in conclusion
-        assert max_15 == 2.0
+        assert max_15_d == 2.0
+        assert max_45_d == 2.0
 
     def test_large_span_low_cumulative(self):
-        ok, *_ = _evaluate_threshold(20.0, 1.0, [])
+        ok, max_15_d, max_45_d = _evaluate_threshold(20.0, 1.0, [])
         assert ok is True
+        assert max_15_d == 1.0
+        assert max_45_d == 1.0
 
     def test_large_span_high_cumulative_scan_15_passes(self):
         snaps = [
             AngleSnapshot(start=10.0, end=10.5, cumulative=0.5),
         ]
-        ok, conclusion, max_15, _ = _evaluate_threshold(20.0, 3.0, snaps)
+        ok, max_15_d, max_45_d = _evaluate_threshold(20.0, 3.0, snaps)
         assert ok is True
-        assert max_15 <= 1.5
+        assert max_15_d <= 1.5
+        assert max_45_d == 3.0
 
     def test_large_span_scan_15_fails_span_under_45(self):
         snaps = [
             AngleSnapshot(start=10.0, end=22.0, cumulative=12.0),
             AngleSnapshot(start=22.0, end=34.0, cumulative=24.0),
         ]
-        ok, conclusion, max_15, _ = _evaluate_threshold(30.0, 4.0, snaps)
+        ok, max_15_d, max_45_d = _evaluate_threshold(30.0, 4.0, snaps)
         assert ok is False
-        assert max_15 > 1.5
+        assert max_15_d > 1.5
+        assert max_45_d == 4.0
 
     def test_large_span_scan_45(self):
         snaps = [
@@ -203,8 +206,10 @@ class TestEvaluateThreshold:
             AngleSnapshot(start=22.0, end=34.0, cumulative=24.0),
             AngleSnapshot(start=40.0, end=60.0, cumulative=44.0),
         ]
-        ok, *_ = _evaluate_threshold(50.0, 4.0, snaps)
+        ok, max_15_d, max_45_d = _evaluate_threshold(50.0, 4.0, snaps)
         assert ok is False
+        assert max_15_d > 1.5
+        assert max_45_d > 3.0
 
 
 class TestEndToEnd:
@@ -347,3 +352,108 @@ class TestEndToEnd:
             ),
         ])
         assert results == []
+
+
+class TestBuildConclusion:
+    def test_compliant_all_within_limits(self):
+        result = _build_conclusion(
+            0.8, 1.2, "RADAR_01", ["obs1", "obs2"],
+        )
+        assert "RADAR_01" in result
+        assert "obs1、obs2" in result
+        assert "满足\"不大于1.5°\"" in result
+        assert "满足\"不大于3.0°\"" in result
+        assert "0.80°" in result
+        assert "1.20°" in result
+
+    def test_15deg_not_compliant(self):
+        result = _build_conclusion(
+            2.0, 1.0, "RADAR_01", ["obs_a"],
+        )
+        assert "不满足\"不大于1.5°\"" in result
+        assert "满足\"不大于3.0°\"" in result
+
+    def test_45deg_not_compliant(self):
+        result = _build_conclusion(
+            1.0, 4.5, "RADAR_01", ["obs_a"],
+        )
+        assert "满足\"不大于1.5°\"" in result
+        assert "不满足\"不大于3.0°\"" in result
+
+    def test_both_not_compliant(self):
+        result = _build_conclusion(
+            3.0, 5.0, "RADAR_01", ["obs_a"],
+        )
+        assert "不满足\"不大于1.5°\"" in result
+        assert "不满足\"不大于3.0°\"" in result
+
+    def test_always_both_dims_mentioned(self):
+        result = _build_conclusion(
+            0.5, 2.5, "STN", ["o1"],
+        )
+        assert "任意15°方位范围" in result
+        assert "任意45°方位范围" in result
+        assert "1.5°" in result
+        assert "3.0°" in result
+
+    def test_station_name_included(self):
+        result = _build_conclusion(
+            0.5, 0.5, "TEST_RADAR", ["obs1"],
+        )
+        assert "相对于TEST_RADAR的垂直遮蔽角" in result
+
+
+class TestEndToEndFormat:
+    def test_single_obstacle_conclusion_csharp_format(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                obstacleName="Alpha_Tower",
+                stationName="RADAR_A",
+                metrics={"verticalMaskAngleDegrees": 0.5},
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=11.0,
+            ),
+        ])
+        assert len(results) == 1
+        conclusion = results[0]["conclusion"]
+        assert "Alpha_Tower" in conclusion
+        assert "RADAR_A" in conclusion
+        assert "任意15°方位范围" in conclusion
+        assert "任意45°方位范围" in conclusion
+        assert "不大于1.5°" in conclusion
+        assert "不大于3.0°" in conclusion
+
+    def test_two_obstacles_conclusion_csharp_format(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                obstacleId=1,
+                obstacleName="Tower_A",
+                stationName="RADAR_X",
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+            ),
+            _make_result(
+                obstacleId=2,
+                obstacleName="Tower_B",
+                stationName="RADAR_X",
+                minHorizontalAngleDegrees=30.0,
+                maxHorizontalAngleDegrees=35.0,
+            ),
+        ])
+        assert len(results) == 1
+        conclusion = results[0]["conclusion"]
+        assert "Tower_A、Tower_B" in conclusion
+        assert "相对于RADAR_X" in conclusion
+
+    def test_conclusion_always_mentions_both_15_and_45(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                metrics={"verticalMaskAngleDegrees": 0.5},
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=25.0,
+            ),
+        ])
+        assert len(results) == 1
+        conclusion = results[0]["conclusion"]
+        assert "任意15°方位范围" in conclusion
+        assert "任意45°方位范围" in conclusion

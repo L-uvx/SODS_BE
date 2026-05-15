@@ -1,5 +1,5 @@
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -17,18 +17,6 @@ class AngleSnapshot:
     cumulative: float
 
 
-@dataclass
-class StationCumulativeResult:
-    station_id: int
-    station_name: str
-    station_type: str
-    total_span_degrees: float
-    cumulative_horizontal_angle_degrees: float
-    max_cumulative_in_15_deg: float
-    max_cumulative_in_45_deg: float
-    is_compliant: bool
-    conclusion: str
-    clusters: list[dict[str, float]] = field(default_factory=list)
 
 
 # 最大间隙法展开跨 360° 的障碍物序列
@@ -113,55 +101,58 @@ def _scan_sector(
 
 
 # 三级阈值判定
+# 返回 (is_compliant, max_15_display, max_45_display)
 def _evaluate_threshold(
     total_span: float,
     cumulative: float,
     snapshots: list[AngleSnapshot],
-) -> tuple[bool, str, float, float]:
+) -> tuple[bool, float, float]:
     max_15 = 0.0
     max_45 = 0.0
 
     if total_span < 15.0:
         ok = cumulative <= 1.5
-        conclusion = (
-            f"障碍物群总夹角{total_span:.1f}°<15°，累计水平遮蔽角{cumulative:.1f}°"
-            f"{'≤' if ok else '>'}1.5°，{'满足' if ok else '不满足'}标准限值要求。"
-        )
-        return ok, conclusion, cumulative if total_span > 0 else 0.0, 0.0
+        display = cumulative if total_span > 0 else 0.0
+        return ok, display, display
 
     if cumulative <= 1.5:
-        conclusion = (
-            f"障碍物群总夹角{total_span:.1f}°≥15°，累计水平遮蔽角{cumulative:.1f}°"
-            f"≤1.5°，满足标准限值要求。"
-        )
-        return True, conclusion, 0.0, 0.0
+        return True, cumulative, cumulative
 
     max_15 = _scan_sector(snapshots, 15.0)
 
     if max_15 <= 1.5:
-        conclusion = (
-            f"障碍物群总夹角{total_span:.1f}°≥15°，累计水平遮蔽角{cumulative:.1f}°>1.5°，"
-            f"但在任意15°扇区内未超出1.5°，满足标准限值要求。"
-        )
-        return True, conclusion, max_15, 0.0
+        if total_span >= 45.0:
+            max_45 = _scan_sector(snapshots, 45.0)
+            return True, max_15, max_45
+        else:
+            return True, max_15, cumulative
 
     if total_span < 45.0:
         ok = cumulative <= 3.0
-        conclusion = (
-            f"障碍物群总夹角{total_span:.1f}°<45°，在任意15°扇区内超出1.5°"
-            f"（最大{max_15:.2f}°），累计水平遮蔽角{cumulative:.1f}°"
-            f"{'≤' if ok else '>'}3°，{'满足' if ok else '不满足'}标准限值要求。"
-        )
-        return ok, conclusion, max_15, 0.0
+        return ok, max_15, cumulative
 
     max_45 = _scan_sector(snapshots, 45.0)
     ok = max_45 <= 3.0
-    conclusion = (
-        f"障碍物群总夹角{total_span:.1f}°≥45°，在任意15°扇区内超出1.5°"
-        f"（最大{max_15:.2f}°），在任意45°扇区内{'未超出' if ok else '超出'}3°"
-        f"（最大{max_45:.2f}°），{'满足' if ok else '不满足'}标准限值要求。"
+    return ok, max_15, max_45
+
+
+# 构建雷达累计水平遮蔽角结论文案
+def _build_conclusion(
+    max_15_display: float,
+    max_45_display: float,
+    station_name: str,
+    obstacle_names: list[str],
+) -> str:
+    names_str = "、".join(obstacle_names)
+    status_15 = "满足" if max_15_display <= 1.5 else "不满足"
+    status_45 = "满足" if max_45_display <= 3.0 else "不满足"
+    return (
+        f"障碍物{names_str}相对于{station_name}的垂直遮蔽角超出0.25°,"
+        f"任意15°方位范围内的最大累计水平遮蔽角为{max_15_display:.2f}°，"
+        f"{status_15}\"不大于1.5°\"的标准要求；"
+        f"任意45°方位范围内的最大累计水平遮蔽角为{max_45_display:.2f}°，"
+        f"{status_45}\"不大于3.0°\"的标准要求。"
     )
-    return ok, conclusion, max_15, max_45
 
 
 # 计算所有 RADAR/场监雷达台站的累计水平遮蔽角结论
@@ -232,8 +223,20 @@ def compute_cumulative_horizontal_mask_angles(
 
         unwrapped = _unwrap_angles(spans)
         total_span, cumulative, snapshots = _merge_overlapping(unwrapped)
-        is_compliant, conclusion, max_15, max_45 = _evaluate_threshold(
+        is_compliant, max_15_display, max_45_display = _evaluate_threshold(
             total_span, cumulative, snapshots,
+        )
+
+        obstacle_names: list[str] = []
+        seen_names: set[str] = set()
+        for s in spans:
+            if s.obstacle_name and s.obstacle_name not in seen_names:
+                seen_names.add(s.obstacle_name)
+                obstacle_names.append(s.obstacle_name)
+
+        conclusion = _build_conclusion(
+            max_15_display, max_45_display,
+            str(station_data["stationName"]), obstacle_names,
         )
 
         clusters: list[dict[str, float]] = []
@@ -244,21 +247,14 @@ def compute_cumulative_horizontal_mask_angles(
                 "cumulativeDegrees": round(snap.cumulative, 4),
             })
 
-        obstacle_names: list[str] = []
-        seen_names: set[str] = set()
-        for s in spans:
-            if s.obstacle_name and s.obstacle_name not in seen_names:
-                seen_names.add(s.obstacle_name)
-                obstacle_names.append(s.obstacle_name)
-
         results.append({
             "stationId": station_data["stationId"],
             "stationName": station_data["stationName"],
             "stationType": station_data["stationType"],
             "totalSpanDegrees": round(total_span, 2),
             "cumulativeHorizontalAngleDegrees": round(cumulative, 2),
-            "maxCumulativeIn15Deg": round(max_15, 2),
-            "maxCumulativeIn45Deg": round(max_45, 2),
+            "maxCumulativeIn15Deg": round(max_15_display, 2),
+            "maxCumulativeIn45Deg": round(max_45_display, 2),
             "isCompliant": "满足" if is_compliant else "不满足",
             "conclusion": conclusion,
             "clusters": clusters,
