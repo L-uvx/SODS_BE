@@ -183,7 +183,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                 "overHeight": over_height_display,
             }
             rows.append(row)
-            if not skip_overheight_tracking:
+            if not skip_overheight_tracking and not is_compliant:
                 key = obstacle_name
                 track_over = _float_or_none(metrics.get("overHeightMeters"))
                 obstacle_overheights.setdefault(key, []).append(ceil2(track_over or 0))
@@ -204,7 +204,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                         "overHeight": over_height_display,
                     }
                     rows.append(row)
-                    if not skip_overheight_tracking:
+                    if not skip_overheight_tracking and not is_compliant:
                         key = obstacle_name
                         track_over = _float_or_none(metrics.get("overHeightMeters"))
                         obstacle_overheights.setdefault(key, []).append(ceil2(track_over or 0))

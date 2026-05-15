@@ -744,6 +744,7 @@ class TestFlattenRuleResultsSpecialDisplay:
     # ---- T6: isMid not tracked for finalOverHeight ----
     def test_is_mid_not_tracked_in_final_over_height(self):
         normal = self._make_rule(
+            isCompliant=False,
             obstacleName="Obstacle X",
             stationName="Station Y",
             metrics={
@@ -783,7 +784,7 @@ class TestFlattenRuleResultsSpecialDisplay:
         assert row["complianceStatus"] == "满足"
         assert row["heightLimit"] == 80.0
         assert row["overHeight"] == 5.0
-        assert row["finalOverHeight"] == 5.0
+        assert row["finalOverHeight"] == 0
 
     # ---- T9: both standards None → emit one row with "/" ----
     def test_both_standards_none_emits_one_row(self):
@@ -803,6 +804,7 @@ class TestFlattenRuleResultsSpecialDisplay:
     # ---- T7: finalOverHeight aggregated by obstacle, not obstacle+station ----
     def test_final_over_height_agg_by_obstacle(self):
         r1 = self._make_rule(
+            isCompliant=False,
             obstacleName="Building A",
             stationName="Station X",
             metrics={
@@ -811,6 +813,7 @@ class TestFlattenRuleResultsSpecialDisplay:
             },
         )
         r2 = self._make_rule(
+            isCompliant=False,
             obstacleName="Building A",
             stationName="Station Y",
             metrics={
@@ -819,6 +822,7 @@ class TestFlattenRuleResultsSpecialDisplay:
             },
         )
         r3 = self._make_rule(
+            isCompliant=False,
             obstacleName="Building B",
             stationName="Station X",
             metrics={
