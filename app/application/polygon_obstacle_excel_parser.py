@@ -5,10 +5,10 @@ from zipfile import BadZipFile
 
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+from openpyxl.worksheet.worksheet import Worksheet
 
 
 EXPECTED_SHEET_NAME = "Sheet1"
-EXPECTED_HEADERS = ["障碍物名称", "经度", "纬度", "顶部高程"]
 _DMS_PATTERN = re.compile(r'^\s*(\d+)[°º]\s*(\d+)[\'′]\s*(\d+(?:\.\d+)?)["″]\s*$')
 
 
@@ -46,6 +46,16 @@ def _parse_dms(value: str, *, field_name: str, row_number: int) -> float:
     return degrees + minutes / 60 + seconds / 3600
 
 
+def _parse_dms_components(
+    degrees: float | None, minutes: float | None, seconds: float | None
+) -> float:
+    return (degrees or 0) + (minutes or 0) / 60 + (seconds or 0) / 3600
+
+
+def _detect_obstacle_template(worksheet: "Worksheet") -> str:
+    return "8col" if worksheet.max_column >= 8 else "4col"
+
+
 # 解析固定模板的障碍物 Excel 文件。
 def parse_polygon_obstacle_excel(excel_bytes: bytes) -> list[PolygonObstacle]:
     try:
@@ -59,22 +69,32 @@ def parse_polygon_obstacle_excel(excel_bytes: bytes) -> list[PolygonObstacle]:
         )
 
     worksheet = workbook[EXPECTED_SHEET_NAME]
-    headers = [worksheet.cell(row=1, column=index).value for index in range(1, 5)]
-    if headers != EXPECTED_HEADERS:
-        raise PolygonObstacleExcelParseError(
-            f"invalid header row: expected {EXPECTED_HEADERS}, got {headers}"
-        )
+    template = _detect_obstacle_template(worksheet)
 
     obstacles_by_name: dict[str, PolygonObstacle] = {}
     obstacles: list[PolygonObstacle] = []
 
     for row_number in range(2, worksheet.max_row + 1):
         name = worksheet.cell(row=row_number, column=1).value
-        longitude_text = worksheet.cell(row=row_number, column=2).value
-        latitude_text = worksheet.cell(row=row_number, column=3).value
-        top_elevation = worksheet.cell(row=row_number, column=4).value
 
-        row_values = [name, longitude_text, latitude_text, top_elevation]
+        if template == "8col":
+            lon_deg = worksheet.cell(row=row_number, column=2).value
+            lon_min = worksheet.cell(row=row_number, column=3).value
+            lon_sec = worksheet.cell(row=row_number, column=4).value
+            lat_deg = worksheet.cell(row=row_number, column=5).value
+            lat_min = worksheet.cell(row=row_number, column=6).value
+            lat_sec = worksheet.cell(row=row_number, column=7).value
+            top_elevation = worksheet.cell(row=row_number, column=8).value
+            longitude_text = ""
+            latitude_text = ""
+            row_values = [name, lon_deg, lon_min, lon_sec, lat_deg, lat_min, lat_sec, top_elevation]
+        else:
+            longitude_text = worksheet.cell(row=row_number, column=2).value
+            latitude_text = worksheet.cell(row=row_number, column=3).value
+            top_elevation = worksheet.cell(row=row_number, column=4).value
+            lon_deg = lon_min = lon_sec = lat_deg = lat_min = lat_sec = None
+            row_values = [name, longitude_text, latitude_text, top_elevation]
+
         if all(value in (None, "") for value in row_values):
             continue
 
@@ -82,10 +102,18 @@ def parse_polygon_obstacle_excel(excel_bytes: bytes) -> list[PolygonObstacle]:
             raise PolygonObstacleExcelParseError(
                 f"row {row_number} 障碍物名称 is required"
             )
-        if not isinstance(longitude_text, str) or not longitude_text.strip():
-            raise PolygonObstacleExcelParseError(f"row {row_number} 经度 is required")
-        if not isinstance(latitude_text, str) or not latitude_text.strip():
-            raise PolygonObstacleExcelParseError(f"row {row_number} 纬度 is required")
+
+        if template == "8col":
+            if lon_deg is None and lon_min is None and lon_sec is None:
+                raise PolygonObstacleExcelParseError(f"row {row_number} 经度 is required")
+            if lat_deg is None and lat_min is None and lat_sec is None:
+                raise PolygonObstacleExcelParseError(f"row {row_number} 纬度 is required")
+        else:
+            if not isinstance(longitude_text, str) or not longitude_text.strip():
+                raise PolygonObstacleExcelParseError(f"row {row_number} 经度 is required")
+            if not isinstance(latitude_text, str) or not latitude_text.strip():
+                raise PolygonObstacleExcelParseError(f"row {row_number} 纬度 is required")
+
         if top_elevation in (None, ""):
             raise PolygonObstacleExcelParseError(
                 f"row {row_number} 顶部高程 is required"
@@ -98,16 +126,25 @@ def parse_polygon_obstacle_excel(excel_bytes: bytes) -> list[PolygonObstacle]:
                 f"row {row_number} 顶部高程 must be numeric"
             ) from exc
 
+        if template == "8col":
+            longitude_decimal = _parse_dms_components(lon_deg, lon_min, lon_sec)
+            latitude_decimal = _parse_dms_components(lat_deg, lat_min, lat_sec)
+        else:
+            longitude_decimal = _parse_dms(
+                longitude_text.strip(), field_name="经度", row_number=row_number
+            )
+            latitude_decimal = _parse_dms(
+                latitude_text.strip(), field_name="纬度", row_number=row_number
+            )
+            longitude_text = longitude_text.strip()
+            latitude_text = latitude_text.strip()
+
         point = PolygonObstaclePoint(
             row_number=row_number,
-            longitude_text=longitude_text.strip(),
-            latitude_text=latitude_text.strip(),
-            longitude_decimal=_parse_dms(
-                longitude_text.strip(), field_name="经度", row_number=row_number
-            ),
-            latitude_decimal=_parse_dms(
-                latitude_text.strip(), field_name="纬度", row_number=row_number
-            ),
+            longitude_text=longitude_text,
+            latitude_text=latitude_text,
+            longitude_decimal=longitude_decimal,
+            latitude_decimal=latitude_decimal,
         )
 
         obstacle = obstacles_by_name.get(name)

@@ -79,3 +79,87 @@ def test_parse_point_obstacle_excel_raises_for_invalid_excel_file_bytes() -> Non
         parse_point_obstacle_excel(b"not-an-excel-file")
 
     assert str(exc_info.value) == "invalid excel file"
+
+
+def test_parse_point_obstacle_excel_8col_template() -> None:
+    workbook_bytes = _build_workbook_bytes(
+        [
+            ["障碍物名称", "经度_度", "经度_分", "经度_秒", "纬度_度", "纬度_分", "纬度_秒", "顶部高程"],
+            ["点障碍物1", 103, 58, 33.11, 30, 30, 24.77, 549.9],
+        ]
+    )
+
+    obstacles = parse_point_obstacle_excel(workbook_bytes)
+
+    assert len(obstacles) == 1
+    assert obstacles[0].name == "点障碍物1"
+    assert obstacles[0].longitude_text == ""
+    assert obstacles[0].latitude_text == ""
+    assert round(obstacles[0].longitude_decimal, 6) == 103.975864
+    assert round(obstacles[0].latitude_decimal, 6) == 30.506881
+    assert obstacles[0].top_elevation == 549.9
+
+
+def test_parse_point_obstacle_excel_4col_template_backward_compat() -> None:
+    workbook_bytes = _build_workbook_bytes(
+        [
+            ["障碍物名称", "经度", "纬度", "顶部高程"],
+            ["点障碍物1", "103°58'33.11\"", "030°30'24.77\"", 549.9],
+        ]
+    )
+
+    obstacles = parse_point_obstacle_excel(workbook_bytes)
+
+    assert len(obstacles) == 1
+    assert obstacles[0].name == "点障碍物1"
+    assert obstacles[0].longitude_text == "103°58'33.11\""
+    assert obstacles[0].latitude_text == "030°30'24.77\""
+    assert round(obstacles[0].longitude_decimal, 6) == 103.975864
+    assert round(obstacles[0].latitude_decimal, 6) == 30.506881
+
+
+def test_parse_point_obstacle_excel_8col_deduplication() -> None:
+    workbook_bytes = _build_workbook_bytes(
+        [
+            ["障碍物名称", "经度_度", "经度_分", "经度_秒", "纬度_度", "纬度_分", "纬度_秒", "顶部高程"],
+            ["点障碍物1", 103, 58, 33.11, 30, 30, 24.77, 549.9],
+            ["点障碍物1", 103, 58, 33.11, 30, 30, 24.77, 549.9],
+            ["点障碍物2", 103, 58, 41.20, 30, 30, 20.34, 550.1],
+        ]
+    )
+
+    obstacles = parse_point_obstacle_excel(workbook_bytes)
+
+    assert len(obstacles) == 2
+
+
+def test_parse_point_obstacle_excel_8col_with_none_components() -> None:
+    workbook_bytes = _build_workbook_bytes(
+        [
+            ["障碍物名称", "经度_度", "经度_分", "经度_秒", "纬度_度", "纬度_分", "纬度_秒", "顶部高程"],
+            ["点障碍物1", 103, None, None, 30, None, None, 549.9],
+        ]
+    )
+
+    obstacles = parse_point_obstacle_excel(workbook_bytes)
+
+    assert len(obstacles) == 1
+    assert round(obstacles[0].longitude_decimal, 1) == 103.0
+    assert round(obstacles[0].latitude_decimal, 1) == 30.0
+    assert obstacles[0].longitude_text == ""
+    assert obstacles[0].latitude_text == ""
+
+
+def test_parse_point_obstacle_excel_no_header_validation() -> None:
+    workbook_bytes = _build_workbook_bytes(
+        [
+            ["名称", "Longitude", "Latitude", "Elevation"],
+            ["点障碍物1", "103°58'33.11\"", "030°30'24.77\"", 549.9],
+        ]
+    )
+
+    obstacles = parse_point_obstacle_excel(workbook_bytes)
+
+    assert len(obstacles) == 1
+    assert obstacles[0].name == "点障碍物1"
+    assert round(obstacles[0].longitude_decimal, 6) == 103.975864

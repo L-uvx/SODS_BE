@@ -766,6 +766,44 @@ class TestFlattenRuleResultsSpecialDisplay:
         for row in rows:
             assert row["finalOverHeight"] == 10.0
 
+    # ---- T7: finalOverHeight aggregated by obstacle, not obstacle+station ----
+    def test_final_over_height_agg_by_obstacle(self):
+        r1 = self._make_rule(
+            obstacleName="Building A",
+            stationName="Station X",
+            metrics={
+                "allowedHeightMeters": 50.0,
+                "overHeightMeters": 5.0,
+            },
+        )
+        r2 = self._make_rule(
+            obstacleName="Building A",
+            stationName="Station Y",
+            metrics={
+                "allowedHeightMeters": 999.0,
+                "overHeightMeters": 15.0,
+            },
+        )
+        r3 = self._make_rule(
+            obstacleName="Building B",
+            stationName="Station X",
+            metrics={
+                "allowedHeightMeters": 100.0,
+                "overHeightMeters": 3.0,
+            },
+        )
+        rows = _flatten_rule_results([r1, r2, r3])
+        for row in rows:
+            if row["obstacleName"] == "Building A":
+                assert row["finalOverHeight"] == 15.0, (
+                    f"Expected 15.0 for Building A, got {row['finalOverHeight']} "
+                    f"at station {row['stationName']}"
+                )
+            elif row["obstacleName"] == "Building B":
+                assert row["finalOverHeight"] == 3.0, (
+                    f"Expected 3.0 for Building B, got {row['finalOverHeight']}"
+                )
+
 
 class TestBuildSummaryRadarIntegration:
     """T7-T16: _build_summary skip logic and radar conclusion integration."""
