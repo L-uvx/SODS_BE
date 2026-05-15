@@ -36,6 +36,33 @@ def _create_test_session() -> Generator[Session, None, None]:
     )
 
     session = testing_session_local()
+    from sqlalchemy import text as _sql_text
+    session.execute(_sql_text("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR(255) NOT NULL,
+            project_type VARCHAR(100),
+            status VARCHAR(50),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+        )
+    """))
+    session.execute(_sql_text("""
+        CREATE TABLE IF NOT EXISTS obstacles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL REFERENCES projects(id),
+            name VARCHAR(255) NOT NULL,
+            obstacle_type VARCHAR(100),
+            source_batch_id VARCHAR(100),
+            source_row_no INTEGER,
+            top_elevation NUMERIC(10, 2),
+            raw_payload JSON,
+            geom TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+        )
+    """))
+    session.commit()
     try:
         yield session
     finally:
@@ -93,6 +120,35 @@ def _create_test_client() -> Generator[TestClient, None, None]:
             session.close()
 
     app.dependency_overrides = {get_db_session: _override_session}
+
+    with next(iter(app.dependency_overrides[get_db_session]())) as init_session:
+        from sqlalchemy import text as _sql_text
+        init_session.execute(_sql_text("""
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(255) NOT NULL,
+                project_type VARCHAR(100),
+                status VARCHAR(50),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+            )
+        """))
+        init_session.execute(_sql_text("""
+            CREATE TABLE IF NOT EXISTS obstacles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                name VARCHAR(255) NOT NULL,
+                obstacle_type VARCHAR(100),
+                source_batch_id VARCHAR(100),
+                source_row_no INTEGER,
+                top_elevation NUMERIC(10, 2),
+                raw_payload JSON,
+                geom TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+            )
+        """))
+        init_session.commit()
 
     with TestClient(app) as client:
         yield client
@@ -1860,3 +1916,172 @@ def test_repository_update_rejects_unknown_field_name() -> None:
 
         with pytest.raises(ValueError, match="unknown field: not_a_real_field"):
             repository.update_airport(airport, not_a_real_field="boom")
+
+
+def test_obstacle_list_response_uses_pagination_envelope() -> None:
+    with _create_test_client() as client:
+        response = client.get("/data-management/obstacles")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "pageSize": 20,
+    }
+
+
+def test_obstacle_list_response_serializes_page_size_as_camel_case() -> None:
+    from app.schemas.data_management import ObstacleListResponse
+
+    response = ObstacleListResponse(items=[], total=0, page=1, pageSize=20)
+
+    assert response.model_dump(by_alias=True) == {
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "pageSize": 20,
+    }
+
+
+def test_obstacle_list_item_response_includes_required_fields() -> None:
+    from datetime import datetime, UTC
+    from app.schemas.data_management import ObstacleListItemResponse
+
+    timestamp = datetime(2026, 5, 15, 12, 0, tzinfo=UTC)
+    response = ObstacleListItemResponse(
+        id=1,
+        projectId=1,
+        projectName="Test Project",
+        name="Obstacle A",
+        obstacleType="建筑物/构建物",
+        topElevation=500.0,
+        geometry={"type": "Point", "coordinates": [104.1, 30.6]},
+        createdAt=timestamp,
+        updatedAt=timestamp,
+    )
+
+    assert response.model_dump(by_alias=True) == {
+        "id": 1,
+        "projectId": 1,
+        "projectName": "Test Project",
+        "name": "Obstacle A",
+        "obstacleType": "建筑物/构建物",
+        "topElevation": 500.0,
+        "sourceBatchId": None,
+        "sourceRowNo": None,
+        "geometry": {"type": "Point", "coordinates": [104.1, 30.6]},
+        "rawPayload": None,
+        "createdAt": timestamp,
+        "updatedAt": timestamp,
+    }
+
+
+def _seed_project(name: str) -> None:
+    with next(iter(app.dependency_overrides[get_db_session]())) as session:
+        from app.models.project import Project
+        session.add(Project(name=name))
+        session.commit()
+
+
+def _seed_obstacle(project_id: int, name: str, obstacle_type: str = "building_general", geom_wkt: str | None = None) -> None:
+    with next(iter(app.dependency_overrides[get_db_session]())) as session:
+        from sqlalchemy import text
+        import json
+        session.execute(
+            text("""
+                INSERT INTO obstacles (project_id, name, obstacle_type, geom, raw_payload)
+                VALUES (:project_id, :name, :obstacle_type, :geom, :raw_payload)
+            """),
+            {
+                "project_id": project_id,
+                "name": name,
+                "obstacle_type": obstacle_type,
+                "geom": geom_wkt,
+                "raw_payload": json.dumps({"geometry": {"type": "Point", "coordinates": [104.1, 30.6]}}) if geom_wkt else None,
+            },
+        )
+        session.commit()
+
+
+def test_get_obstacle_detail_returns_obstacle_payload() -> None:
+    with _create_test_client() as client:
+        _seed_project(name="Test Project")
+        _seed_obstacle(project_id=1, name="Obstacle A", geom_wkt="POINT(104.1 30.6)")
+        response = client.get("/data-management/obstacles/1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == 1
+    assert payload["name"] == "Obstacle A"
+    assert payload["obstacleType"] == "建筑物/构建物"
+    assert payload["projectId"] == 1
+    assert payload["geometry"] == {"type": "Point", "coordinates": [104.1, 30.6]}
+
+
+def test_delete_obstacle_returns_no_content() -> None:
+    with _create_test_client() as client:
+        _seed_project(name="Test Project")
+        _seed_obstacle(project_id=1, name="Obstacle A")
+        response = client.delete("/data-management/obstacles/1")
+
+    assert response.status_code == 204
+
+
+def test_get_obstacle_geometry_null_when_no_geom() -> None:
+    with _create_test_client() as client:
+        _seed_project(name="Test Project")
+        _seed_obstacle(project_id=1, name="Obstacle B", geom_wkt=None)
+        response = client.get("/data-management/obstacles/1")
+
+    assert response.status_code == 200
+    assert response.json()["geometry"] is None
+
+
+def test_obstacle_delete_not_found_returns_404() -> None:
+    with _create_test_client() as client:
+        response = client.delete("/data-management/obstacles/999")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": {
+            "code": "obstacle_not_found",
+            "message": "obstacle not found",
+        }
+    }
+
+
+def test_obstacle_detail_not_found_returns_404() -> None:
+    with _create_test_client() as client:
+        response = client.get("/data-management/obstacles/999")
+
+    assert response.status_code == 404
+
+
+def test_obstacle_list_filters_by_project_id() -> None:
+    with _create_test_client() as client:
+        _seed_project(name="Project 1")
+        _seed_project(name="Project 2")
+        _seed_obstacle(project_id=1, name="Obstacle A1")
+        _seed_obstacle(project_id=1, name="Obstacle A2")
+        _seed_obstacle(project_id=2, name="Obstacle B1")
+        response = client.get("/data-management/obstacles", params={"projectId": 1})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 2
+    names = [item["name"] for item in payload["items"]]
+    assert names == ["Obstacle A1", "Obstacle A2"]
+
+
+def test_obstacle_list_filters_by_chinese_type() -> None:
+    with _create_test_client() as client:
+        _seed_project(name="Test Project")
+        _seed_obstacle(project_id=1, name="Obstacle A", obstacle_type="building_general")
+        _seed_obstacle(project_id=1, name="Obstacle B", obstacle_type="building_hangar")
+        response = client.get("/data-management/obstacles", params={"obstacleType": "机库"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["name"] == "Obstacle B"

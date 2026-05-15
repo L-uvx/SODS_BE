@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -343,3 +344,33 @@ class AirportImportBatchResponse(DataManagementBaseModel):
     total_files: int = Field(alias="totalFiles")
     imported_count: int = Field(alias="importedCount")
     skipped_count: int = Field(alias="skippedCount")
+
+
+class ObstacleGeometryResponse(DataManagementBaseModel):
+    type: str
+    coordinates: Any
+
+
+class ObstacleResponse(DataManagementBaseModel):
+    id: int
+    project_id: int = Field(alias="projectId")
+    name: str
+    obstacle_type: str | None = Field(default=None, alias="obstacleType")
+    top_elevation: float | None = Field(default=None, alias="topElevation")
+    source_batch_id: str | None = Field(default=None, alias="sourceBatchId")
+    source_row_no: int | None = Field(default=None, alias="sourceRowNo")
+    geometry: ObstacleGeometryResponse | None = None
+    raw_payload: dict[str, Any] | None = Field(default=None, alias="rawPayload")
+
+
+class ObstacleListItemResponse(ObstacleResponse):
+    project_name: str = Field(alias="projectName")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+
+
+class ObstacleListResponse(DataManagementBaseModel):
+    items: list[ObstacleListItemResponse] = Field(default_factory=list)
+    total: int
+    page: int
+    page_size: int = Field(alias="pageSize")

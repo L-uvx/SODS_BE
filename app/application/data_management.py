@@ -10,6 +10,9 @@ from app.schemas.data_management import (
     AirportResponse,
     AirportUpsertRequest,
     AirportWriteResponse,
+    ObstacleListItemResponse,
+    ObstacleListResponse,
+    ObstacleResponse,
     OptionItemResponse,
     RunwayListItemResponse,
     RunwayListResponse,
@@ -392,6 +395,42 @@ class DataManagementService:
         runways = self._repository.list_runway_options_by_airport_id(airport_id)
         return [OptionItemResponse.model_validate(runway) for runway in runways]
 
+    # 查询障碍物列表。
+    def list_obstacles(
+        self,
+        *,
+        project_id: int | None,
+        keyword: str | None,
+        obstacle_type: str | None,
+        page: int,
+        page_size: int,
+    ) -> ObstacleListResponse:
+        offset = (page - 1) * page_size
+        obstacles, total = self._repository.list_obstacles(
+            offset=offset,
+            limit=page_size,
+            project_id=project_id,
+            keyword=keyword,
+            obstacle_type=obstacle_type,
+        )
+        items = [self._build_obstacle_list_item(obstacle) for obstacle in obstacles]
+        return ObstacleListResponse(items=items, total=total, page=page, pageSize=page_size)
+
+    # 查询障碍物详情。
+    def get_obstacle(self, obstacle_id: int) -> ObstacleResponse:
+        obstacle = self._repository.get_obstacle(obstacle_id)
+        if obstacle is None:
+            raise DataManagementNotFoundError("obstacle_not_found", "obstacle not found")
+        return self._build_obstacle_response(obstacle)
+
+    # 删除障碍物。
+    def delete_obstacle(self, obstacle_id: int) -> None:
+        obstacle = self._repository.get_obstacle(obstacle_id)
+        if obstacle is None:
+            raise DataManagementNotFoundError("obstacle_not_found", "obstacle not found")
+        self._repository.delete_obstacle(obstacle)
+        self._session.commit()
+
     # 构造机场列表项。
     def _build_airport_list_item(self, airport) -> AirportListItemResponse:
         return AirportListItemResponse(
@@ -576,3 +615,92 @@ class DataManagementService:
                 characters.append("_")
             characters.append(character.lower())
         return "".join(characters)
+
+    # 将障碍物类型英文 key 转为中文标签。
+    def _obstacle_type_to_chinese(self, obstacle_type: str | None) -> str | None:
+        if obstacle_type is None:
+            return None
+        from app.analysis.obstacle_categories import GLOBAL_OBSTACLE_CATEGORY_MAPPING
+        for chinese_label, english_key in GLOBAL_OBSTACLE_CATEGORY_MAPPING.items():
+            if english_key == obstacle_type:
+                return chinese_label
+        return obstacle_type
+
+    # 从 geom 列解码为 GeoJSON dict。
+    def _decode_obstacle_geometry(self, obstacle) -> dict | None:
+        geom_value = self._get_obstacle_field(obstacle, "geom")
+        if geom_value is None:
+            return None
+        try:
+            from shapely import wkb
+            from shapely.geometry import mapping
+            shape = wkb.loads(bytes(geom_value.data))
+            return mapping(shape)
+        except (AttributeError, TypeError):
+            try:
+                from shapely import wkt
+                from shapely.geometry import mapping
+                shape = wkt.loads(geom_value)
+                return mapping(shape)
+            except Exception:
+                return None
+        except Exception:
+            return None
+
+    # 获取障碍物字段（兼容 ORM 对象与 dict）。
+    @staticmethod
+    def _get_obstacle_field(obstacle, field_name, default=None):
+        if isinstance(obstacle, dict):
+            return obstacle.get(field_name, default)
+        return getattr(obstacle, field_name, default)
+
+    # 构造障碍物详情响应。
+    def _build_obstacle_response(self, obstacle) -> ObstacleResponse:
+        import json
+        geometry = self._decode_obstacle_geometry(obstacle)
+        top_elev = self._get_obstacle_field(obstacle, "top_elevation")
+        raw_payload = self._get_obstacle_field(obstacle, "raw_payload")
+        if isinstance(raw_payload, str):
+            try:
+                raw_payload = json.loads(raw_payload)
+            except (json.JSONDecodeError, TypeError):
+                raw_payload = None
+        return ObstacleResponse(
+            id=self._get_obstacle_field(obstacle, "id"),
+            projectId=self._get_obstacle_field(obstacle, "project_id"),
+            name=self._get_obstacle_field(obstacle, "name"),
+            obstacleType=self._obstacle_type_to_chinese(self._get_obstacle_field(obstacle, "obstacle_type")),
+            topElevation=float(top_elev) if top_elev is not None else None,
+            sourceBatchId=self._get_obstacle_field(obstacle, "source_batch_id"),
+            sourceRowNo=self._get_obstacle_field(obstacle, "source_row_no"),
+            geometry=geometry,
+            rawPayload=raw_payload,
+        )
+
+    # 构造障碍物列表项。
+    def _build_obstacle_list_item(self, obstacle) -> ObstacleListItemResponse:
+        import json
+        geometry = self._decode_obstacle_geometry(obstacle)
+        project_id = self._get_obstacle_field(obstacle, "project_id")
+        project = self._repository.get_project(project_id)
+        top_elev = self._get_obstacle_field(obstacle, "top_elevation")
+        raw_payload = self._get_obstacle_field(obstacle, "raw_payload")
+        if isinstance(raw_payload, str):
+            try:
+                raw_payload = json.loads(raw_payload)
+            except (json.JSONDecodeError, TypeError):
+                raw_payload = None
+        return ObstacleListItemResponse(
+            id=self._get_obstacle_field(obstacle, "id"),
+            projectId=project_id,
+            projectName=project.name if project is not None else "",
+            name=self._get_obstacle_field(obstacle, "name"),
+            obstacleType=self._obstacle_type_to_chinese(self._get_obstacle_field(obstacle, "obstacle_type")),
+            topElevation=float(top_elev) if top_elev is not None else None,
+            sourceBatchId=self._get_obstacle_field(obstacle, "source_batch_id"),
+            sourceRowNo=self._get_obstacle_field(obstacle, "source_row_no"),
+            geometry=geometry,
+            rawPayload=raw_payload,
+            createdAt=self._get_obstacle_field(obstacle, "created_at"),
+            updatedAt=self._get_obstacle_field(obstacle, "updated_at"),
+        )

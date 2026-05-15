@@ -17,6 +17,8 @@ from app.schemas.data_management import (
     AirportUpsertRequest,
     AirportWriteResponse,
     DomainErrorResponse,
+    ObstacleListResponse,
+    ObstacleResponse,
     OptionItemResponse,
     RunwayListResponse,
     RunwayResponse,
@@ -367,3 +369,54 @@ def list_airport_runway_options(
         return service.list_runway_options_by_airport_id(airport_id)
     except DataManagementNotFoundError as error:
         _raise_api_error(error)
+
+
+# 查询障碍物列表。
+@router.get("/obstacles", response_model=ObstacleListResponse)
+def list_obstacles(
+    project_id: int | None = Query(default=None, alias="projectId"),
+    keyword: str | None = None,
+    obstacle_type: str | None = Query(default=None, alias="obstacleType"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, alias="pageSize", ge=1),
+    session: Session = Depends(get_db_session),
+) -> ObstacleListResponse:
+    service = DataManagementService(session)
+    return service.list_obstacles(
+        project_id=project_id,
+        keyword=keyword,
+        obstacle_type=obstacle_type,
+        page=page,
+        page_size=page_size,
+    )
+
+
+# 查询障碍物详情。
+@router.get("/obstacles/{obstacle_id}", response_model=ObstacleResponse, responses=NOT_FOUND_RESPONSE)
+def get_obstacle(
+    obstacle_id: int,
+    session: Session = Depends(get_db_session),
+) -> ObstacleResponse:
+    service = DataManagementService(session)
+    try:
+        return service.get_obstacle(obstacle_id)
+    except DataManagementNotFoundError as error:
+        _raise_api_error(error)
+
+
+# 删除障碍物。
+@router.delete(
+    "/obstacles/{obstacle_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=NOT_FOUND_RESPONSE,
+)
+def delete_obstacle(
+    obstacle_id: int,
+    session: Session = Depends(get_db_session),
+) -> Response:
+    service = DataManagementService(session)
+    try:
+        service.delete_obstacle(obstacle_id)
+    except DataManagementNotFoundError as error:
+        _raise_api_error(error)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

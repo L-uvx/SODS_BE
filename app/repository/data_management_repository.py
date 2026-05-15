@@ -2,10 +2,12 @@ from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.airport import Airport
+from app.models.obstacle import Obstacle
+from app.models.project import Project
 from app.models.runway import Runway
 from app.models.station import Station
 
@@ -253,6 +255,160 @@ class DataManagementRepository:
             .order_by(Station.station_type)
         )
         return list(self._session.scalars(statement).all())
+
+    # 根据编号获取项目。
+    def get_project(self, project_id: int) -> Project | None:
+        return self._session.get(Project, project_id)
+
+    # 根据编号获取障碍物。
+    def get_obstacle(self, obstacle_id: int) -> Obstacle | None:
+        if (
+            self._session.bind is not None
+            and self._session.bind.dialect.name == "sqlite"
+        ):
+            row = (
+                self._session.execute(
+                    text(
+                        "SELECT id, project_id, name, obstacle_type, source_batch_id, "
+                        "source_row_no, top_elevation, geom, raw_payload, created_at, updated_at "
+                        "FROM obstacles WHERE id = :id"
+                    ),
+                    {"id": obstacle_id},
+                )
+                .mappings()
+                .first()
+            )
+            if row is None:
+                return None
+            return dict(row)
+        return self._session.get(Obstacle, obstacle_id)
+
+    # 分页查询障碍物列表。
+    def list_obstacles(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        project_id: int | None = None,
+        keyword: str | None = None,
+        obstacle_type: str | None = None,
+    ) -> tuple[list[dict], int] | tuple[list[Obstacle], int]:
+        resolved_type = self._resolve_obstacle_type(obstacle_type)
+        if (
+            self._session.bind is not None
+            and self._session.bind.dialect.name == "sqlite"
+        ):
+            return self._list_obstacles_sqlite(
+                offset=offset,
+                limit=limit,
+                project_id=project_id,
+                keyword=keyword,
+                obstacle_type=resolved_type,
+            )
+        return self._list_obstacles_orm(
+            offset=offset,
+            limit=limit,
+            project_id=project_id,
+            keyword=keyword,
+            obstacle_type=resolved_type,
+        )
+
+    # 将中文障碍物类型标签转为英文 key。
+    @staticmethod
+    def _resolve_obstacle_type(obstacle_type: str | None) -> str | None:
+        if obstacle_type is None:
+            return None
+        from app.analysis.obstacle_categories import GLOBAL_OBSTACLE_CATEGORY_MAPPING
+        if obstacle_type in GLOBAL_OBSTACLE_CATEGORY_MAPPING:
+            return GLOBAL_OBSTACLE_CATEGORY_MAPPING[obstacle_type]
+        return obstacle_type
+
+    # 在 SQLite 环境下列查询障碍物。
+    def _list_obstacles_sqlite(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        project_id: int | None,
+        keyword: str | None,
+        obstacle_type: str | None,
+    ) -> tuple[list[dict], int]:
+        where_parts: list[str] = []
+        params: dict[str, object] = {"limit": limit, "offset": offset}
+        if project_id is not None:
+            where_parts.append("obstacles.project_id = :project_id")
+            params["project_id"] = project_id
+        if keyword:
+            where_parts.append("obstacles.name LIKE :keyword")
+            params["keyword"] = f"%{keyword}%"
+        if obstacle_type:
+            where_parts.append("obstacles.obstacle_type = :obstacle_type")
+            params["obstacle_type"] = obstacle_type
+        where_clause = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+
+        count_result = self._session.execute(
+            text(f"SELECT COUNT(*) AS cnt FROM obstacles {where_clause}"),
+            {k: v for k, v in params.items() if k not in ("limit", "offset")},
+        )
+        total = int(count_result.scalar() or 0)
+
+        rows = (
+            self._session.execute(
+                text(
+                    "SELECT id, project_id, name, obstacle_type, source_batch_id, "
+                    "source_row_no, top_elevation, geom, raw_payload, created_at, updated_at "
+                    f"FROM obstacles {where_clause} ORDER BY id LIMIT :limit OFFSET :offset"
+                ),
+                params,
+            )
+            .mappings()
+            .all()
+        )
+        return [dict(row) for row in rows], total
+
+    # 使用 ORM 查询障碍物列表。
+    def _list_obstacles_orm(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        project_id: int | None,
+        keyword: str | None,
+        obstacle_type: str | None,
+    ) -> tuple[list[Obstacle], int]:
+        statement = select(Obstacle)
+        if project_id is not None:
+            statement = statement.where(Obstacle.project_id == project_id)
+        if keyword:
+            statement = statement.where(Obstacle.name.contains(keyword))
+        if obstacle_type:
+            statement = statement.where(Obstacle.obstacle_type == obstacle_type)
+        statement = statement.order_by(Obstacle.id).offset(offset).limit(limit)
+
+        count_statement = select(func.count()).select_from(Obstacle)
+        if project_id is not None:
+            count_statement = count_statement.where(Obstacle.project_id == project_id)
+        if keyword:
+            count_statement = count_statement.where(Obstacle.name.contains(keyword))
+        if obstacle_type:
+            count_statement = count_statement.where(Obstacle.obstacle_type == obstacle_type)
+
+        total = int(self._session.scalar(count_statement) or 0)
+        return list(self._session.scalars(statement).all()), total
+
+    # 删除障碍物记录。
+    def delete_obstacle(self, obstacle: Obstacle | dict) -> None:
+        if (
+            self._session.bind is not None
+            and self._session.bind.dialect.name == "sqlite"
+        ):
+            obstacle_id = obstacle if isinstance(obstacle, int) else obstacle["id"]
+            self._session.execute(
+                text("DELETE FROM obstacles WHERE id = :id"),
+                {"id": obstacle_id},
+            )
+            return
+        self._session.delete(obstacle)
 
     # 统一统计模型数量。
     def _count(self, model: type[Airport] | type[Runway] | type[Station]) -> int:
