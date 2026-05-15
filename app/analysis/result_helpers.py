@@ -4,6 +4,14 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 
 
+def ceil2(value: float) -> float:
+    return math.ceil(value * 100) / 100
+
+
+def floor2(value: float) -> float:
+    return math.floor(value * 100) / 100
+
+
 def _normalize_azimuth_degrees(angle: float) -> float:
     return angle % 360.0
 

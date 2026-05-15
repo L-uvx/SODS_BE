@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from shapely.geometry import Point
 
 from app.analysis.result_helpers import (
+    ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
 )
@@ -44,11 +45,11 @@ class BoundLocBuildingRestrictionZoneRegion2Rule(BoundObstacleRule):
 
         over_height_meters = max(0.0, top_elevation_meters - allowed_height_meters)
         if entered_protection_zone:
-            limit = round(allowed_height_meters, 2)
+            limit = ceil2(allowed_height_meters)
             if is_compliant:
                 message = f"位于建筑物限制区内,此处限制顶部高程为{limit}米，未超出标准要求"
             else:
-                over = round(over_height_meters, 2)
+                over = ceil2(over_height_meters)
                 message = f"位于建筑物限制区内,此处限制顶部高程为{limit}米,超出标准要求{over}米"
         else:
             message = "不位于建筑物限制区内"
@@ -66,14 +67,14 @@ class BoundLocBuildingRestrictionZoneRegion2Rule(BoundObstacleRule):
 
         gb_name, mh_name = _resolve_loc_standard_names("loc_building_restriction_zone")
         joined_names = _join_loc_standard_names(gb_name, mh_name)
-        limit = round(allowed_height_meters - base_height_meters, 2)
+        limit = ceil2(allowed_height_meters - base_height_meters)
         if is_compliant:
             details = (
                 f"满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定。"
             )
         else:
-            actual = round(top_elevation_meters - base_height_meters, 2)
-            over = round(top_elevation_meters - allowed_height_meters, 2)
+            actual = ceil2(top_elevation_meters - base_height_meters)
+            over = ceil2(top_elevation_meters - allowed_height_meters)
             details = (
                 f"不满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定，"
                 f"实际高度{actual}m，超出{over}m。"

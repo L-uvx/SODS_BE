@@ -4,6 +4,7 @@ from shapely.geometry import Point
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.result_helpers import (
+    ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
 )
@@ -57,7 +58,7 @@ class BoundVhfCircleRule(BoundObstacleRule):
             if not is_compliant
             else 0.0
         )
-        actual_dist = round(actual_distance_meters, 2)
+        actual_dist = ceil2(actual_distance_meters)
         min_dist = self.minimum_distance_meters
         details_text = (
             f"不满足最小防护间距要求，实际距离{actual_dist}m，所需最小间距{min_dist}m。"

@@ -7,6 +7,7 @@ from shapely.geometry.base import BaseGeometry
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.result_helpers import (
+    ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
 )
@@ -76,7 +77,7 @@ class BoundNdbMinimumDistanceRule(BoundObstacleRule):
         if is_compliant:
             details = f"满足{joined_names}中'障碍物与台站的允许间距{req_dist}m'的规定。"
         else:
-            actual_dist = round(actual_distance_meters, 2)
+            actual_dist = ceil2(actual_distance_meters)
             details = f"不满足{joined_names}中'障碍物与台站的允许间距{req_dist}m'的规定，实际距离{actual_dist}m。"
 
         return AnalysisRuleResult(

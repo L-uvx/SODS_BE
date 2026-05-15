@@ -4,6 +4,7 @@ from shapely.geometry import Point
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.result_helpers import (
+    ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
@@ -91,7 +92,7 @@ class BoundRadarCircleRule(BoundObstacleRule):
             is_compliant=is_compliant,
             is_filter_limit=True,
             message=(
-                f"距离台站{round(actual_distance_meters, 2)}米"
+                f"距离台站{ceil2(actual_distance_meters)}米"
             ),
             metrics=metrics,
             standards_rule_code=self.standards_rule_code,

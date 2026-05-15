@@ -1020,14 +1020,14 @@ class TestBuildSummaryRadarIntegration:
 
 class TestPrecisionHelpers:
     def test_floor2_rounds_down(self):
-        from app.report.export_payload_builder import _floor2
+        from app.analysis.result_helpers import floor2 as _floor2
         assert _floor2(1.234) == 1.23
         assert _floor2(1.239) == 1.23
         assert _floor2(1.200) == 1.20
         assert _floor2(0.0) == 0.0
 
     def test_ceil2_rounds_up(self):
-        from app.report.export_payload_builder import _ceil2
+        from app.analysis.result_helpers import ceil2 as _ceil2
         assert _ceil2(1.231) == 1.24
         assert _ceil2(1.230) == 1.23
         assert _ceil2(1.200) == 1.20

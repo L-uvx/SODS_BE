@@ -6,6 +6,7 @@ from shapely.geometry import Point
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.result_helpers import (
+    ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
@@ -106,7 +107,7 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
         top_elevation = float(raw_top if raw_top is not None else 0.0)
 
         is_compliant = not entered or top_elevation <= allowed_h
-        limit = round(allowed_h, 2)
+        limit = ceil2(allowed_h)
         if not entered:
             message = "不在VOR 100米阴影区范围内"
         elif is_compliant:
@@ -128,9 +129,9 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
         if not entered:
             details = "障碍物未进入反射网阴影区。"
         elif is_compliant:
-            details = f"满足规定要求，障碍物高度{top_elevation}m，允许高度{round(allowed_h,2)}m。"
+            details = f"满足规定要求，障碍物高度{top_elevation}m，允许高度{ceil2(allowed_h)}m。"
         else:
-            details = f"不满足规定要求，障碍物高度{top_elevation}m，允许高度{round(allowed_h,2)}m，超出{round(over,2)}m。"
+            details = f"不满足规定要求，障碍物高度{top_elevation}m，允许高度{ceil2(allowed_h)}m，超出{ceil2(over)}m。"
 
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,

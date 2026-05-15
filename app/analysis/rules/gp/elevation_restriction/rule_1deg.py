@@ -6,6 +6,7 @@ from shapely.geometry.base import BaseGeometry
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.result_helpers import (
+    ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
@@ -61,7 +62,7 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
             )
             is_compliant = top_elevation_meters <= limit_height_meters
             if obstacle_metrics.effective_forward_distance_meters <= 0:
-                message = f"位于下滑信标天线正前方A区边缘上，限高为A区边缘地势高{round(base_height_meters, 2)}"
+                message = f"位于下滑信标天线正前方A区边缘上，限高为A区边缘地势高{ceil2(base_height_meters)}"
             else:
                 vertical_angle_deg = math.degrees(
                     math.atan(
@@ -72,9 +73,9 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
                 message = f"位于下滑信标天线前方信号覆盖范围内，遮蔽角为{round(vertical_angle_deg, 2)}°"
             over = compute_over_distance_meters(top_elevation_meters, limit_height_meters)
             if is_compliant:
-                details = f"满足规定要求，障碍物高度{top_elevation_meters}m，允许高度{round(limit_height_meters,2)}m。"
+                details = f"满足规定要求，障碍物高度{top_elevation_meters}m，允许高度{ceil2(limit_height_meters)}m。"
             else:
-                details = f"不满足规定要求，障碍物高度{top_elevation_meters}m，允许高度{round(limit_height_meters,2)}m，超出{round(over,2)}m。"
+                details = f"不满足规定要求，障碍物高度{top_elevation_meters}m，允许高度{ceil2(limit_height_meters)}m，超出{ceil2(over)}m。"
 
         return self.build_result(
             obstacle=obstacle,

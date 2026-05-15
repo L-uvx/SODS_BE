@@ -1,16 +1,9 @@
-import math
 from typing import Any
 
+from app.analysis.result_helpers import ceil2, floor2
 from app.analysis.rules.runway.config import ZONE_CODE as EM_ZONE_CODE
 from app.models.analysis_task import AnalysisTask
 from app.analysis.rules.radar.cumulative_analysis import compute_cumulative_horizontal_mask_angles
-
-def _floor2(value: float) -> float:
-    return math.floor(value * 100) / 100
-
-
-def _ceil2(value: float) -> float:
-    return math.ceil(value * 100) / 100
 
 
 _STANDARD_NAME_BY_PREFIX: list[tuple[str, str]] = [
@@ -107,7 +100,7 @@ def _normalize_standards(value: object) -> list[dict[str, Any]]:
 
 def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
     rows: list[dict] = []
-    obstacle_station_overheights: dict[tuple[str, str], list[float]] = {}
+    obstacle_overheights: dict[str, list[float]] = {}
 
     for r in rule_results:
         # Priority 1: isFilterIntersect skip
@@ -153,24 +146,24 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                 "第1部分:导航》标准要求确定是否开展计算机仿真工作"
             )
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
-            height_limit_display = _floor2(height_val or 0)
+            height_limit_display = floor2(height_val or 0)
             over = _float_or_none(metrics.get("overHeightMeters"))
-            over_height_display = _ceil2(over or 0)
+            over_height_display = ceil2(over or 0)
         elif is_radar_16km_special:
             compliance_status = (
                 "位于台站16km范围内，根据MHT4003.2-2014《民用航空通信导航监视台(站)"
                 "设置场地规范 第2部分:监视》要求，需论证是否影响雷达正常工作"
             )
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
-            height_limit_display = _floor2(height_val or 0)
+            height_limit_display = floor2(height_val or 0)
             over = _float_or_none(metrics.get("overHeightMeters"))
-            over_height_display = _ceil2(over or 0)
+            over_height_display = ceil2(over or 0)
         else:
             compliance_status = "满足" if is_compliant else "不满足"
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
-            height_limit_display = _floor2(height_val or 0)
+            height_limit_display = floor2(height_val or 0)
             over = _float_or_none(metrics.get("overHeightMeters"))
-            over_height_display = _ceil2(over or 0)
+            over_height_display = ceil2(over or 0)
 
         for std_key in ("gb", "mh"):
             for s in _normalize_standards(r.get("standards", {}).get(std_key)):
@@ -189,14 +182,14 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                 }
                 rows.append(row)
                 if not skip_overheight_tracking:
-                    key = (obstacle_name, station_name)
+                    key = obstacle_name
                     track_over = _float_or_none(metrics.get("overHeightMeters"))
-                    obstacle_station_overheights.setdefault(key, []).append(_ceil2(track_over or 0))
+                    obstacle_overheights.setdefault(key, []).append(ceil2(track_over or 0))
 
     for row in rows:
-        key = (row["obstacleName"], row["stationName"])
-        dists = obstacle_station_overheights.get(key, [0])
-        row["finalOverHeight"] = _ceil2(max(dists))
+        key = row["obstacleName"]
+        dists = obstacle_overheights.get(key, [0])
+        row["finalOverHeight"] = ceil2(max(dists))
 
     return rows
 
@@ -250,7 +243,7 @@ def _build_summary(rule_results: list[dict], obstacle_count: int, radar_unmet_ob
     else:
         names = sorted(non_compliant_obstacles)
         heights = [
-            f"{_floor2(non_compliant_obstacles[n]):.2f}"
+            f"{floor2(non_compliant_obstacles[n]):.2f}"
             for n in names
         ]
         base = (

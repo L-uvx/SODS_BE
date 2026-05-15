@@ -5,6 +5,7 @@ from shapely.geometry import Point
 
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.result_helpers import (
+    ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
@@ -82,11 +83,11 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
         if not entered:
             message = f"不在VOR {self.radius_meters}m基准面范围内"
         else:
-            base_h = round(self.benchmark_height, 2)
+            base_h = ceil2(self.benchmark_height)
             if is_compliant:
                 message = f"基准面高度为{base_h}米，未超出基准面高度"
             else:
-                diff = round(top_elevation - self.benchmark_height, 2)
+                diff = ceil2(top_elevation - self.benchmark_height)
                 message = f"基准面高度为{base_h}米，超出基准面高度{diff}米"
 
         obstacle_centroid = shape.centroid
@@ -105,7 +106,7 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
         elif is_compliant:
             details = f"满足规定要求，障碍物高度{top_elevation}m，允许高度{self.benchmark_height}m。"
         else:
-            details = f"不满足规定要求，障碍物高度{top_elevation}m，允许高度{self.benchmark_height}m，超出{round(over,2)}m。"
+            details = f"不满足规定要求，障碍物高度{top_elevation}m，允许高度{self.benchmark_height}m，超出{ceil2(over)}m。"
 
         actual_distance_meters = float(shape.distance(Point(self.station_point)))
 
