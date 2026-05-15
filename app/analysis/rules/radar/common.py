@@ -27,6 +27,7 @@ class BoundRadarCircleRule(BoundObstacleRule):
     minimum_distance_meters: float | None
     standards_rule_code: str
     base_height_meters: float = 0.0
+    is_filter_limit: bool = True
 
     # 执行已绑定的 Radar 圆形保护区判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
@@ -46,6 +47,8 @@ class BoundRadarCircleRule(BoundObstacleRule):
         }
         if self.minimum_distance_meters is not None:
             metrics["minimumDistanceMeters"] = self.minimum_distance_meters
+        over_height_meters = max(0.0, top_elevation_meters - self.base_height_meters)
+        metrics["overHeightMeters"] = over_height_meters
 
         centroid = obstacle_shape.centroid
         azimuth_degrees = compute_azimuth_degrees(
@@ -90,7 +93,7 @@ class BoundRadarCircleRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=is_compliant,
-            is_filter_limit=True,
+            is_filter_limit=self.is_filter_limit,
             message=(
                 f"距离台站{ceil2(actual_distance_meters)}米"
             ),

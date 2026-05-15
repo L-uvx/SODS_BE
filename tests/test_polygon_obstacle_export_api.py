@@ -693,6 +693,7 @@ class TestFlattenRuleResultsSpecialDisplay:
     def test_loc_building_restriction_special_message(self):
         r = self._make_rule(
             zoneCode="loc_building_restriction_zone",
+            isCompliant=False,
             metrics={
                 "enteredProtectionZone": True,
                 "allowedHeightMeters": 80.0,
@@ -705,13 +706,14 @@ class TestFlattenRuleResultsSpecialDisplay:
         assert "建议结合MH4003.1-2021" in row["complianceStatus"]
         assert row["heightLimit"] == 80.0
         assert row["overHeight"] == 12.5
-        assert row["finalOverHeight"] == 0
+        assert row["finalOverHeight"] == 12.5
 
     # ---- T5: Radar 16KM special message ----
     def test_radar_16km_special_message(self):
         r = self._make_rule(
             ruleCode="radar_rotating_reflector_16km",
             zoneCode="radar_rotating_reflector_16km",
+            isCompliant=False,
             metrics={
                 "enteredProtectionZone": True,
                 "allowedHeightMeters": 200.0,
@@ -724,7 +726,7 @@ class TestFlattenRuleResultsSpecialDisplay:
         assert "16km范围内" in row["complianceStatus"]
         assert row["heightLimit"] == 200.0
         assert row["overHeight"] == 8.0
-        assert row["finalOverHeight"] == 0
+        assert row["finalOverHeight"] == 8.0
 
     # ---- T6a: isApplicable=False with isMid still shows row ----
     def test_is_applicable_false_with_isMid_still_shows_row(self):
@@ -800,6 +802,34 @@ class TestFlattenRuleResultsSpecialDisplay:
         row = rows[0]
         assert row["standardName"] == "/"
         assert row["standardClause"] == "/"
+
+    # ---- T6c: LOC BRZ non-compliant tracked in finalOverHeight ----
+    def test_loc_brz_non_compliant_tracked_in_final_over_height(self):
+        normal = self._make_rule(
+            isCompliant=False,
+            obstacleName="Obstacle Y",
+            stationName="Station A",
+            metrics={
+                "allowedHeightMeters": 50.0,
+                "overHeightMeters": 7.0,
+            },
+        )
+        loc_brz = self._make_rule(
+            zoneCode="loc_building_restriction_zone",
+            isCompliant=False,
+            obstacleName="Obstacle Y",
+            stationName="Station B",
+            metrics={
+                "enteredProtectionZone": True,
+                "allowedHeightMeters": 80.0,
+                "overHeightMeters": 15.0,
+            },
+        )
+        rows = _flatten_rule_results([normal, loc_brz])
+        for row in rows:
+            assert row["finalOverHeight"] == 15.0, (
+                f"Expected 15.0 for Obstacle Y, got {row['finalOverHeight']}"
+            )
 
     # ---- T7: finalOverHeight aggregated by obstacle, not obstacle+station ----
     def test_final_over_height_agg_by_obstacle(self):

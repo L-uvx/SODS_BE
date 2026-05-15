@@ -766,13 +766,14 @@ def test_radar_minimum_distance_rule_has_is_filter_limit() -> None:
     assert result.is_filter_limit is True
 
 
-def test_radar_rotating_reflector_16km_rule_has_is_filter_limit() -> None:
+def test_radar_rotating_reflector_16km_rule_has_is_filter_limit_false() -> None:
     bound = RadarRotatingReflector16kmRule().bind(
         station=_make_station(),
         station_point=(0.0, 0.0),
     )
     result = bound.analyze(_make_obstacle(category="large_rotating_reflector", local_geometry=_point_geometry(1000.0, 0.0)))
-    assert result.is_filter_limit is True
+    assert result.is_filter_limit is False
+    assert "overHeightMeters" in result.metrics
 
 
 def test_radar_site_protection_does_not_have_is_filter_limit() -> None:

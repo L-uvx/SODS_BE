@@ -519,6 +519,46 @@ def test_gp_region_c_binder_builds_mh_zone_spec() -> None:
     assert bound_rule.protection_zone.rule_code == "gp_site_protection_mh_region_c"
 
 
+def test_gp_region_c_not_entered_includes_over_height_meters_in_metrics() -> None:
+    region_c_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_c"
+    )
+
+    bound_rule = region_c_module.GpSiteProtectionGbRegionCRule().bind(
+        station=_make_gp_station(),
+        shared_context=_make_gp_shared_context(standard_version="GB"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 20,
+            "name": "Outside Region C",
+            "rawObstacleType": "道路",
+            "globalObstacleCategory": "road",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [5000.0, 5000.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [5000.0, 5000.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is True
+    assert result.message == "不在C区范围内"
+    assert result.metrics == {
+        "enteredProtectionZone": False,
+        "topElevationMeters": 510.0,
+        "actualDistanceMeters": pytest.approx(7071.067811865475, rel=1e-9),
+        "isRoadOrRail": True,
+        "requiresClearanceEvaluation": False,
+        "overHeightMeters": 10.0,
+    }
+
+
 def test_gp_region_c_road_entering_region_is_non_compliant() -> None:
     region_c_module = importlib.import_module(
         "app.analysis.rules.gp.site_protection.region_c"
@@ -555,6 +595,7 @@ def test_gp_region_c_road_entering_region_is_non_compliant() -> None:
         "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": True,
         "requiresClearanceEvaluation": False,
+        "overHeightMeters": 10.0,
     }
     assert result.standards_rule_code == "gp_site_protection_gb_region_c"
 
@@ -595,6 +636,7 @@ def test_gp_region_c_electrified_rail_entering_region_is_non_compliant() -> None
         "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": True,
         "requiresClearanceEvaluation": False,
+        "overHeightMeters": 10.0,
     }
 
 
@@ -634,6 +676,7 @@ def test_gp_region_c_non_electrified_rail_entering_region_is_non_compliant() -> 
         "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": True,
         "requiresClearanceEvaluation": False,
+        "overHeightMeters": 10.0,
     }
     assert result.standards_rule_code == "gp_site_protection_mh_region_c"
 
@@ -674,6 +717,7 @@ def test_gp_region_c_non_road_or_rail_with_unavailable_clearance_is_non_complian
         "actualDistanceMeters": pytest.approx(116.61903789690601, rel=1e-9),
         "isRoadOrRail": False,
         "requiresClearanceEvaluation": True,
+        "overHeightMeters": 10.0,
     }
     assert result.standards_rule_code == "gp_site_protection_mh_region_c"
 
@@ -1082,6 +1126,7 @@ def test_gp_region_b_gb_entered_within_600m_is_non_compliant() -> None:
     assert result.metrics["enteredProtectionZone"] is True
     assert result.metrics["forwardDistanceMeters"] == 500.0
     assert result.metrics["requiresClearanceEvaluation"] is False
+    assert result.metrics["overHeightMeters"] == 10.0
 
 
 def test_gp_region_b_mh_i_entered_is_non_compliant() -> None:
@@ -1116,6 +1161,7 @@ def test_gp_region_b_mh_i_entered_is_non_compliant() -> None:
     assert result.message == "在B区范围内"
     assert result.metrics["enteredProtectionZone"] is True
     assert result.metrics["stationSubType"] == "I"
+    assert result.metrics["overHeightMeters"] == 10.0
 
 
 def test_gp_region_b_mh_ii_ring_road_within_600m_is_non_compliant() -> None:
@@ -1150,6 +1196,7 @@ def test_gp_region_b_mh_ii_ring_road_within_600m_is_non_compliant() -> None:
     assert result.message == "在B区范围600米内"
     assert result.metrics["isAirportRingRoad"] is True
     assert result.metrics["forwardDistanceMeters"] == 500.0
+    assert result.metrics["overHeightMeters"] == 10.0
 
 
 def test_gp_region_b_mh_ii_ring_road_outside_600m_is_compliant() -> None:
@@ -1218,6 +1265,7 @@ def test_gp_region_b_mh_iii_non_ring_road_entered_is_non_compliant() -> None:
     assert result.message == "在B区范围内"
     assert result.metrics["isAirportRingRoad"] is False
     assert result.metrics["stationSubType"] == "III"
+    assert result.metrics["overHeightMeters"] == 10.0
 
 
 def test_gp_region_b_gb_entered_outside_600m_with_unavailable_clearance_is_non_compliant() -> None:
@@ -1457,6 +1505,41 @@ def test_gp_run_area_region_b_returns_is_mid_when_type_not_supported() -> None:
     assert result.is_mid is True
     assert result.is_applicable is False
     assert result.metrics["enteredProtectionZone"] is True
+
+
+def test_gp_region_b_mh_other_station_type_entered_is_non_compliant() -> None:
+    region_b_module = importlib.import_module(
+        "app.analysis.rules.gp.site_protection.region_b"
+    )
+
+    bound_rule = region_b_module.GpSiteProtectionMhRegionBRule().bind(
+        station=_make_gp_station(station_sub_type="IV"),
+        shared_context=_make_gp_shared_context(standard_version="MH"),
+    )
+
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 24,
+            "name": "MH IV Building",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 510.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [60.0, -500.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.message == "在B区范围内"
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["stationSubType"] == "IV"
+    assert result.metrics["overHeightMeters"] == 10.0
 
 
 def _make_gp_shared_context(*, standard_version: str):

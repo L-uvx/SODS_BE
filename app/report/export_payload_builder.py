@@ -134,7 +134,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
             and metrics.get("enteredProtectionZone") is True
         )
 
-        skip_overheight_tracking = is_special_no_judge or is_loc_brz_special or is_radar_16km_special
+        skip_overheight_tracking = is_special_no_judge
 
         if is_special_no_judge:
             compliance_status = "不判断"

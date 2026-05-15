@@ -734,3 +734,67 @@ def test_ring_protection_zone_is_annular():
     assert surface["heightModel"]["type"] == "angle_linear_rise"
     assert surface["heightModel"]["angleDegrees"] == -2.0
     assert surface["heightModel"]["distanceOffsetMeters"] == 10.0
+
+
+# —— elevation angle 规则 metrics 中的 allowedHeightMeters / overHeightMeters ——
+
+
+def test_elevation_angle_vertical_violation_has_over_height_in_metrics():
+    station = _make_station()
+    bound = Vor100_200_1_5_Rule().bind(station=station, station_point=(0.0, 0.0))
+    base_height = station.altitude + station.reflection_net_hag
+
+    obstacle = _make_obstacle(
+        local_geometry=_point_geometry(150.0, 0.0),
+        geometry=_point_geometry(150.0, 0.0),
+        top_elevation=base_height + 15.0,
+        category="tree_or_forest",
+    )
+
+    result = bound.analyze(obstacle)
+    assert result.is_compliant is False
+    assert "overHeightMeters" in result.metrics
+    assert result.metrics["overHeightMeters"] > 0
+    assert "allowedHeightMeters" in result.metrics
+    assert result.metrics["allowedHeightMeters"] > 0
+
+
+def test_elevation_angle_horizontal_violation_has_over_height_in_metrics():
+    station = _make_station()
+    bound = Vor100_200_1_5_Rule().bind(station=station, station_point=(0.0, 0.0))
+    shape = _sector_like_polygon(120.0, 150.0, 0.0, 10.0)
+    base_height = station.altitude + station.reflection_net_hag
+
+    obstacle = _make_obstacle(
+        local_geometry=_polygon_geometry(list(shape.exterior.coords)[:-1]),
+        geometry=_polygon_geometry(list(shape.exterior.coords)[:-1]),
+        top_elevation=base_height + 2.0,
+        category="tree_or_forest",
+    )
+
+    result = bound.analyze(obstacle)
+    assert result.is_compliant is False
+    assert "horizontalAngularWidthDegrees" in result.metrics
+    assert result.metrics["horizontalAngularWidthDegrees"] > 7.0
+    assert "overHeightMeters" in result.metrics
+    assert "allowedHeightMeters" in result.metrics
+
+
+def test_elevation_angle_compliant_has_allowed_height_and_zero_over_height():
+    station = _make_station()
+    bound = Vor100_200_1_5_Rule().bind(station=station, station_point=(0.0, 0.0))
+    base_height = station.altitude + station.reflection_net_hag
+
+    obstacle = _make_obstacle(
+        local_geometry=_point_geometry(150.0, 0.0),
+        geometry=_point_geometry(150.0, 0.0),
+        top_elevation=base_height + 2.0,
+        category="tree_or_forest",
+    )
+
+    result = bound.analyze(obstacle)
+    assert result.is_compliant is True
+    assert "overHeightMeters" in result.metrics
+    assert result.metrics["overHeightMeters"] == 0.0
+    assert "allowedHeightMeters" in result.metrics
+    assert result.metrics["allowedHeightMeters"] > 0

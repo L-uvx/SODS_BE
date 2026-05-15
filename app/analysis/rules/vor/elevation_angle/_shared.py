@@ -46,6 +46,12 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
             self.station_point, shape,
         )
 
+        allowed_height_meters = (
+            self.base_height
+            + math.tan(math.radians(self.limit_angle_degrees)) * actual_distance
+        )
+        over_height_meters = max(0.0, top_elevation - allowed_height_meters)
+
         metrics: dict[str, object] = {
             "enteredProtectionZone": entered,
             "actualDistanceMeters": actual_distance,
@@ -55,6 +61,8 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
             "innerRadiusMeters": self.inner_radius_m,
             "outerRadiusMeters": self.outer_radius_m,
             "limitAngleDegrees": self.limit_angle_degrees,
+            "allowedHeightMeters": allowed_height_meters,
+            "overHeightMeters": over_height_meters,
         }
 
         if not entered:

@@ -96,6 +96,7 @@ class BoundGpSiteProtectionRegionCRule(BoundGpSiteProtectionRegionRule):
                 "actualDistanceMeters": actual_distance_meters,
                 "isRoadOrRail": is_road_or_rail,
                 "requiresClearanceEvaluation": requires_clearance_evaluation,
+                "overHeightMeters": max(0.0, top_elev - base_h),
                 **(
                     {}
                     if not entered_protection_zone or is_road_or_rail

@@ -217,6 +217,6 @@ def test_gated_radar_16km_result_preserves_additional_fields() -> None:
 
     result = _find_rule_result(payload, "radar_rotating_reflector_16km")
     assert result.is_applicable is False
-    assert result.is_filter_limit is True
+    assert result.is_filter_limit is False
     assert result.metrics["triangleGateApplied"] is True
     assert result.metrics["gatedByRunwayTriangle"] is True

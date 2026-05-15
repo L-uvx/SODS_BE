@@ -54,6 +54,7 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
         az = compute_azimuth_degrees(sp[0], sp[1], obstacle_centroid.x, obstacle_centroid.y)
         min_h, max_h = compute_horizontal_angle_range_from_geometry(sp, obstacle_shape)
         rel_height = top_elev - base_h
+        over_height_for_metrics = max(0.0, rel_height)
 
         if not entered_protection_zone:
             is_compliant = True
@@ -146,6 +147,7 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
                 "forwardDistanceMeters": forward_distance_meters,
                 "isAirportRingRoad": is_airport_ring_road,
                 "requiresClearanceEvaluation": requires_clearance_evaluation,
+                "overHeightMeters": over_height_for_metrics,
                 **(
                     {}
                     if self.protection_zone.zone_code != "gp_site_protection_gb"
