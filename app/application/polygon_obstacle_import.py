@@ -1324,9 +1324,12 @@ class PolygonObstacleImportService:
                 raise ValueError("analysis task is not ready for export")
 
             payload = build_export_payload(analysis_task)
+            project_name = payload.get("projectName", "")
+            airport_name = payload.get("airportName", "")
             file_path, file_name = self._build_export_output_path(
                 task_id=task_id,
-                analysis_task_id=analysis_task.id,
+                project_name=project_name,
+                airport_name=airport_name,
             )
             build_analysis_report_docx(payload, file_path)
             self._repository.mark_report_export_succeeded(
@@ -1424,13 +1427,15 @@ class PolygonObstacleImportService:
 
     # 生成导出报告文件的输出路径。
     def _build_export_output_path(
-        self, *, task_id: str, analysis_task_id: str
+        self, *, task_id: str, project_name: str, airport_name: str
     ) -> tuple[Path, str]:
         if runtime.settings is None:
             runtime.settings = Settings.from_env()
 
         export_directory = runtime.settings.export_storage_dir / task_id
-        file_name = f"polygon-obstacle-analysis-{analysis_task_id}.docx"
+        safe_project = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", project_name).strip("._ ")
+        safe_airport = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", airport_name).strip("._ ")
+        file_name = f"{safe_project}-{safe_airport}.docx" if safe_project and safe_airport else f"export-{task_id}.docx"
         return export_directory / file_name, file_name
 
     # 将障碍物记录转换为统一响应对象。

@@ -355,7 +355,7 @@ def test_run_export_task_marks_status_succeeded_and_returns_download_url() -> No
         "exportTaskId": export_task_id,
         "analysisTaskId": analysis_task_id,
         "status": "succeeded",
-        "fileName": f"polygon-obstacle-analysis-{analysis_task_id}.docx",
+        "fileName": "Wuhan Demo-Airport Near.docx",
         "downloadUrl": f"/polygon-obstacle/exports/{export_task_id}/download",
         "errorMessage": None,
     }
@@ -442,7 +442,7 @@ def test_download_export_file_returns_docx_after_generation() -> None:
         == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
     assert (
-        f'filename="polygon-obstacle-analysis-{analysis_task_id}.docx"'
+        "filename*=utf-8''Wuhan%20Demo-Airport%20Near.docx"
         in response.headers["content-disposition"]
     )
     assert len(response.content) > 0
