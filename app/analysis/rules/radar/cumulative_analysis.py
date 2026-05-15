@@ -221,6 +221,9 @@ def compute_cumulative_horizontal_mask_angles(
         if not spans:
             continue
 
+        if len(set(s.obstacle_id for s in spans)) <= 1:
+            continue
+
         unwrapped = _unwrap_angles(spans)
         total_span, cumulative, snapshots = _merge_overlapping(unwrapped)
         is_compliant, max_15_display, max_45_display = _evaluate_threshold(

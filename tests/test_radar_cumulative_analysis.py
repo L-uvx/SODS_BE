@@ -235,7 +235,7 @@ class TestEndToEnd:
         ])
         assert results == []
 
-    def test_single_obstacle_compliant(self):
+    def test_single_obstacle_excluded(self):
         results = compute_cumulative_horizontal_mask_angles([
             _make_result(
                 metrics={"verticalMaskAngleDegrees": 0.5},
@@ -243,38 +243,62 @@ class TestEndToEnd:
                 maxHorizontalAngleDegrees=11.0,
             ),
         ])
-        assert len(results) == 1
-        assert results[0]["isCompliant"] == "满足"
-        assert results[0]["totalSpanDegrees"] == pytest.approx(1.0)
+        assert results == []
 
-    def test_two_stations_grouped_separately(self):
+    def test_two_unique_obstacles_included(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                obstacleId=1,
+                obstacleName="obs1",
+                metrics={"verticalMaskAngleDegrees": 0.5},
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+            ),
+            _make_result(
+                obstacleId=2,
+                obstacleName="obs2",
+                minHorizontalAngleDegrees=30.0,
+                maxHorizontalAngleDegrees=35.0,
+            ),
+        ])
+        assert len(results) == 1
+        assert sorted(results[0]["obstacleNames"]) == ["obs1", "obs2"]
+
+    def test_single_obstacle_crossing_360_excluded(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                minHorizontalAngleDegrees=350.0,
+                maxHorizontalAngleDegrees=10.0,
+            ),
+        ])
+        assert results == []
+
+    def test_mixed_stations_one_excluded_one_included(self):
         results = compute_cumulative_horizontal_mask_angles([
             _make_result(
                 stationId=1,
-                stationName="A",
+                stationName="Radar_A",
+                obstacleId=1,
                 minHorizontalAngleDegrees=10.0,
                 maxHorizontalAngleDegrees=20.0,
             ),
             _make_result(
                 stationId=2,
-                stationName="B",
+                stationName="Radar_B",
                 obstacleId=2,
                 minHorizontalAngleDegrees=30.0,
                 maxHorizontalAngleDegrees=35.0,
             ),
-        ])
-        assert len(results) == 2
-
-    def test_field_monitor_radar_included(self):
-        results = compute_cumulative_horizontal_mask_angles([
             _make_result(
-                stationType="Surface_Detection_Radar",
-                minHorizontalAngleDegrees=10.0,
-                maxHorizontalAngleDegrees=20.0,
+                stationId=2,
+                stationName="Radar_B",
+                obstacleId=3,
+                minHorizontalAngleDegrees=50.0,
+                maxHorizontalAngleDegrees=55.0,
             ),
         ])
         assert len(results) == 1
-        assert results[0]["stationType"] == "Surface_Detection_Radar"
+        assert results[0]["stationName"] == "Radar_B"
 
     def test_wrap_merges_correctly(self):
         results = compute_cumulative_horizontal_mask_angles([
@@ -308,15 +332,23 @@ class TestEndToEnd:
         ])
         assert results == []
 
-    def test_single_obstacle_crosses_360(self):
+    def test_field_monitor_radar_included(self):
         results = compute_cumulative_horizontal_mask_angles([
             _make_result(
-                minHorizontalAngleDegrees=350.0,
-                maxHorizontalAngleDegrees=10.0,
+                stationType="Surface_Detection_Radar",
+                obstacleId=1,
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+            ),
+            _make_result(
+                stationType="Surface_Detection_Radar",
+                obstacleId=2,
+                minHorizontalAngleDegrees=30.0,
+                maxHorizontalAngleDegrees=35.0,
             ),
         ])
         assert len(results) == 1
-        assert results[0]["cumulativeHorizontalAngleDegrees"] == pytest.approx(20.0)
+        assert results[0]["stationType"] == "Surface_Detection_Radar"
 
     def test_obstacle_names_deduplicated(self):
         results = compute_cumulative_horizontal_mask_angles([
@@ -407,16 +439,26 @@ class TestEndToEndFormat:
     def test_single_obstacle_conclusion_csharp_format(self):
         results = compute_cumulative_horizontal_mask_angles([
             _make_result(
+                obstacleId=1,
                 obstacleName="Alpha_Tower",
                 stationName="RADAR_A",
                 metrics={"verticalMaskAngleDegrees": 0.5},
                 minHorizontalAngleDegrees=10.0,
                 maxHorizontalAngleDegrees=11.0,
             ),
+            _make_result(
+                obstacleId=2,
+                obstacleName="Beta_Tower",
+                stationName="RADAR_A",
+                metrics={"verticalMaskAngleDegrees": 0.5},
+                minHorizontalAngleDegrees=15.0,
+                maxHorizontalAngleDegrees=20.0,
+            ),
         ])
         assert len(results) == 1
         conclusion = results[0]["conclusion"]
         assert "Alpha_Tower" in conclusion
+        assert "Beta_Tower" in conclusion
         assert "RADAR_A" in conclusion
         assert "任意15°方位范围" in conclusion
         assert "任意45°方位范围" in conclusion
@@ -448,9 +490,16 @@ class TestEndToEndFormat:
     def test_conclusion_always_mentions_both_15_and_45(self):
         results = compute_cumulative_horizontal_mask_angles([
             _make_result(
+                obstacleId=1,
                 metrics={"verticalMaskAngleDegrees": 0.5},
                 minHorizontalAngleDegrees=10.0,
                 maxHorizontalAngleDegrees=25.0,
+            ),
+            _make_result(
+                obstacleId=2,
+                metrics={"verticalMaskAngleDegrees": 0.5},
+                minHorizontalAngleDegrees=50.0,
+                maxHorizontalAngleDegrees=55.0,
             ),
         ])
         assert len(results) == 1
