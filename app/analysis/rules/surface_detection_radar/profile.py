@@ -78,6 +78,17 @@ class SurfaceDetectionRadarRuleProfile:
                     metrics=metrics,
                     standards_rule_code=result.standards_rule_code,
                     standards=result.standards,
+                    over_distance_meters=result.over_distance_meters,
+                    azimuth_degrees=result.azimuth_degrees,
+                    max_horizontal_angle_degrees=result.max_horizontal_angle_degrees,
+                    min_horizontal_angle_degrees=result.min_horizontal_angle_degrees,
+                    relative_height_meters=result.relative_height_meters,
+                    is_in_radius=result.is_in_radius,
+                    is_in_zone=result.is_in_zone,
+                    is_mid=result.is_mid,
+                    is_filter_limit=result.is_filter_limit,
+                    is_filter_intersect=result.is_filter_intersect,
+                    details=result.details,
                 )
             )
 

@@ -165,26 +165,49 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
             over = _float_or_none(metrics.get("overHeightMeters"))
             over_height_display = ceil2(over or 0)
 
-        for std_key in ("gb", "mh"):
-            for s in _normalize_standards(r.get("standards", {}).get(std_key)):
-                row = {
-                    "obstacleName": obstacle_name,
-                    "obstacleType": obstacle_type,
-                    "stationName": station_name,
-                    "relativePosition": relative_position,
-                    "standardName": f"《{_extract_standard_name(s.get('code', ''))}》",
-                    "standardClause": s.get("text", ""),
-                    "analysisDetail": details,
-                    "heightLimit": height_limit_display,
-                    "isCompliant": is_compliant,
-                    "complianceStatus": compliance_status,
-                    "overHeight": over_height_display,
-                }
-                rows.append(row)
-                if not skip_overheight_tracking:
-                    key = obstacle_name
-                    track_over = _float_or_none(metrics.get("overHeightMeters"))
-                    obstacle_overheights.setdefault(key, []).append(ceil2(track_over or 0))
+        gb_list = _normalize_standards(r.get("standards", {}).get("gb"))
+        mh_list = _normalize_standards(r.get("standards", {}).get("mh"))
+
+        if not gb_list and not mh_list:
+            row = {
+                "obstacleName": obstacle_name,
+                "obstacleType": obstacle_type,
+                "stationName": station_name,
+                "relativePosition": relative_position,
+                "standardName": "/",
+                "standardClause": "/",
+                "analysisDetail": details,
+                "heightLimit": height_limit_display,
+                "isCompliant": is_compliant,
+                "complianceStatus": compliance_status,
+                "overHeight": over_height_display,
+            }
+            rows.append(row)
+            if not skip_overheight_tracking:
+                key = obstacle_name
+                track_over = _float_or_none(metrics.get("overHeightMeters"))
+                obstacle_overheights.setdefault(key, []).append(ceil2(track_over or 0))
+        else:
+            for std_key in ("gb", "mh"):
+                for s in (gb_list if std_key == "gb" else mh_list):
+                    row = {
+                        "obstacleName": obstacle_name,
+                        "obstacleType": obstacle_type,
+                        "stationName": station_name,
+                        "relativePosition": relative_position,
+                        "standardName": f"《{_extract_standard_name(s.get('code', ''))}》",
+                        "standardClause": s.get("text", ""),
+                        "analysisDetail": details,
+                        "heightLimit": height_limit_display,
+                        "isCompliant": is_compliant,
+                        "complianceStatus": compliance_status,
+                        "overHeight": over_height_display,
+                    }
+                    rows.append(row)
+                    if not skip_overheight_tracking:
+                        key = obstacle_name
+                        track_over = _float_or_none(metrics.get("overHeightMeters"))
+                        obstacle_overheights.setdefault(key, []).append(ceil2(track_over or 0))
 
     for row in rows:
         key = row["obstacleName"]

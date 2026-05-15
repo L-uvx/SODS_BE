@@ -147,3 +147,76 @@ def test_base_radar_result_remains_applicable_inside_triangle() -> None:
     assert result.metrics["triangleGateApplied"] is True
     assert result.metrics["isInRunwayTriangle"] is True
     assert result.metrics["gatedByRunwayTriangle"] is False
+
+
+def test_gated_radar_b_result_preserves_additional_fields_when_not_in_triangle() -> None:
+    """方方 Radar B 最小值规则设置了 is_filter_limit=True，场监 gating 时应保留"""
+    payload = SurfaceDetectionRadarRuleProfile().analyze(
+        station=_make_station(),
+        obstacles=[_make_obstacle(obstacle_id=1, local_geometry=_point_geometry(200.0, 150.0), top_elevation=25.0)],
+        station_point=(0.0, 0.0),
+        runways=[_make_runway_context()],
+    )
+
+    result = _find_rule_result(payload, "radar_minimum_distance_460m")
+
+    assert result.is_applicable is False
+    assert result.is_filter_limit is True
+    assert 0.0 <= result.azimuth_degrees < 360.0
+    assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
+    assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
+    assert isinstance(result.relative_height_meters, float)
+    assert isinstance(result.is_in_radius, bool)
+    assert isinstance(result.is_in_zone, bool)
+    assert result.is_mid is False
+    assert result.is_filter_intersect is False
+    assert isinstance(result.details, str)
+    assert result.over_distance_meters >= 0.0
+
+
+def test_gated_radar_b_result_preserves_additional_fields_when_in_triangle() -> None:
+    """在三角区内 is_applicable 保持为 True，其它字段也应完整保留"""
+    payload = SurfaceDetectionRadarRuleProfile().analyze(
+        station=_make_station(),
+        obstacles=[_make_obstacle(obstacle_id=1, local_geometry=_point_geometry(0.0, 150.0), top_elevation=25.0)],
+        station_point=(0.0, 0.0),
+        runways=[_make_runway_context()],
+    )
+
+    result = _find_rule_result(payload, "radar_minimum_distance_460m")
+
+    assert result.is_applicable is True
+    assert result.is_filter_limit is True
+    assert 0.0 <= result.azimuth_degrees < 360.0
+    assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
+    assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
+    assert isinstance(result.relative_height_meters, float)
+    assert isinstance(result.is_in_radius, bool)
+    assert isinstance(result.is_in_zone, bool)
+    assert result.is_mid is False
+    assert result.is_filter_intersect is False
+    assert isinstance(result.details, str)
+    assert result.over_distance_meters >= 0.0
+
+
+def test_gated_radar_16km_result_preserves_additional_fields() -> None:
+    """Radar 16KM 规则同样设置了 is_filter_limit=True，场监 gating 时应保留"""
+    payload = SurfaceDetectionRadarRuleProfile().analyze(
+        station=_make_station(),
+        obstacles=[
+            _make_obstacle(
+                obstacle_id=1,
+                category="large_rotating_reflector",
+                local_geometry=_point_geometry(200.0, 150.0),
+                top_elevation=88.0,
+            )
+        ],
+        station_point=(0.0, 0.0),
+        runways=[_make_runway_context()],
+    )
+
+    result = _find_rule_result(payload, "radar_rotating_reflector_16km")
+    assert result.is_applicable is False
+    assert result.is_filter_limit is True
+    assert result.metrics["triangleGateApplied"] is True
+    assert result.metrics["gatedByRunwayTriangle"] is True

@@ -766,6 +766,40 @@ class TestFlattenRuleResultsSpecialDisplay:
         for row in rows:
             assert row["finalOverHeight"] == 10.0
 
+    # ---- T8: both standards empty → emit one row with "/" ----
+    def test_both_standards_empty_emits_one_row(self):
+        r = self._make_rule(
+            standards={"gb": [], "mh": []},
+            metrics={
+                "allowedHeightMeters": 80.0,
+                "overHeightMeters": 5.0,
+            },
+        )
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1, f"Expected 1 row, got {len(rows)}"
+        row = rows[0]
+        assert row["standardName"] == "/"
+        assert row["standardClause"] == "/"
+        assert row["complianceStatus"] == "满足"
+        assert row["heightLimit"] == 80.0
+        assert row["overHeight"] == 5.0
+        assert row["finalOverHeight"] == 5.0
+
+    # ---- T9: both standards None → emit one row with "/" ----
+    def test_both_standards_none_emits_one_row(self):
+        r = self._make_rule(
+            standards={"gb": None, "mh": None},
+            metrics={
+                "allowedHeightMeters": 60.0,
+                "overHeightMeters": 3.0,
+            },
+        )
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1, f"Expected 1 row, got {len(rows)}"
+        row = rows[0]
+        assert row["standardName"] == "/"
+        assert row["standardClause"] == "/"
+
     # ---- T7: finalOverHeight aggregated by obstacle, not obstacle+station ----
     def test_final_over_height_agg_by_obstacle(self):
         r1 = self._make_rule(

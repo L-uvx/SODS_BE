@@ -399,6 +399,33 @@ def test_build_rule_standards_returns_radar_c_mapping() -> None:
     )]
 
 
+def test_build_rule_standards_returns_radar_a_mh_mapping_for_surface_detection_radar() -> None:
+    standards = build_rule_standards(
+        station_type="Surface_Detection_Radar",
+        rule_name="radar_site_protection",
+        region_code="default",
+    )
+
+    assert standards.gb == []
+    assert standards.mh == [AnalysisStandardReference(
+        code="MH_PSRSSR_场地保护区",
+        text=load_standard_config_entries()["MH_PSRSSR_场地保护区"],
+    )]
+
+
+def test_standard_mappings_register_surface_detection_radar_by_station_type() -> None:
+    surface_radar_keys = _STANDARD_KEYS_BY_STATION_TYPE["Surface_Detection_Radar"]
+
+    assert surface_radar_keys["radar_minimum_distance_460m_standard"] == (
+        [],
+        ["MH_PSRSSR_0.46km平面防护间距要求_金属围栏、构建物、高塔、航站楼"],
+    )
+    assert surface_radar_keys["radar_rotating_reflector_16km_standard"] == (
+        [],
+        ["MH_PSRSSR_16KM保护区"],
+    )
+
+
 def test_standard_mappings_register_radar_standard_codes_separately_from_rule_codes() -> None:
     radar_standard_keys = _STANDARD_KEYS_BY_STATION_TYPE["RADAR"]
 
