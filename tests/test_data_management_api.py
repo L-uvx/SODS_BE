@@ -415,6 +415,7 @@ def test_runway_list_item_response_includes_required_review_fields() -> None:
         "runwayCodeA": None,
         "runwayType": None,
         "runwayCodeB": None,
+        "maximumTypeAircraft": None,
         "createdAt": timestamp,
         "updatedAt": timestamp,
     }
@@ -690,6 +691,7 @@ def test_get_runway_detail_returns_runway_payload() -> None:
         "runwayCodeA": None,
         "runwayType": None,
         "runwayCodeB": None,
+        "maximumTypeAircraft": None,
     }
 
 
@@ -840,6 +842,92 @@ def test_runway_response_serializes_frontend_alias_fields() -> None:
     dumped = response.model_dump(by_alias=True)
     assert dumped["headingDegrees"] == 180.0
     assert dumped["lengthMeters"] == 3200.0
+
+
+def test_runway_upsert_request_accepts_maximum_type_aircraft() -> None:
+    from app.schemas.data_management import RunwayUpsertRequest
+
+    payload = RunwayUpsertRequest(
+        airportId=1,
+        name="18",
+        runNumber="18",
+        maximumTypeAircraft="D类和D类以上",
+    )
+
+    result = payload.model_dump(by_alias=True)
+    assert result["maximumTypeAircraft"] == "D类和D类以上"
+
+
+def test_runway_response_includes_maximum_type_aircraft() -> None:
+    from app.schemas.data_management import RunwayResponse
+
+    response = RunwayResponse(
+        id=1,
+        airportId=1,
+        name="18",
+        runNumber="18",
+        maximumTypeAircraft="C类和C类以下",
+    )
+
+    assert response.model_dump(by_alias=True)["maximumTypeAircraft"] == "C类和C类以下"
+
+
+def test_list_runways_includes_maximum_type_aircraft() -> None:
+    with _create_test_client() as client:
+        _seed_airport(name="Test Airport")
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            runway = Runway(
+                airport_id=1,
+                name="18",
+                run_number="18",
+                maximum_type_aircraft="B类和B类以下",
+            )
+            session.add(runway)
+            session.commit()
+        response = client.get("/data-management/runways?airportId=1")
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["maximumTypeAircraft"] == "B类和B类以下"
+
+
+def test_get_runway_includes_maximum_type_aircraft() -> None:
+    with _create_test_client() as client:
+        _seed_airport(name="Test Airport")
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            runway = Runway(
+                airport_id=1,
+                name="18",
+                run_number="18",
+                maximum_type_aircraft="D类和D类以上",
+            )
+            session.add(runway)
+            session.commit()
+        response = client.get("/data-management/runways/1")
+
+    assert response.status_code == 200
+    assert response.json()["maximumTypeAircraft"] == "D类和D类以上"
+
+
+def test_create_runway_persists_maximum_type_aircraft() -> None:
+    with _create_test_client() as client:
+        _seed_airport(name="Test Airport")
+        response = client.post(
+            "/data-management/runways",
+            json={
+                "airportId": 1,
+                "name": "18",
+                "runNumber": "18",
+                "maximumTypeAircraft": "C类和C类以下",
+            },
+        )
+
+        assert response.status_code == 201
+        runway_id = response.json()["id"]
+
+        response = client.get(f"/data-management/runways/{runway_id}")
+        assert response.json()["maximumTypeAircraft"] == "C类和C类以下"
 
 
 def test_list_stations_returns_pagination_envelope() -> None:

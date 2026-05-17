@@ -555,3 +555,35 @@ class TestImportAirportApi:
                 assert data["items"][1]["fileName"] == "bad.txt"
             finally:
                 app.dependency_overrides.pop(get_db_session, None)
+
+    def test_import_airport_persists_maximum_type_aircraft_on_runway(self) -> None:
+        wb = Workbook()
+        ws1 = wb.create_sheet("Sheet1", 0)
+        ws1.cell(row=2, column=1, value="18")
+        ws1.cell(row=2, column=14, value="C类和C类以下")
+        ws2 = wb.create_sheet("Sheet2")
+        ws2.cell(row=4, column=1, value="NDB")
+        ws2.cell(row=4, column=2, value="NDB_TEST_STATION")
+        ws2.cell(row=4, column=6, value=500)
+        buf = BytesIO()
+        wb.save(buf)
+
+        with _create_import_test_session() as session:
+            app.dependency_overrides[get_db_session] = lambda: session
+            try:
+                client = TestClient(app)
+                response = client.post(
+                    "/data-management/import/airports",
+                    files=[("excelFiles", ("TestAirport.xlsx", buf.getvalue(),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))],
+                )
+                assert response.status_code == 201
+                data = response.json()
+                assert data["importedCount"] == 1
+                runway = session.scalar(
+                    select(Runway).where(Runway.airport_id == data["items"][0]["airportId"])
+                )
+                assert runway is not None
+                assert runway.maximum_type_aircraft == "C类和C类以下"
+            finally:
+                app.dependency_overrides.pop(get_db_session, None)

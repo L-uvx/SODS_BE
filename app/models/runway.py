@@ -27,6 +27,9 @@ class Runway(Base):
     runway_code_a: Mapped[str | None] = mapped_column(String(100), nullable=True)
     runway_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     runway_code_b: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    maximum_type_aircraft: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
     airport_id: Mapped[int] = mapped_column(ForeignKey("airports.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

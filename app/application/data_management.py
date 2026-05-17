@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.repository.data_management_repository import DataManagementRepository
 from app.schemas.data_management import (
+    AirportImportBatchResponse,
+    AirportImportResponse,
     AirportListItemResponse,
     AirportListResponse,
     AirportResponse,
@@ -466,6 +468,7 @@ class DataManagementService:
             runwayCodeA=runway.runway_code_a,
             runwayType=runway.runway_type,
             runwayCodeB=runway.runway_code_b,
+            maximumTypeAircraft=runway.maximum_type_aircraft,
             createdAt=runway.created_at,
             updatedAt=runway.updated_at,
         )

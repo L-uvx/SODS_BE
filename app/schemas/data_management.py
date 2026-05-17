@@ -133,6 +133,10 @@ class RunwayUpsertRequest(DataManagementBaseModel):
     runway_code_a: str | None = Field(default=None, alias="runwayCodeA")
     runway_type: str | None = Field(default=None, alias="runwayType")
     runway_code_b: str | None = Field(default=None, alias="runwayCodeB")
+    maximum_type_aircraft: str | None = Field(
+        default=None,
+        alias="maximumTypeAircraft",
+    )
 
     @field_validator("run_number")
     @classmethod
@@ -180,6 +184,10 @@ class RunwayResponse(DataManagementBaseModel):
     runway_code_a: str | None = Field(default=None, alias="runwayCodeA")
     runway_type: str | None = Field(default=None, alias="runwayType")
     runway_code_b: str | None = Field(default=None, alias="runwayCodeB")
+    maximum_type_aircraft: str | None = Field(
+        default=None,
+        alias="maximumTypeAircraft",
+    )
 
 
 class RunwayWriteResponse(DataManagementBaseModel):

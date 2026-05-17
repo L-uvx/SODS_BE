@@ -539,6 +539,7 @@ def _import_airport_from_excel(
             runway_code_a=rw_data.get('runway_code_a'),
             runway_code_b=rw_data.get('runway_code_b'),
             station_sub_type=rw_data.get('station_sub_type'),
+            maximum_type_aircraft=rw_data.get('maximum_type_aircraft'),
         )
         session.add(runway)
         session.flush()
