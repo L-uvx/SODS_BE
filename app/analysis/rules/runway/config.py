@@ -10,6 +10,23 @@ _CODE_B_CONFIG = {
     "F": (13000.0, 10.0, False),
 }
 
+# maximum_type_aircraft → (radius_m, height_m, use_circle)
+_MAXIMUM_TYPE_AIRCRAFT_CONFIG: dict[str | None, tuple[float, float, bool]] = {
+    "D类和D类以上": (13000.0, 10.0, False),
+    "C类和C类以下": (10000.0, 10.0, False),
+    "B类和B类以下": (10000.0, 0.0, True),
+}
+
+
+def resolve_em_zone_config(
+    maximum_type_aircraft: str | None,
+) -> tuple[float, float, bool]:
+    """按 maximum_type_aircraft 获取 EM 区配置，缺省按 D类 处理。"""
+    if maximum_type_aircraft and maximum_type_aircraft in _MAXIMUM_TYPE_AIRCRAFT_CONFIG:
+        return _MAXIMUM_TYPE_AIRCRAFT_CONFIG[maximum_type_aircraft]
+    return _MAXIMUM_TYPE_AIRCRAFT_CONFIG["D类和D类以上"]
+
+
 ZONE_CODE = "runway_electromagnetic_environment"
 ZONE_NAME = "机场电磁环境保护区"
 RULE_CODE = "runway_electromagnetic_environment"

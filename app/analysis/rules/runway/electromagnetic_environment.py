@@ -18,7 +18,7 @@ from app.analysis.rules.runway.config import (
     RULE_NAME,
     ZONE_CODE,
     ZONE_NAME,
-    _CODE_B_CONFIG,
+    resolve_em_zone_config,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 
@@ -66,15 +66,9 @@ def build_runway_em_protection_zone(
     projector: object,
     runway_context: dict[str, object],
 ) -> ProtectionZoneSpec | None:
-    code_b = runway_context.get("runwayCodeB")
-    if not code_b:
-        return None
+    maximum_type = runway_context.get("maximumTypeAircraft")
+    radius_m, height_m, is_circle = resolve_em_zone_config(maximum_type)
 
-    config = _CODE_B_CONFIG.get(code_b)
-    if config is None:
-        return None
-
-    radius_m, height_m, is_circle = config
     center_x, center_y = runway_context["localCenterPoint"]
     direction_deg = float(runway_context.get("directionDegrees", 0.0))
     length_m = float(runway_context.get("lengthMeters", 0.0))

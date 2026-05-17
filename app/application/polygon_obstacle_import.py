@@ -667,6 +667,7 @@ class PolygonObstacleImportService:
                         else None
                     ),
                     "runwayCodeB": getattr(runway, "runway_code_b", None),
+                    "maximumTypeAircraft": getattr(runway, "maximum_type_aircraft", None),
                     "altitude": float(getattr(runway, "altitude", 0) or 0.0),
                 }
             )

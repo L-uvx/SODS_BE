@@ -27,6 +27,15 @@ class TestCodeBConfig:
         assert _CODE_B_CONFIG.get("X") is None
         assert _CODE_B_CONFIG.get("") is None
 
+    def test_resolve_em_zone_config(self) -> None:
+        from app.analysis.rules.runway.config import resolve_em_zone_config
+        assert resolve_em_zone_config("D类和D类以上") == (13000.0, 10.0, False)
+        assert resolve_em_zone_config("C类和C类以下") == (10000.0, 10.0, False)
+        assert resolve_em_zone_config("B类和B类以下") == (10000.0, 0.0, True)
+        assert resolve_em_zone_config(None) == (13000.0, 10.0, False)
+        assert resolve_em_zone_config("未知值") == (13000.0, 10.0, False)
+        assert resolve_em_zone_config("") == (13000.0, 10.0, False)
+
 
 class TestStadiumPolygon:
     """体育场形多边形构建测试"""
@@ -122,7 +131,7 @@ class TestStadiumPolygon:
 class TestEmProtectionZone:
     """电磁环境保护区构建测试"""
 
-    def _make_runway_context(self, code_b, runway_id=1, direction=90.0, length=3000.0, altitude=0.0):
+    def _make_runway_context(self, maximum_type_aircraft=None, runway_id=1, direction=90.0, length=3000.0, altitude=0.0):
         return {
             "runwayId": runway_id,
             "runNumber": "18",
@@ -131,12 +140,12 @@ class TestEmProtectionZone:
             "lengthMeters": length,
             "widthMeters": 45.0,
             "maximumAirworthiness": None,
-            "runwayCodeB": code_b,
+            "maximumTypeAircraft": maximum_type_aircraft,
             "altitude": altitude,
         }
 
     def test_em_zone_code_a_produces_circle(self) -> None:
-        ctx = self._make_runway_context("A")
+        ctx = self._make_runway_context("B类和B类以下")
         result = build_runway_em_protection_zone(None, ctx)
         assert result is not None
         assert isinstance(result.local_geometry, MultiPolygon)
@@ -148,7 +157,7 @@ class TestEmProtectionZone:
         assert max_y == pytest.approx(10000.0, rel=0.01)
 
     def test_em_zone_code_b_produces_stadium(self) -> None:
-        ctx = self._make_runway_context("B")
+        ctx = self._make_runway_context("C类和C类以下")
         result = build_runway_em_protection_zone(None, ctx)
         assert result is not None
         assert isinstance(result.local_geometry, MultiPolygon)
@@ -157,7 +166,7 @@ class TestEmProtectionZone:
         assert result.vertical_definition["baseHeightMeters"] == 10.0
 
     def test_em_zone_code_c_produces_stadium_13km(self) -> None:
-        ctx = self._make_runway_context("C")
+        ctx = self._make_runway_context("D类和D类以上")
         result = build_runway_em_protection_zone(None, ctx)
         assert result is not None
         assert isinstance(result.local_geometry, MultiPolygon)
@@ -168,31 +177,45 @@ class TestEmProtectionZone:
         assert min_y == pytest.approx(-13000.0, rel=0.01)
         assert max_y == pytest.approx(13000.0, rel=0.01)
 
-    def test_em_zone_null_code_b_returns_none(self) -> None:
+    def test_em_zone_null_maximum_type_aircraft_defaults_to_d_class(self) -> None:
         ctx = self._make_runway_context(None)
         result = build_runway_em_protection_zone(None, ctx)
-        assert result is None
+        assert result is not None
+        assert isinstance(result.local_geometry, MultiPolygon)
+        # None 默认映射为 "C" → 13000m 体育场形
+        min_x, min_y, max_x, max_y = result.local_geometry.bounds
+        assert min_x == pytest.approx(-14500.0, rel=0.01)
+        assert max_x == pytest.approx(14500.0, rel=0.01)
+        assert min_y == pytest.approx(-13000.0, rel=0.01)
+        assert max_y == pytest.approx(13000.0, rel=0.01)
 
-    def test_em_zone_unknown_code_b_returns_none(self) -> None:
-        ctx = self._make_runway_context("X")
+    def test_em_zone_unknown_maximum_type_aircraft_defaults_to_d_class(self) -> None:
+        ctx = self._make_runway_context("未知值")
         result = build_runway_em_protection_zone(None, ctx)
-        assert result is None
+        assert result is not None
+        assert isinstance(result.local_geometry, MultiPolygon)
+        # 未知值默认映射为 "C" → 13000m 体育场形
+        min_x, min_y, max_x, max_y = result.local_geometry.bounds
+        assert min_x == pytest.approx(-14500.0, rel=0.01)
+        assert max_x == pytest.approx(14500.0, rel=0.01)
+        assert min_y == pytest.approx(-13000.0, rel=0.01)
+        assert max_y == pytest.approx(13000.0, rel=0.01)
 
     def test_em_zone_has_runway_id(self) -> None:
-        ctx = self._make_runway_context("A", runway_id=42)
+        ctx = self._make_runway_context("B类和B类以下", runway_id=42)
         result = build_runway_em_protection_zone(None, ctx)
         assert result is not None
         assert result.runway_id == 42
 
     def test_em_zone_station_id_is_zero(self) -> None:
-        ctx = self._make_runway_context("A")
+        ctx = self._make_runway_context("B类和B类以下")
         result = build_runway_em_protection_zone(None, ctx)
         assert result is not None
         assert result.station_id == -1
         assert result.station_type == "RUNWAY"
 
     def test_em_zone_vertical_flat(self) -> None:
-        ctx = self._make_runway_context("B")
+        ctx = self._make_runway_context("C类和C类以下")
         result = build_runway_em_protection_zone(None, ctx)
         assert result is not None
         assert result.vertical_definition["mode"] == "flat"
@@ -200,14 +223,14 @@ class TestEmProtectionZone:
         assert result.vertical_definition["baseHeightMeters"] == 10.0
 
     def test_em_zone_with_runway_altitude(self) -> None:
-        ctx = self._make_runway_context("A", altitude=500.0)
+        ctx = self._make_runway_context("B类和B类以下", altitude=500.0)
         result = build_runway_em_protection_zone(None, ctx)
         assert result is not None
         # A类: runway_altitude(500) + height_m(0) = 500
         assert result.vertical_definition["baseHeightMeters"] == 500.0
 
     def test_em_zone_b_with_runway_altitude(self) -> None:
-        ctx = self._make_runway_context("B", altitude=300.0)
+        ctx = self._make_runway_context("C类和C类以下", altitude=300.0)
         result = build_runway_em_protection_zone(None, ctx)
         assert result is not None
         # B类: runway_altitude(300) + height_m(10) = 310
