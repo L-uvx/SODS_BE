@@ -38,12 +38,13 @@ class BoundLocBuildingRestrictionZoneRegion1Rule(BoundObstacleRule):
         )
         base_height_meters = float(getattr(self.station, "altitude", 0.0) or 0.0)
         top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
+        ceiled_relative_height = ceil2(top_elevation_meters - base_height_meters)
 
         is_compliant = True
         if entered_protection_zone:
-            is_compliant = top_elevation_meters <= allowed_height_meters
+            is_compliant = (ceiled_relative_height + base_height_meters) <= allowed_height_meters
 
-        over_height_meters = max(0.0, top_elevation_meters - allowed_height_meters)
+        over_height_meters = max(0.0, (ceiled_relative_height + base_height_meters) - allowed_height_meters)
         if entered_protection_zone:
             limit = ceil2(allowed_height_meters)
             if is_compliant:

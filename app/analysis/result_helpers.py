@@ -1,15 +1,25 @@
 import math
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 
 
+_TWO_PLACES = Decimal("0.01")
+
+
 def ceil2(value: float) -> float:
-    return math.ceil(value * 100) / 100
+    if not math.isfinite(value):
+        return value
+    d = Decimal(str(value))
+    return float(d.quantize(_TWO_PLACES, rounding=ROUND_CEILING))
 
 
 def floor2(value: float) -> float:
-    return math.floor(value * 100) / 100
+    if not math.isfinite(value):
+        return value
+    d = Decimal(str(value))
+    return float(d.quantize(_TWO_PLACES, rounding=ROUND_FLOOR))
 
 
 def _normalize_azimuth_degrees(angle: float) -> float:
