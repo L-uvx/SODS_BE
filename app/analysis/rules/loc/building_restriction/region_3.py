@@ -52,7 +52,7 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
             is_compliant = (ceiled_relative_height + base_height_meters) <= worst_allowed_height_meters
 
         over_height_meters = (
-            max(0.0, (ceiled_relative_height + base_height_meters) - (allowed_height_meters or 0.0))
+            max(0.0, top_elevation_meters - (allowed_height_meters or 0.0))
             if entered_protection_zone
             else 0.0
         )
