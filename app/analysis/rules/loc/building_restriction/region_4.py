@@ -6,6 +6,7 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    compute_over_height_fixed_limit,
     precise_diff_ceil2,
     precise_relative_height,
 )
@@ -44,7 +45,9 @@ class BoundLocBuildingRestrictionZoneRegion4Rule(BoundObstacleRule):
         if entered_protection_zone:
             is_compliant = (ceiled_relative_height + base_height_meters) <= allowed_height_meters
 
-        over_height_meters = max(0.0, (ceiled_relative_height + base_height_meters) - allowed_height_meters)
+        over_height_meters = compute_over_height_fixed_limit(
+            top_elevation_meters, base_height_meters, 0.0,
+        )
         if entered_protection_zone:
             limit = ceil2(allowed_height_meters)
             if is_compliant:

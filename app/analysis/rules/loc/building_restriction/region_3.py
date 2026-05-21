@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal
 
 from shapely.geometry import Point
 
@@ -6,6 +7,7 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    compute_over_height_fixed_limit,
     precise_diff_ceil2,
     precise_relative_height,
 )
@@ -54,7 +56,7 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
             is_compliant = (ceiled_relative_height + base_height_meters) <= worst_allowed_height_meters
 
         over_height_meters = (
-            max(0.0, top_elevation_meters - (allowed_height_meters or 0.0))
+            float(max(Decimal("0.00"), Decimal(str(top_elevation_meters)) - Decimal(str(allowed_height_meters or 0.0))))
             if entered_protection_zone
             else 0.0
         )

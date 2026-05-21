@@ -30,6 +30,20 @@ def precise_relative_height(top_elevation: float, base_height: float) -> float:
     return precise_diff_ceil2(top_elevation, base_height)
 
 
+# 使用 Decimal 算术计算固定限高规则中的超高值（米）。
+# 对齐 C# overDistance = Ceil((top - alt) * 100) / 100 - limit 的 Decimal 口径，
+# 避免 precise_relative_height 返回 float 后再次浮点加减引入误差。
+def compute_over_height_fixed_limit(
+    top_elevation: float, base_height: float, limit_offset: float,
+) -> float:
+    top_d = Decimal(str(top_elevation))
+    base_d = Decimal(str(base_height))
+    rel_ceiled = (top_d - base_d).quantize(_TWO_PLACES, rounding=ROUND_CEILING)
+    limit_d = Decimal(str(limit_offset))
+    over_d = max(Decimal("0.00"), rel_ceiled - limit_d)
+    return float(over_d)
+
+
 def floor2(value: float) -> float:
     if not math.isfinite(value):
         return value

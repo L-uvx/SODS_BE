@@ -1,5 +1,6 @@
 # app/analysis/rules/vor/datum_plane/_base.py
 from dataclasses import dataclass
+from decimal import Decimal
 
 from shapely.geometry import Point
 
@@ -99,8 +100,8 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
         min_h, max_h = compute_horizontal_angle_range_from_geometry(
             self.station_point, shape,
         )
-        over = compute_over_distance_meters(top_elevation, self.benchmark_height)
-        rel_h = top_elevation - self.benchmark_height
+        over = float(max(Decimal("0.00"), Decimal(str(top_elevation)) - Decimal(str(self.benchmark_height))))
+        rel_h = float(Decimal(str(top_elevation)) - Decimal(str(self.benchmark_height)))
 
         if not entered:
             details = "障碍物未进入基准面保护区。"
@@ -133,7 +134,7 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
                 "allowedHeightMeters": self.benchmark_height,
                 "benchmarkHeightMeters": self.benchmark_height,
                 "topElevationMeters": top_elevation,
-                "overHeightMeters": max(0.0, top_elevation - self.benchmark_height),
+                "overHeightMeters": float(max(Decimal("0.00"), Decimal(str(top_elevation)) - Decimal(str(self.benchmark_height)))),
             },
             standards_rule_code=self.protection_zone.rule_code,
             over_distance_meters=over,

@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from decimal import Decimal
 
 from shapely.geometry import Point, Polygon
 
@@ -63,7 +64,7 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
             self.station_point, obstacle_shape,
         )
         relative_height_meters = top_elevation_meters - base_height_meters
-        over_height_meters = max(0.0, top_elevation_meters - allowed_height_meters)
+        over_height_meters = float(max(Decimal("0.00"), Decimal(str(top_elevation_meters)) - Decimal(str(allowed_height_meters))))
         over_distance_meters = over_height_meters if not is_compliant else 0.0
 
         gb_name, mh_name = _resolve_loc_standard_names(self.protection_zone.rule_code)
