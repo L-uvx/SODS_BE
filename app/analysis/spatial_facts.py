@@ -1,44 +1,8 @@
 from typing import Any
 
-from shapely.geometry import MultiPolygon, Point, Polygon, mapping, shape
-
 from app.analysis.local_coordinate import AirportLocalProjector
 from app.analysis.obstacle_categories import normalize_obstacle_type
-
-
-# 将经纬度障碍物几何投影到机场局部米制坐标系。
-def _project_geometry(
-    projector: AirportLocalProjector, geometry: dict[str, Any]
-) -> dict[str, Any]:
-    source_geometry = shape(geometry)
-    if isinstance(source_geometry, Point):
-        x, y = projector.project_point(
-            float(source_geometry.x), float(source_geometry.y)
-        )
-        return {
-            "type": "Point",
-            "coordinates": [float(x), float(y)],
-        }
-
-    multipolygon = source_geometry
-    polygons: list[Polygon] = []
-    for polygon in multipolygon.geoms:
-        shell = [
-            projector.project_point(float(lon), float(lat))
-            for lon, lat in polygon.exterior.coords
-        ]
-        holes = [
-            [projector.project_point(float(lon), float(lat)) for lon, lat in ring.coords]
-            for ring in polygon.interiors
-        ]
-        polygons.append(Polygon(shell=shell, holes=holes))
-
-    projected = MultiPolygon(polygons)
-    projected_mapping = mapping(projected)
-    return {
-        "type": projected_mapping["type"],
-        "coordinates": projected_mapping["coordinates"],
-    }
+from app.analysis.obstacle_projection import project_geometry_to_projector
 
 
 # 构建机场级最小空间事实结果。
@@ -86,7 +50,7 @@ def build_airport_spatial_facts(context: Any) -> dict[str, Any]:
         if geometry is None and local_geometry is None:
             raise KeyError("obstacle raw_payload must contain geometry or localGeometry")
         if local_geometry is None:
-            local_geometry = _project_geometry(projector, geometry)
+            local_geometry = project_geometry_to_projector(projector, geometry)
 
         obstacle_items.append(
             {

@@ -9,6 +9,8 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    precise_diff_ceil2,
+    precise_relative_height,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
@@ -44,7 +46,7 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
             is_compliant = top_elevation_meters <= allowed_height_meters
 
         is_mid = entered_protection_zone and not is_applicable
-        height_diff = ceil2(top_elevation_meters - base_height_meters)
+        height_diff = precise_relative_height(top_elevation_meters, base_height_meters)
         if not is_applicable:
             message = f"位于航向信标天线中心前向±10°、距离航向信标天线3000m的区域内，顶部高程与航向信标天线地势高度差为{height_diff}米,但标准未明确对该障碍物类型进行限制"
         elif not entered_protection_zone:
@@ -66,14 +68,14 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
 
         gb_name, mh_name = _resolve_loc_standard_names(self.protection_zone.rule_code)
         joined_names = _join_loc_standard_names(gb_name, mh_name)
-        limit = ceil2(allowed_height_meters - base_height_meters)
+        limit = precise_diff_ceil2(allowed_height_meters, base_height_meters)
         if is_compliant:
             details = (
                 f"满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定。"
             )
         else:
-            actual = ceil2(top_elevation_meters - base_height_meters)
-            over = ceil2(top_elevation_meters - allowed_height_meters)
+            actual = precise_diff_ceil2(top_elevation_meters, base_height_meters)
+            over = precise_diff_ceil2(top_elevation_meters, allowed_height_meters)
             details = (
                 f"不满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定，"
                 f"实际高度{actual}m，超出{over}m。"

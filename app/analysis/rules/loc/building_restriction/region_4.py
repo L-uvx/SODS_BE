@@ -6,6 +6,8 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    precise_diff_ceil2,
+    precise_relative_height,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
@@ -35,7 +37,7 @@ class BoundLocBuildingRestrictionZoneRegion4Rule(BoundObstacleRule):
         actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         base_height_meters = float(getattr(self.station, "altitude", 0.0) or 0.0)
         top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
-        ceiled_relative_height = ceil2(top_elevation_meters - base_height_meters)
+        ceiled_relative_height = precise_relative_height(top_elevation_meters, base_height_meters)
         allowed_height_meters = base_height_meters
 
         is_compliant = True
@@ -72,8 +74,9 @@ class BoundLocBuildingRestrictionZoneRegion4Rule(BoundObstacleRule):
                 f"满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定。"
             )
         else:
-            actual = ceil2(top_elevation_meters - base_height_meters)
-            over = ceil2(top_elevation_meters - base_height_meters)
+            rel_height = precise_diff_ceil2(top_elevation_meters, base_height_meters)
+            actual = rel_height
+            over = rel_height
             details = (
                 f"不满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定，"
                 f"实际高度{actual}m，超出{over}m。"

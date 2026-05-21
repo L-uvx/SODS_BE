@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis.context_builder import build_airport_analysis_context
 from app.analysis.local_coordinate import AirportLocalProjector
+from app.analysis.obstacle_projection import create_station_projector, project_obstacle_for_station
 from app.analysis.protection_zone_style import resolve_protection_zone_style
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.spatial_facts import build_airport_spatial_facts
@@ -355,11 +356,11 @@ class PolygonObstacleImportService:
         runways = self._repository.list_runways_by_airport_id(airport_id)
         stations = self._repository.list_stations_by_airport_id(airport_id)
 
-        projector = AirportLocalProjector(
+        airport_projector = AirportLocalProjector(
             float(airport.longitude), float(airport.latitude)
         )
-        runway_contexts = self._build_runway_contexts(
-            projector=projector,
+        airport_runway_contexts = self._build_runway_contexts(
+            projector=airport_projector,
             runways=runways,
         )
 
@@ -388,20 +389,25 @@ class PolygonObstacleImportService:
             if station.longitude is None or station.latitude is None:
                 continue
 
-            station_point = projector.project_point(
+            station_proj = create_station_projector(station)
+            station_point = station_proj.project_point(
                 float(station.longitude),
                 float(station.latitude),
+            )
+            station_runway_contexts = self._build_runway_contexts(
+                projector=station_proj,
+                runways=runways,
             )
             zone_specs = dispatcher.bind_station_protection_zones(
                 station=station,
                 station_point=station_point,
-                runways=runway_contexts,
+                runways=station_runway_contexts,
             )
             for spec in zone_specs:
                 payload = self._build_protection_zone_payload(
                     airport_id=airport_id,
                     airport_name=airport.name,
-                    projector=projector,
+                    projector=station_proj,
                     station_altitude_by_id=station_altitude_by_id,
                     station_name_by_id=station_name_by_id,
                     station_coordinates_by_id=station_coordinates_by_id,
@@ -410,13 +416,13 @@ class PolygonObstacleImportService:
                 )
                 all_zones.append(payload)
 
-        for rw_ctx in runway_contexts:
-            em_spec = build_runway_em_protection_zone(projector, rw_ctx)
+        for rw_ctx in airport_runway_contexts:
+            em_spec = build_runway_em_protection_zone(airport_projector, rw_ctx)
             if em_spec is not None:
                 payload = self._build_protection_zone_payload(
                     airport_id=airport_id,
                     airport_name=airport.name,
-                    projector=projector,
+                    projector=airport_projector,
                     station_altitude_by_id=station_altitude_by_id,
                     station_name_by_id=station_name_by_id,
                     station_coordinates_by_id=station_coordinates_by_id,
@@ -578,12 +584,13 @@ class PolygonObstacleImportService:
         airport_facts.pop("stationCount", None)
         airport_facts.pop("stations", None)
         airport = context.airport
-        projector = AirportLocalProjector(
+        obstacles_from_facts = airport_facts["obstacles"]
+        airport_projector = AirportLocalProjector(
             float(airport.longitude), float(airport.latitude)
         )
         dispatcher = StationAnalysisDispatcher()
-        runway_contexts = self._build_runway_contexts(
-            projector=projector,
+        airport_runway_contexts = self._build_runway_contexts(
+            projector=airport_projector,
             runways=context.runways,
         )
         rule_results: list[dict[str, object]] = []
@@ -593,15 +600,28 @@ class PolygonObstacleImportService:
             if station.longitude is None or station.latitude is None:
                 continue
 
-            station_point = projector.project_point(
+            station_proj = create_station_projector(station)
+            station_obstacles: list[dict[str, object]] = []
+            for obs in obstacles_from_facts:
+                if obs.get("geometry") is not None:
+                    station_obstacles.append(project_obstacle_for_station(station_proj, obs))
+                else:
+                    stripped = {**obs}
+                    stripped.pop("localGeometry", None)
+                    station_obstacles.append(stripped)
+            station_point = station_proj.project_point(
                 float(station.longitude),
                 float(station.latitude),
             )
+            station_runway_contexts = self._build_runway_contexts(
+                projector=station_proj,
+                runways=context.runways,
+            )
             station_results = dispatcher.analyze_station(
                 station=station,
-                obstacles=airport_facts["obstacles"],
+                obstacles=station_obstacles,
                 station_point=station_point,
-                runways=runway_contexts,
+                runways=station_runway_contexts,
             )
             rule_results.extend(
                 [
@@ -615,8 +635,8 @@ class PolygonObstacleImportService:
             protection_zones.extend(station_results.protection_zones)
 
         # === 跑道级分析：机场电磁环境保护区 ===
-        for rw_ctx in runway_contexts:
-            pz_spec = build_runway_em_protection_zone(projector, rw_ctx)
+        for rw_ctx in airport_runway_contexts:
+            pz_spec = build_runway_em_protection_zone(airport_projector, rw_ctx)
             if pz_spec is None:
                 continue
             protection_zones.append(pz_spec)

@@ -6,6 +6,8 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    precise_diff_ceil2,
+    precise_relative_height,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
@@ -39,7 +41,7 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
         actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         base_height_meters = float(getattr(self.station, "altitude", 0.0) or 0.0)
         top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
-        ceiled_relative_height = ceil2(top_elevation_meters - base_height_meters)
+        ceiled_relative_height = precise_relative_height(top_elevation_meters, base_height_meters)
         worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
             zone_geometry=self.zone_geometry,
             obstacle_geometry=obstacle_shape,
@@ -79,14 +81,14 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
 
         gb_name, mh_name = _resolve_loc_standard_names("loc_building_restriction_zone")
         joined_names = _join_loc_standard_names(gb_name, mh_name)
-        limit = ceil2((worst_allowed_height_meters or base_height_meters) - base_height_meters)
+        limit = precise_diff_ceil2((worst_allowed_height_meters or base_height_meters), base_height_meters)
         if is_compliant:
             details = (
                 f"满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定。"
             )
         else:
-            actual = ceil2(top_elevation_meters - base_height_meters)
-            over = ceil2(top_elevation_meters - (worst_allowed_height_meters or 0.0))
+            actual = precise_diff_ceil2(top_elevation_meters, base_height_meters)
+            over = precise_diff_ceil2(top_elevation_meters, (worst_allowed_height_meters or 0.0))
             details = (
                 f"不满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定，"
                 f"实际高度{actual}m，超出{over}m。"

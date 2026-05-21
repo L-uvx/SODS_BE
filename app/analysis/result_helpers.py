@@ -15,6 +15,21 @@ def ceil2(value: float) -> float:
     return float(d.quantize(_TWO_PLACES, rounding=ROUND_CEILING))
 
 
+# 使用 Decimal 精确减法计算两浮点数之差并向上取整到 2 位小数。
+# 对齐 C# 的 Ceil((top - alt) * 100) / 100 口径。
+# 用于 ceil2(a - b) 模式，其中 a, b 为从数据库读取的 Numeric 值。
+def precise_diff_ceil2(a: float, b: float) -> float:
+    if not math.isfinite(a) or not math.isfinite(b):
+        return ceil2(a - b)
+    diff = Decimal(str(a)) - Decimal(str(b))
+    return float(diff.quantize(_TWO_PLACES, rounding=ROUND_CEILING))
+
+
+# 使用 Decimal 精确减法计算障碍物相对台站的高度并向上取整到 2 位小数。
+def precise_relative_height(top_elevation: float, base_height: float) -> float:
+    return precise_diff_ceil2(top_elevation, base_height)
+
+
 def floor2(value: float) -> float:
     if not math.isfinite(value):
         return value

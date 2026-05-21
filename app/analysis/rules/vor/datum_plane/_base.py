@@ -9,6 +9,7 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
+    precise_diff_ceil2,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
@@ -87,7 +88,7 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
             if is_compliant:
                 message = f"基准面高度为{base_h}米，未超出基准面高度"
             else:
-                diff = ceil2(top_elevation - self.benchmark_height)
+                diff = precise_diff_ceil2(top_elevation, self.benchmark_height)
                 message = f"基准面高度为{base_h}米，超出基准面高度{diff}米"
 
         obstacle_centroid = shape.centroid

@@ -1,5 +1,11 @@
+import math
 from types import SimpleNamespace
 
+from app.analysis.obstacle_projection import (
+    create_station_projector,
+    project_geometry_to_projector,
+    project_obstacle_for_station,
+)
 from app.analysis.spatial_facts import build_airport_spatial_facts
 
 
@@ -187,3 +193,103 @@ def test_build_airport_spatial_facts_projects_point_geometry() -> None:
     assert facts["obstacles"][0]["geometry"]["type"] == "Point"
     assert facts["obstacles"][0]["localGeometry"]["type"] == "Point"
     assert len(facts["obstacles"][0]["localGeometry"]["coordinates"]) == 2
+
+
+def test_create_station_projector_centered_on_station() -> None:
+    station = SimpleNamespace(longitude=104.0, latitude=30.0)
+
+    projector = create_station_projector(station)
+
+    local_x, local_y = projector.project_point(104.0, 30.0)
+    assert math.isclose(local_x, 0.0, abs_tol=1.0)
+    assert math.isclose(local_y, 0.0, abs_tol=1.0)
+
+
+def test_project_obstacle_for_station_point() -> None:
+    projector = create_station_projector(
+        SimpleNamespace(longitude=104.0, latitude=30.0)
+    )
+    obstacle = {
+        "id": 1,
+        "name": "点障碍物",
+        "obstacle_type": "tree_or_forest",
+        "top_elevation": 520.0,
+        "geometry": {
+            "type": "Point",
+            "coordinates": [104.001, 30.0],
+        },
+    }
+
+    result = project_obstacle_for_station(projector, obstacle)
+
+    assert result["id"] == 1
+    assert result["name"] == "点障碍物"
+    assert result["geometry"]["type"] == "Point"
+    assert result["geometry"]["coordinates"] == [104.001, 30.0]
+    assert result["localGeometry"]["type"] == "Point"
+    local_coords = result["localGeometry"]["coordinates"]
+    assert len(local_coords) == 2
+    assert local_coords[0] > 0
+    assert math.isclose(local_coords[1], 0.0, abs_tol=10.0)
+
+
+def test_project_obstacle_for_station_polygon() -> None:
+    projector = create_station_projector(
+        SimpleNamespace(longitude=104.0, latitude=30.0)
+    )
+    obstacle = {
+        "id": 2,
+        "name": "多边形障碍物",
+        "obstacle_type": "building_general",
+        "top_elevation": 550.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [
+                        [104.0, 30.0],
+                        [104.0005, 30.0],
+                        [104.0005, 30.0005],
+                        [104.0, 30.0005],
+                        [104.0, 30.0],
+                    ]
+                ]
+            ],
+        },
+    }
+
+    result = project_obstacle_for_station(projector, obstacle)
+
+    assert result["id"] == 2
+    assert result["name"] == "多边形障碍物"
+    assert result["obstacle_type"] == "building_general"
+    assert result["top_elevation"] == 550.0
+    assert result["geometry"]["type"] == "MultiPolygon"
+    assert result["localGeometry"]["type"] == "MultiPolygon"
+    local_coords = result["localGeometry"]["coordinates"]
+    assert len(local_coords) == 1
+
+
+def test_project_obstacle_for_station_overwrites_existing_local_geometry() -> None:
+    projector = create_station_projector(
+        SimpleNamespace(longitude=104.0, latitude=30.0)
+    )
+    obstacle = {
+        "id": 3,
+        "name": "测试障碍物",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [104.001, 30.001],
+        },
+        "localGeometry": {
+            "type": "Point",
+            "coordinates": [999.0, 888.0],
+        },
+    }
+
+    result = project_obstacle_for_station(projector, obstacle)
+
+    local_coords = result["localGeometry"]["coordinates"]
+    assert math.isclose(local_coords[0], 0.0, abs_tol=200.0)
+    assert math.isclose(local_coords[1], 0.0, abs_tol=200.0)
+    assert local_coords[0] != 999.0
