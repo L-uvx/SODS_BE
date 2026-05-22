@@ -483,7 +483,7 @@ def test_run_export_task_writes_gb_and_mh_standards_into_report() -> None:
                         "isApplicable": True,
                         "isCompliant": False,
                         "message": "在50米以内",
-                        "metrics": {"minimumDistanceMeters": 50.0},
+                            "metrics": {"minimumDistanceMeters": 50.0, "enteredProtectionZone": True},
                         "standards": {
                             "gb": {
                                 "code": "GB_NDB_50m最小间距区域_50",
@@ -861,27 +861,27 @@ class TestFlattenRuleResultsSpecialDisplay:
                 f"Expected 10.0 (only normal rule), got {row['finalOverHeight']}"
             )
 
-    def test_same_obstacle_removed_from_compliant_table(self):
-        """同一障碍物在不满足表中出现后，从满足表移除——通过 build_export_payload 验收"""
+    def test_not_entered_zone_rows_excluded_from_tables(self):
+        """enteredProtectionZone=False 不出现在任一张表中——通过 build_export_payload 验收"""
         from unittest.mock import MagicMock
 
         r1 = self._make_rule(
             isCompliant=False,
             obstacleName="Building A",
             stationName="Station X",
-            metrics={"enteredProtectionZone": True, "overHeightMeters": 10.0},
+            metrics={"enteredProtectionZone": True, "overHeightMeters": 10.0, "allowedHeightMeters": 50.0},
         )
         r2 = self._make_rule(
             isCompliant=True,
             obstacleName="Building A",
             stationName="Station Y",
-            metrics={"enteredProtectionZone": False},
+            metrics={"enteredProtectionZone": False, "allowedHeightMeters": 100.0},
         )
         r3 = self._make_rule(
             isCompliant=True,
             obstacleName="Building B",
             stationName="Station X",
-            metrics={"enteredProtectionZone": False},
+            metrics={"enteredProtectionZone": False, "allowedHeightMeters": 100.0},
         )
         mock_task = MagicMock()
         mock_task.result_payload = {
@@ -897,8 +897,65 @@ class TestFlattenRuleResultsSpecialDisplay:
 
         assert len(non_compliant_rows) == 1
         assert non_compliant_rows[0]["obstacleName"] == "Building A"
+        assert len(compliant_rows) == 0
+
+    def test_same_obstacle_in_both_tables_with_different_rules(self):
+        """同一障碍物在不同规则下有不同结果，可同时出现在满足表和不满足表"""
+        from unittest.mock import MagicMock
+
+        r1 = self._make_rule(
+            isCompliant=False,
+            obstacleName="Building A",
+            stationName="Station X",
+            metrics={"enteredProtectionZone": True, "overHeightMeters": 10.0, "allowedHeightMeters": 50.0},
+        )
+        r2 = self._make_rule(
+            isCompliant=True,
+            obstacleName="Building A",
+            stationName="Station Y",
+            metrics={"enteredProtectionZone": True, "allowedHeightMeters": 100.0},
+        )
+        mock_task = MagicMock()
+        mock_task.result_payload = {
+            "ruleResults": [r1, r2],
+            "obstacleCount": 1,
+            "selectedTargets": [{"name": "测试机场"}],
+        }
+        mock_task.import_batch = None
+
+        payload = build_export_payload(mock_task)
+        non_compliant_rows = payload["nonCompliantRows"]
+        compliant_rows = payload["compliantRows"]
+
+        assert len(non_compliant_rows) == 1
+        assert non_compliant_rows[0]["obstacleName"] == "Building A"
         assert len(compliant_rows) == 1
-        assert compliant_rows[0]["obstacleName"] == "Building B"
+        assert compliant_rows[0]["obstacleName"] == "Building A"
+
+    def test_no_judge_status_in_compliant_not_in_noncompliant(self):
+        """complianceStatus='不判断' 的行出现在满足表中，不出现不满表用"""
+        from unittest.mock import MagicMock
+
+        r = self._make_rule(
+            isMid=True,
+            obstacleName="Building E",
+            metrics={"enteredProtectionZone": True, "allowedHeightMeters": 100.0},
+        )
+        mock_task = MagicMock()
+        mock_task.result_payload = {
+            "ruleResults": [r],
+            "obstacleCount": 1,
+            "selectedTargets": [{"name": "测试机场"}],
+        }
+        mock_task.import_batch = None
+
+        payload = build_export_payload(mock_task)
+        non_compliant_rows = payload["nonCompliantRows"]
+        compliant_rows = payload["compliantRows"]
+
+        assert len(non_compliant_rows) == 0
+        assert len(compliant_rows) == 1
+        assert compliant_rows[0]["complianceStatus"] == "不判断"
 
     def test_overheight_tracks_on_entered_zone_not_is_compliant(self):
         """enteredProtectionZone=True 但 isCompliant=True 的规则仍计入最终超高"""
@@ -927,6 +984,49 @@ class TestFlattenRuleResultsSpecialDisplay:
         rows = _flatten_rule_results([r])
         assert len(rows) == 1
         assert rows[0]["finalOverHeight"] == 0
+
+    # ---- T10b: enteredProtectionZone field in row output ----
+    def test_row_includes_entered_protection_zone_true(self):
+        r = self._make_rule(
+            isCompliant=False,
+            metrics={
+                "enteredProtectionZone": True,
+                "overHeightMeters": 5.0,
+            },
+        )
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        assert rows[0]["enteredProtectionZone"] is True
+
+    def test_row_includes_entered_protection_zone_false(self):
+        r = self._make_rule(
+            isCompliant=True,
+            metrics={
+                "enteredProtectionZone": False,
+            },
+        )
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        assert rows[0]["enteredProtectionZone"] is False
+
+    def test_row_entered_protection_zone_missing_defaults_false(self):
+        r = self._make_rule(
+            isCompliant=True,
+            metrics={"overHeightMeters": 3.0},
+        )
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        assert rows[0]["enteredProtectionZone"] is False
+
+    def test_row_entered_protection_zone_present_in_no_standards_path(self):
+        r = self._make_rule(
+            standards={"gb": [], "mh": []},
+            isCompliant=True,
+            metrics={"enteredProtectionZone": True},
+        )
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        assert rows[0]["enteredProtectionZone"] is True
 
 
 class TestBuildSummaryRadarIntegration:

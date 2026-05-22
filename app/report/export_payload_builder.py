@@ -186,6 +186,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                 "isCompliant": is_compliant,
                 "complianceStatus": compliance_status,
                 "overHeight": over_height_display,
+                "enteredProtectionZone": entered_zone,
             }
             rows.append(row)
             # C# L651: if (analysisResult.Intersection) → contribute to maxOverHeight
@@ -214,6 +215,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                         "isCompliant": is_compliant,
                         "complianceStatus": compliance_status,
                         "overHeight": over_height_display,
+                        "enteredProtectionZone": entered_zone,
                     }
                     rows.append(row)
                     # C# L651: if (analysisResult.Intersection) → contribute to maxOverHeight
@@ -396,13 +398,16 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     radar_unmet_names = _collect_radar_unmet_obstacles(cumulative_mask_angle_results)
     summary = _build_summary(rule_results, obstacle_count, radar_unmet_names)
 
-    non_compliant_obstacle_names = {
-        row["obstacleName"] for row in table_rows if not row["isCompliant"]
-    }
-    non_compliant_rows = [row for row in table_rows if not row["isCompliant"]]
+    non_compliant_rows = [
+        row for row in table_rows
+        if not row["isCompliant"]
+        and row["enteredProtectionZone"]
+        and row["complianceStatus"] != "不判断"
+    ]
     compliant_rows = [
         row for row in table_rows
-        if row["isCompliant"] and row["obstacleName"] not in non_compliant_obstacle_names
+        if (row["isCompliant"] or row["complianceStatus"] == "不判断")
+        and row["enteredProtectionZone"]
     ]
 
     em_zone_results = [
