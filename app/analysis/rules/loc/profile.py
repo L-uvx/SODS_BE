@@ -114,7 +114,10 @@ class LocRuleProfile:
                         continue
         building_restriction_shared_context = None
         building_restriction_rules = []
+        station_sub_type = getattr(station, "station_sub_type", None)
         if self._building_restriction_rules and (
+            station_sub_type in {"II", "III"}
+        ) and (
             not has_obstacles
             or obstacle_categories
             & loc_building_restriction_module.SUPPORTED_CATEGORIES
@@ -185,18 +188,20 @@ class LocRuleProfile:
         )
         protection_zones.append(bound_forward.protection_zone)
 
-        shared_ctx = build_loc_building_restriction_zone_shared_context(
-            station_point=station_point,
-            runway_context=runway_context,
-        )
-        for rule in self._building_restriction_rules:
-            bound = rule.bind(
-                station=station,
+        station_sub_type = getattr(station, "station_sub_type", None)
+        if station_sub_type in {"II", "III"}:
+            shared_ctx = build_loc_building_restriction_zone_shared_context(
                 station_point=station_point,
                 runway_context=runway_context,
-                shared_context=shared_ctx,
             )
-            protection_zones.append(bound.protection_zone)
+            for rule in self._building_restriction_rules:
+                bound = rule.bind(
+                    station=station,
+                    station_point=station_point,
+                    runway_context=runway_context,
+                    shared_context=shared_ctx,
+                )
+                protection_zones.append(bound.protection_zone)
 
         run_area_shared = build_loc_run_area_shared_context(
             station=station,

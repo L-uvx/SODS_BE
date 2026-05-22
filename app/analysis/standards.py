@@ -55,7 +55,11 @@ _LOC_STANDARD_KEYS: dict[str, tuple[list[str], list[str]]] = {
         ["GB_ILSLOC_场地保护区_线缆"],
         ["MH_ILSLOC_场地保护区_线缆"],
     ),
-    "loc_building_restriction_zone": (
+    "loc_building_restriction_zone_ii": (
+        [],
+        ["MH_ILSLOC_建筑物限制区_Ⅱ"],
+    ),
+    "loc_building_restriction_zone_iii": (
         [],
         ["MH_ILSLOC_建筑物限制区_Ⅲ"],
     ),

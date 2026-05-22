@@ -32,6 +32,8 @@ class BoundLocBuildingRestrictionZoneRegion4Rule(BoundObstacleRule):
     # 执行 LOC 建筑物限制区第 4 区判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         obstacle_shape = resolve_obstacle_shape(obstacle)
+        station_sub_type = str(getattr(self.station, "station_sub_type", "")).upper()
+        standards_rule_code = f"loc_building_restriction_zone_{station_sub_type.lower()}"
         entered_protection_zone = obstacle_shape.intersects(
             self.protection_zone.local_geometry
         )
@@ -69,7 +71,7 @@ class BoundLocBuildingRestrictionZoneRegion4Rule(BoundObstacleRule):
         relative_height_meters = top_elevation_meters - base_height_meters
         over_distance_meters = over_height_meters if not is_compliant else 0.0
 
-        gb_name, mh_name = _resolve_loc_standard_names("loc_building_restriction_zone")
+        gb_name, mh_name = _resolve_loc_standard_names(standards_rule_code)
         joined_names = _join_loc_standard_names(gb_name, mh_name)
         limit = 0.0
         if is_compliant:
@@ -109,7 +111,7 @@ class BoundLocBuildingRestrictionZoneRegion4Rule(BoundObstacleRule):
                 "overHeightMeters": over_height_meters,
                 "actualDistanceMeters": actual_distance_meters,
             },
-            standards_rule_code="loc_building_restriction_zone",
+            standards_rule_code=standards_rule_code,
             over_distance_meters=over_distance_meters,
             azimuth_degrees=az,
             max_horizontal_angle_degrees=max_h,

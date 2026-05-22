@@ -54,13 +54,31 @@ def test_build_rule_standards_returns_none_for_missing_mapping() -> None:
     assert standards.mh == []
 
 
-def test_build_rule_standards_returns_shared_loc_building_restriction_mapping() -> None:
+def test_build_rule_standards_returns_loc_building_restriction_ii_mapping() -> None:
     standards = build_rule_standards(
         station_type="LOC",
-        rule_name="loc_building_restriction_zone",
+        rule_name="loc_building_restriction_zone_ii",
         region_code="3",
     )
+    assert standards == AnalysisStandardSet(
+        mh=[AnalysisStandardReference(
+            code="MH_ILSLOC_建筑物限制区_Ⅱ",
+            text=(
+                "航向信标台建筑物限制区：对于Ⅱ类运行或规划Ⅱ类运行的跑道，"
+                "飞行区与建筑物限制区重叠范围内规划建设超过高度限制的机库、"
+                "航站楼等大型建筑物，宜采用计算机仿真的方式确定建筑物的尺寸。"
+            ),
+        )],
+        gb=[],
+    )
 
+
+def test_build_rule_standards_returns_loc_building_restriction_iii_mapping() -> None:
+    standards = build_rule_standards(
+        station_type="LOC",
+        rule_name="loc_building_restriction_zone_iii",
+        region_code="3",
+    )
     assert standards == AnalysisStandardSet(
         mh=[AnalysisStandardReference(
             code="MH_ILSLOC_建筑物限制区_Ⅲ",
@@ -266,7 +284,11 @@ def test_standard_mappings_are_registered_by_station_type() -> None:
         == ["GB_ILSLOC_前向正负10°，3000米区域"]
     )
     assert (
-        _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_building_restriction_zone"][0]
+        _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_building_restriction_zone_ii"][0]
+        == []
+    )
+    assert (
+        _STANDARD_KEYS_BY_STATION_TYPE["LOC"]["loc_building_restriction_zone_iii"][0]
         == []
     )
     assert (

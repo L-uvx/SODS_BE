@@ -170,7 +170,7 @@ def test_loc_placeholder_building_restriction_regions_keep_standards_neutral() -
         "loc_building_restriction_zone_region_2",
         "loc_building_restriction_zone_region_4",
     ]
-    assert all(result.standards_rule_code == "loc_building_restriction_zone" for result in results)
+    assert all(result.standards_rule_code == "loc_building_restriction_zone_ii" for result in results)
 
 
 def test_build_geometry_definition_returns_multipolygon_coordinates() -> None:
@@ -1842,7 +1842,7 @@ def test_loc_rule_profile_returns_no_run_area_abcd_protection_zones_when_context
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
-            "station_sub_type": "I",
+            "station_sub_type": "II",
             "unit_number": "11",
         },
     )()
@@ -3091,6 +3091,7 @@ def test_loc_rule_profile_returns_active_region_1_to_region_4_zone_specs() -> No
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
         },
     )()
     runway = {
@@ -3128,6 +3129,7 @@ def test_loc_rule_profile_builds_building_restriction_shared_context_once_per_st
             "station_type": "LOC",
             "altitude": 500.0,
             "runway_no": "18",
+            "station_sub_type": "II",
         },
     )()
     runway = {
@@ -3836,3 +3838,215 @@ def test_loc_building_restriction_zone_region_4_rule_rejects_obstacle_within_zon
     assert result.is_compliant is False
     assert "位于建筑物限制区内" in result.message
     assert "超出标准要求" in result.message
+
+
+def test_loc_rule_profile_skips_building_restriction_for_station_sub_type_i() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+            "unit_number": "16",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 800,
+        "name": "Building I",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]],
+        },
+    }
+    payload = LocRuleProfile().analyze(
+        station=station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+    building_restriction_codes = {
+        "loc_building_restriction_zone_region_1",
+        "loc_building_restriction_zone_region_2",
+        "loc_building_restriction_zone_region_3",
+        "loc_building_restriction_zone_region_4",
+    }
+    for result in payload.rule_results:
+        assert result.rule_code not in building_restriction_codes
+    for zone in payload.protection_zones:
+        assert zone.rule_code not in building_restriction_codes
+
+
+def test_loc_rule_profile_skips_building_restriction_for_missing_station_sub_type() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "unit_number": "16",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 801,
+        "name": "Building None",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]],
+        },
+    }
+    payload = LocRuleProfile().analyze(
+        station=station,
+        obstacles=[obstacle],
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+    building_restriction_codes = {
+        "loc_building_restriction_zone_region_1",
+        "loc_building_restriction_zone_region_2",
+        "loc_building_restriction_zone_region_3",
+        "loc_building_restriction_zone_region_4",
+    }
+    for result in payload.rule_results:
+        assert result.rule_code not in building_restriction_codes
+    for zone in payload.protection_zones:
+        assert zone.rule_code not in building_restriction_codes
+
+
+def test_loc_bind_protection_zones_skips_building_restriction_for_station_sub_type_i() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "I",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+    zones = LocRuleProfile().bind_protection_zones(
+        station=station,
+        station_point=(0.0, 0.0),
+        runways=[runway],
+    )
+    building_restriction_codes = {
+        "loc_building_restriction_zone_region_1",
+        "loc_building_restriction_zone_region_2",
+        "loc_building_restriction_zone_region_3",
+        "loc_building_restriction_zone_region_4",
+    }
+    for zone in zones:
+        assert zone.rule_code not in building_restriction_codes
+
+
+def test_loc_building_restriction_region_1_uses_ii_standard_code_for_station_sub_type_ii() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "II",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 1,
+        "name": "Building",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]],
+        },
+    }
+    result = LocBuildingRestrictionZoneRegion1Rule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    ).analyze(obstacle)
+    assert result.standards_rule_code == "loc_building_restriction_zone_ii"
+
+
+def test_loc_building_restriction_region_1_uses_iii_standard_code_for_station_sub_type_iii() -> None:
+    station = type(
+        "Station",
+        (),
+        {
+            "id": 101,
+            "station_type": "LOC",
+            "altitude": 500.0,
+            "runway_no": "18",
+            "station_sub_type": "III",
+        },
+    )()
+    runway = {
+        "runwayId": 201,
+        "runNumber": "18",
+        "localCenterPoint": (0.0, -600.0),
+        "directionDegrees": 0.0,
+        "lengthMeters": 600.0,
+        "widthMeters": 45.0,
+    }
+    obstacle = {
+        "obstacleId": 1,
+        "name": "Building",
+        "rawObstacleType": "建筑物/构建物",
+        "globalObstacleCategory": "building_general",
+        "topElevation": 520.0,
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]],
+        },
+    }
+    result = LocBuildingRestrictionZoneRegion1Rule().bind(
+        station=station,
+        station_point=(0.0, 0.0),
+        runway_context=runway,
+    ).analyze(obstacle)
+    assert result.standards_rule_code == "loc_building_restriction_zone_iii"
