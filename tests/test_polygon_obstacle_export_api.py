@@ -752,6 +752,7 @@ class TestFlattenRuleResultsSpecialDisplay:
             metrics={
                 "allowedHeightMeters": 50.0,
                 "overHeightMeters": 10.0,
+                "enteredProtectionZone": True,
             },
         )
         mid_rule = self._make_rule(
@@ -762,6 +763,7 @@ class TestFlattenRuleResultsSpecialDisplay:
             metrics={
                 "allowedHeightMeters": 999.0,
                 "overHeightMeters": 99.0,
+                "enteredProtectionZone": True,
             },
         )
         rows = _flatten_rule_results([normal, mid_rule])
@@ -776,6 +778,7 @@ class TestFlattenRuleResultsSpecialDisplay:
             metrics={
                 "allowedHeightMeters": 80.0,
                 "overHeightMeters": 5.0,
+                "enteredProtectionZone": False,
             },
         )
         rows = _flatten_rule_results([r])
@@ -812,6 +815,7 @@ class TestFlattenRuleResultsSpecialDisplay:
             metrics={
                 "allowedHeightMeters": 50.0,
                 "overHeightMeters": 7.0,
+                "enteredProtectionZone": True,
             },
         )
         loc_brz = self._make_rule(
@@ -831,46 +835,98 @@ class TestFlattenRuleResultsSpecialDisplay:
                 f"Expected 15.0 for Obstacle Y, got {row['finalOverHeight']}"
             )
 
-    # ---- T7: finalOverHeight aggregated by obstacle, not obstacle+station ----
-    def test_final_over_height_agg_by_obstacle(self):
+    def test_sdr_non_triangle_not_tracked_in_final_over_height(self):
+        """场监雷达非三角区即使 enteredProtectionZone=True 也不计入最终超高"""
+        sdr_non_triangle = self._make_rule(
+            isCompliant=True,
+            obstacleName="Obstacle X",
+            metrics={
+                "enteredProtectionZone": True,
+                "triangleGateApplied": True,
+                "isInRunwayTriangle": False,
+                "overHeightMeters": 50.0,
+            },
+        )
+        normal_rule = self._make_rule(
+            isCompliant=False,
+            obstacleName="Obstacle X",
+            metrics={
+                "enteredProtectionZone": True,
+                "overHeightMeters": 10.0,
+            },
+        )
+        rows = _flatten_rule_results([sdr_non_triangle, normal_rule])
+        for row in rows:
+            assert row["finalOverHeight"] == 10.0, (
+                f"Expected 10.0 (only normal rule), got {row['finalOverHeight']}"
+            )
+
+    def test_same_obstacle_removed_from_compliant_table(self):
+        """同一障碍物在不满足表中出现后，从满足表移除——通过 build_export_payload 验收"""
+        from unittest.mock import MagicMock
+
         r1 = self._make_rule(
             isCompliant=False,
             obstacleName="Building A",
             stationName="Station X",
+            metrics={"enteredProtectionZone": True, "overHeightMeters": 10.0},
+        )
+        r2 = self._make_rule(
+            isCompliant=True,
+            obstacleName="Building A",
+            stationName="Station Y",
+            metrics={"enteredProtectionZone": False},
+        )
+        r3 = self._make_rule(
+            isCompliant=True,
+            obstacleName="Building B",
+            stationName="Station X",
+            metrics={"enteredProtectionZone": False},
+        )
+        mock_task = MagicMock()
+        mock_task.result_payload = {
+            "ruleResults": [r1, r2, r3],
+            "obstacleCount": 2,
+            "selectedTargets": [{"name": "测试机场"}],
+        }
+        mock_task.import_batch = None
+
+        payload = build_export_payload(mock_task)
+        non_compliant_rows = payload["nonCompliantRows"]
+        compliant_rows = payload["compliantRows"]
+
+        assert len(non_compliant_rows) == 1
+        assert non_compliant_rows[0]["obstacleName"] == "Building A"
+        assert len(compliant_rows) == 1
+        assert compliant_rows[0]["obstacleName"] == "Building B"
+
+    def test_overheight_tracks_on_entered_zone_not_is_compliant(self):
+        """enteredProtectionZone=True 但 isCompliant=True 的规则仍计入最终超高"""
+        r = self._make_rule(
+            isCompliant=True,
+            obstacleName="Obstacle X",
             metrics={
-                "allowedHeightMeters": 50.0,
+                "enteredProtectionZone": True,
                 "overHeightMeters": 5.0,
             },
         )
-        r2 = self._make_rule(
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        assert rows[0]["finalOverHeight"] == 5.0
+
+    def test_overheight_not_tracked_when_not_entered_zone(self):
+        """enteredProtectionZone=False 时不参与超高出计算"""
+        r = self._make_rule(
             isCompliant=False,
-            obstacleName="Building A",
-            stationName="Station Y",
+            obstacleName="Obstacle X",
             metrics={
-                "allowedHeightMeters": 999.0,
-                "overHeightMeters": 15.0,
+                "enteredProtectionZone": False,
+                "overHeightMeters": 99.0,
             },
         )
-        r3 = self._make_rule(
-            isCompliant=False,
-            obstacleName="Building B",
-            stationName="Station X",
-            metrics={
-                "allowedHeightMeters": 100.0,
-                "overHeightMeters": 3.0,
-            },
-        )
-        rows = _flatten_rule_results([r1, r2, r3])
-        for row in rows:
-            if row["obstacleName"] == "Building A":
-                assert row["finalOverHeight"] == 15.0, (
-                    f"Expected 15.0 for Building A, got {row['finalOverHeight']} "
-                    f"at station {row['stationName']}"
-                )
-            elif row["obstacleName"] == "Building B":
-                assert row["finalOverHeight"] == 3.0, (
-                    f"Expected 3.0 for Building B, got {row['finalOverHeight']}"
-                )
+        rows = _flatten_rule_results([r])
+        assert len(rows) == 1
+        assert rows[0]["finalOverHeight"] == 0
 
 
 class TestBuildSummaryRadarIntegration:

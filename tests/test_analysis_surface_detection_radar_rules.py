@@ -127,7 +127,8 @@ def test_base_radar_result_is_not_applicable_outside_triangle() -> None:
 
     result = _find_rule_result(payload, "radar_minimum_distance_460m")
 
-    assert result.is_applicable is False
+    assert result.is_applicable is True
+    assert result.is_compliant is True
     assert result.metrics["triangleGateApplied"] is True
     assert result.metrics["isInRunwayTriangle"] is False
     assert result.metrics["gatedByRunwayTriangle"] is True
@@ -160,7 +161,8 @@ def test_gated_radar_b_result_preserves_additional_fields_when_not_in_triangle()
 
     result = _find_rule_result(payload, "radar_minimum_distance_460m")
 
-    assert result.is_applicable is False
+    assert result.is_applicable is True
+    assert result.is_compliant is True
     assert result.is_filter_limit is True
     assert 0.0 <= result.azimuth_degrees < 360.0
     assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
@@ -216,7 +218,52 @@ def test_gated_radar_16km_result_preserves_additional_fields() -> None:
     )
 
     result = _find_rule_result(payload, "radar_rotating_reflector_16km")
-    assert result.is_applicable is False
+    assert result.is_applicable is True
+    assert result.is_compliant is True
     assert result.is_filter_limit is False
     assert result.metrics["triangleGateApplied"] is True
     assert result.metrics["gatedByRunwayTriangle"] is True
+
+
+# ── Task 1: gating 行为变更测试 ──────────────────────────────
+
+
+def test_non_triangle_results_have_is_applicable_true() -> None:
+    """非三角区内场监基座结果 isApplicable 应为 True（对齐 C#）"""
+    payload = SurfaceDetectionRadarRuleProfile().analyze(
+        station=_make_station(),
+        obstacles=[_make_obstacle(local_geometry=_point_geometry(200.0, 150.0), top_elevation=25.0)],
+        station_point=(0.0, 0.0),
+        runways=[_make_runway_context()],
+    )
+
+    result = _find_rule_result(payload, "radar_minimum_distance_460m")
+    assert result.is_applicable is True, f"expected True, got {result.is_applicable}"
+    assert result.metrics["gatedByRunwayTriangle"] is True
+
+
+def test_non_triangle_results_have_is_compliant_true() -> None:
+    """非三角区内场监基座结果 isCompliant 应为 True（不论原始值）"""
+    payload = SurfaceDetectionRadarRuleProfile().analyze(
+        station=_make_station(),
+        obstacles=[_make_obstacle(local_geometry=_point_geometry(200.0, 150.0), top_elevation=25.0)],
+        station_point=(0.0, 0.0),
+        runways=[_make_runway_context()],
+    )
+
+    result = _find_rule_result(payload, "radar_minimum_distance_460m")
+    assert result.is_compliant is True, f"expected True, got {result.is_compliant}"
+
+
+def test_in_triangle_results_preserve_original_behavior() -> None:
+    """三角区内场监基座结果保持原始 isApplicable 和 isCompliant"""
+    payload = SurfaceDetectionRadarRuleProfile().analyze(
+        station=_make_station(),
+        obstacles=[_make_obstacle(local_geometry=_point_geometry(0.0, 150.0), top_elevation=25.0)],
+        station_point=(0.0, 0.0),
+        runways=[_make_runway_context()],
+    )
+
+    result = _find_rule_result(payload, "radar_minimum_distance_460m")
+    assert result.is_applicable is True
+    assert result.is_compliant is False

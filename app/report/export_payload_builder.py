@@ -118,6 +118,11 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
         details = r.get("message") or r.get("details") or ""
         relative_position = _build_relative_position(metrics, r)
 
+        # Over-height tracking flags
+        entered_zone = metrics.get("enteredProtectionZone") is True
+        is_sdr_gated = metrics.get("triangleGateApplied") is True
+        is_in_triangle = metrics.get("isInRunwayTriangle") is True
+
         # Priority 4: isMid or isFilterLimit → special display
         is_special_no_judge = bool(r.get("isMid") or r.get("isFilterLimit"))
         is_compliant: bool = bool(r.get("isCompliant", True))
@@ -183,7 +188,14 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                 "overHeight": over_height_display,
             }
             rows.append(row)
-            if not skip_overheight_tracking and not is_compliant:
+            # C# L651: if (analysisResult.Intersection) → contribute to maxOverHeight
+            # C# L661-666: detection radar requires IsInTriangle (skip non-triangle)
+            should_track_overheight = (
+                not skip_overheight_tracking
+                and entered_zone
+                and (not is_sdr_gated or is_in_triangle)
+            )
+            if should_track_overheight:
                 key = obstacle_name
                 track_over = _float_or_none(metrics.get("overHeightMeters"))
                 obstacle_overheights.setdefault(key, []).append(ceil2(track_over or 0))
@@ -204,7 +216,14 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                         "overHeight": over_height_display,
                     }
                     rows.append(row)
-                    if not skip_overheight_tracking and not is_compliant:
+                    # C# L651: if (analysisResult.Intersection) → contribute to maxOverHeight
+                    # C# L661-666: detection radar requires IsInTriangle (skip non-triangle)
+                    should_track_overheight = (
+                        not skip_overheight_tracking
+                        and entered_zone
+                        and (not is_sdr_gated or is_in_triangle)
+                    )
+                    if should_track_overheight:
                         key = obstacle_name
                         track_over = _float_or_none(metrics.get("overHeightMeters"))
                         obstacle_overheights.setdefault(key, []).append(ceil2(track_over or 0))
@@ -377,8 +396,14 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
     radar_unmet_names = _collect_radar_unmet_obstacles(cumulative_mask_angle_results)
     summary = _build_summary(rule_results, obstacle_count, radar_unmet_names)
 
+    non_compliant_obstacle_names = {
+        row["obstacleName"] for row in table_rows if not row["isCompliant"]
+    }
     non_compliant_rows = [row for row in table_rows if not row["isCompliant"]]
-    compliant_rows = [row for row in table_rows if row["isCompliant"]]
+    compliant_rows = [
+        row for row in table_rows
+        if row["isCompliant"] and row["obstacleName"] not in non_compliant_obstacle_names
+    ]
 
     em_zone_results = [
         r for r in rule_results
