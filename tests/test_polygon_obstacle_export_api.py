@@ -181,6 +181,8 @@ def test_create_export_task_returns_minimal_task_payload() -> None:
     assert response.json() == {
         "exportTaskId": "export-task-1",
         "analysisTaskId": analysis_task_id,
+        "targetId": None,
+        "targetName": None,
         "status": "pending",
         "message": "export task created",
         "progressPercent": 0,
@@ -255,6 +257,8 @@ def test_get_export_task_status_returns_existing_task() -> None:
     assert response.json() == {
         "exportTaskId": export_task_id,
         "analysisTaskId": analysis_task_id,
+        "targetId": None,
+        "targetName": None,
         "status": "pending",
         "message": "export task created",
         "progressPercent": 0,
@@ -279,6 +283,8 @@ def test_get_export_task_result_returns_empty_payload_before_completion() -> Non
     assert response.json() == {
         "exportTaskId": export_task_id,
         "analysisTaskId": analysis_task_id,
+        "targetId": None,
+        "targetName": None,
         "status": "pending",
         "fileName": None,
         "downloadUrl": None,
@@ -346,6 +352,8 @@ def test_run_export_task_marks_status_succeeded_and_returns_download_url() -> No
     assert status_response.json() == {
         "exportTaskId": export_task_id,
         "analysisTaskId": analysis_task_id,
+        "targetId": None,
+        "targetName": None,
         "status": "succeeded",
         "message": "export task succeeded",
         "progressPercent": 100,
@@ -354,6 +362,8 @@ def test_run_export_task_marks_status_succeeded_and_returns_download_url() -> No
     assert result_response.json() == {
         "exportTaskId": export_task_id,
         "analysisTaskId": analysis_task_id,
+        "targetId": None,
+        "targetName": None,
         "status": "succeeded",
         "fileName": "Wuhan Demo-Airport Near.docx",
         "downloadUrl": f"/polygon-obstacle/exports/{export_task_id}/download",
@@ -371,38 +381,44 @@ def test_build_export_payload_includes_rule_results_with_standards() -> None:
             "summary": "done",
             "obstacleCount": 1,
             "selectedTargets": [{"id": 1, "name": "Airport A", "category": "机场"}],
-            "ruleResults": [
+            "targetResults": [
                 {
-                    "airportId": 1,
-                    "stationId": 101,
-                    "stationName": "NDB Station",
-                    "stationType": "NDB",
-                    "obstacleId": 2,
-                    "obstacleName": "Obstacle A",
-                    "rawObstacleType": "建筑物/构建物",
-                    "globalObstacleCategory": "building_general",
-                    "ruleCode": "ndb_minimum_distance_50m",
-                    "ruleName": "ndb_minimum_distance_50m",
-                    "zoneCode": "ndb_minimum_distance_50m",
-                    "zoneName": "NDB 50米最小间距",
-                    "regionCode": "default",
-                    "regionName": "default",
-                    "isApplicable": True,
-                    "isCompliant": False,
-                    "message": "在50米以内",
-                    "metrics": {"minimumDistanceMeters": 50.0},
-                    "standards": {
-                        "gb": {
-                            "code": "GB_NDB_50m最小间距区域_50",
-                            "text": "GB text",
+                    "targetId": 1,
+                    "targetName": "Airport A",
+                    "ruleResults": [
+                        {
+                            "airportId": 1,
+                            "stationId": 101,
+                            "stationName": "NDB Station",
+                            "stationType": "NDB",
+                            "obstacleId": 2,
+                            "obstacleName": "Obstacle A",
+                            "rawObstacleType": "建筑物/构建物",
+                            "globalObstacleCategory": "building_general",
+                            "ruleCode": "ndb_minimum_distance_50m",
+                            "ruleName": "ndb_minimum_distance_50m",
+                            "zoneCode": "ndb_minimum_distance_50m",
+                            "zoneName": "NDB 50米最小间距",
+                            "regionCode": "default",
+                            "regionName": "default",
+                            "isApplicable": True,
                             "isCompliant": False,
-                        },
-                        "mh": {
-                            "code": "MH_NDB_50m最小间距区域_50",
-                            "text": "MH text",
-                            "isCompliant": False,
-                        },
-                    },
+                            "message": "在50米以内",
+                            "metrics": {"minimumDistanceMeters": 50.0},
+                            "standards": {
+                                "gb": {
+                                    "code": "GB_NDB_50m最小间距区域_50",
+                                    "text": "GB text",
+                                    "isCompliant": False,
+                                },
+                                "mh": {
+                                    "code": "MH_NDB_50m最小间距区域_50",
+                                    "text": "MH text",
+                                    "isCompliant": False,
+                                },
+                            },
+                        }
+                    ],
                 }
             ],
         },
@@ -885,7 +901,9 @@ class TestFlattenRuleResultsSpecialDisplay:
         )
         mock_task = MagicMock()
         mock_task.result_payload = {
-            "ruleResults": [r1, r2, r3],
+            "targetResults": [
+                {"targetId": 1, "targetName": "测试机场", "ruleResults": [r1, r2, r3]},
+            ],
             "obstacleCount": 2,
             "selectedTargets": [{"name": "测试机场"}],
         }
@@ -917,7 +935,9 @@ class TestFlattenRuleResultsSpecialDisplay:
         )
         mock_task = MagicMock()
         mock_task.result_payload = {
-            "ruleResults": [r1, r2],
+            "targetResults": [
+                {"targetId": 1, "targetName": "测试机场", "ruleResults": [r1, r2]},
+            ],
             "obstacleCount": 1,
             "selectedTargets": [{"name": "测试机场"}],
         }
@@ -943,7 +963,9 @@ class TestFlattenRuleResultsSpecialDisplay:
         )
         mock_task = MagicMock()
         mock_task.result_payload = {
-            "ruleResults": [r],
+            "targetResults": [
+                {"targetId": 1, "targetName": "测试机场", "ruleResults": [r]},
+            ],
             "obstacleCount": 1,
             "selectedTargets": [{"name": "测试机场"}],
         }
@@ -1265,7 +1287,9 @@ class TestEmptyExportPayload:
 
         mock_task = MagicMock()
         mock_task.result_payload = {
-            "ruleResults": [],
+            "targetResults": [
+                {"targetId": 1, "targetName": "测试机场", "ruleResults": []},
+            ],
             "obstacleCount": 0,
             "selectedTargets": [{"name": "测试机场"}],
         }
@@ -1306,3 +1330,298 @@ class TestEmptyExportPayload:
         assert "通信、导航、监视台站场地保护区" in body_xml
         # Verify nonCompliantRows template tag is NOT in output (should have been skipped via {% else %})
         assert "nonCompliantRows" not in body_xml
+
+
+class TestPerTargetExport:
+    """Task 2: per-target report export."""
+
+    def _make_rule_dict(self, obstacle_name: str, station_name: str, **overrides):
+        base = {
+            "obstacleName": obstacle_name,
+            "rawObstacleType": "建筑物/构建物",
+            "stationName": station_name,
+            "stationType": "NDB",
+            "isApplicable": True,
+            "isCompliant": False,
+            "zoneCode": "ndb_minimum_distance_50m",
+            "ruleCode": "ndb_minimum_distance_50m",
+            "metrics": {"allowedHeightMeters": 50.0, "overHeightMeters": 5.0, "enteredProtectionZone": True},
+            "standards": {
+                "gb": [{"code": "GB_TEST", "text": "clause"}],
+                "mh": [],
+            },
+            "message": "",
+        }
+        base.update(overrides)
+        return base
+
+    def test_export_with_target_id_filters_correctly(self):
+        """Multi-target analysis, export with target_id=2 → only target 2 results."""
+        from unittest.mock import MagicMock
+
+        r_target1 = self._make_rule_dict("Obstacle A", "Station X")
+        r_target2 = self._make_rule_dict("Obstacle B", "Station Y")
+
+        mock_task = MagicMock()
+        mock_task.result_payload = {
+            "targetResults": [
+                {"targetId": 1, "targetName": "Airport Alpha", "ruleResults": [r_target1]},
+                {"targetId": 2, "targetName": "Airport Beta", "ruleResults": [r_target2]},
+            ],
+            "obstacleCount": 2,
+            "selectedTargets": [
+                {"id": 1, "name": "Airport Alpha", "category": "机场"},
+                {"id": 2, "name": "Airport Beta", "category": "机场"},
+            ],
+        }
+        mock_task.import_batch = None
+
+        payload = build_export_payload(mock_task, target_id=2)
+
+        assert payload["airportName"] == "Airport Beta"
+        rows = payload["tableRows"]
+        assert len(rows) == 1
+        assert rows[0]["obstacleName"] == "Obstacle B"
+        assert rows[0]["stationName"] == "Station Y"
+
+    def test_export_without_target_id_uses_first_target(self):
+        """No target_id → first target used."""
+        from unittest.mock import MagicMock
+
+        r = self._make_rule_dict("Obstacle A", "Station X")
+
+        mock_task = MagicMock()
+        mock_task.result_payload = {
+            "targetResults": [
+                {"targetId": 1, "targetName": "Airport Alpha", "ruleResults": [r]},
+            ],
+            "obstacleCount": 1,
+            "selectedTargets": [{"id": 1, "name": "Airport Alpha", "category": "机场"}],
+        }
+        mock_task.import_batch = None
+
+        payload = build_export_payload(mock_task)
+        assert payload["airportName"] == "Airport Alpha"
+
+    def test_export_response_includes_target_fields(self):
+        """Export status/result responses include targetId and targetName."""
+        with _create_test_client() as client:
+            analysis_task_id = _create_succeeded_analysis_task(client)
+
+            with next(iter(app.dependency_overrides[get_db_session]())) as session:
+                task = session.get(AnalysisTask, analysis_task_id)
+                assert task is not None
+                task.result_payload = {
+                    "summary": "done",
+                    "obstacleCount": 1,
+                    "selectedTargets": [
+                        {"id": 1, "name": "Airport Near", "category": "机场"}
+                    ],
+                    "targetResults": [
+                        {
+                            "targetId": 1,
+                            "targetName": "Airport Near",
+                            "ruleResults": [
+                                {
+                                    "obstacleName": "Obstacle A",
+                                    "rawObstacleType": "建筑物/构建物",
+                                    "stationName": "NDB Station",
+                                    "stationType": "NDB",
+                                    "isApplicable": True,
+                                    "isCompliant": False,
+                                    "zoneCode": "ndb_minimum_distance_50m",
+                                    "ruleCode": "ndb_minimum_distance_50m",
+                                    "metrics": {"minimumDistanceMeters": 50.0, "enteredProtectionZone": True},
+                                    "standards": {
+                                        "gb": {"code": "GB_NDB_50m最小间距区域_50", "text": "GB text", "isCompliant": False},
+                                        "mh": {"code": "MH_NDB_50m最小间距区域_50", "text": "MH text", "isCompliant": False},
+                                    },
+                                    "message": "",
+                                }
+                            ],
+                        }
+                    ],
+                }
+                session.commit()
+
+            app.state.dispatch_export_task = _DispatchRecorder().delay
+            runtime.dispatch_export_task = app.state.dispatch_export_task
+
+            response = client.post(
+                f"/polygon-obstacle/analysis/{analysis_task_id}/export?targetId=1"
+            )
+
+            assert response.status_code == 201
+            assert response.json()["targetId"] == 1
+            assert response.json()["targetName"] == "Airport Near"
+
+    def test_legacy_flat_rule_results_backward_compat(self):
+        """Flat ruleResults in result_payload still work (no targetResults)."""
+        from unittest.mock import MagicMock
+
+        mock_task = MagicMock()
+        mock_task.result_payload = {
+            "ruleResults": [
+                {
+                    "obstacleName": "Legacy Obs",
+                    "rawObstacleType": "building",
+                    "stationName": "Legacy Station",
+                    "stationType": "NDB",
+                    "isApplicable": True,
+                    "isCompliant": False,
+                    "zoneCode": "ndb_minimum_distance_50m",
+                    "ruleCode": "ndb_minimum_distance_50m",
+                    "metrics": {"allowedHeightMeters": 50.0, "overHeightMeters": 5.0, "enteredProtectionZone": True},
+                    "standards": {
+                        "gb": [{"code": "GB_TEST", "text": "clause"}],
+                        "mh": [],
+                    },
+                    "message": "",
+                }
+            ],
+            "obstacleCount": 1,
+            "selectedTargets": [{"id": 1, "name": "Airport Legacy", "category": "机场"}],
+        }
+        mock_task.import_batch = None
+
+        payload = build_export_payload(mock_task)
+        assert payload["airportName"] == "Airport Legacy"
+        rows = payload["tableRows"]
+        assert len(rows) == 1
+        assert rows[0]["obstacleName"] == "Legacy Obs"
+
+    def test_export_with_invalid_target_id_returns_error(self):
+        """Export with target_id not in selected_target_ids → 409."""
+        with _create_test_client() as client:
+            analysis_task_id = _create_succeeded_analysis_task(client)
+
+            with next(iter(app.dependency_overrides[get_db_session]())) as session:
+                task = session.get(AnalysisTask, analysis_task_id)
+                assert task is not None
+                task.selected_target_ids = [1]
+                task.result_payload = {
+                    "summary": "done",
+                    "obstacleCount": 1,
+                    "selectedTargets": [
+                        {"id": 1, "name": "Airport Near", "category": "机场"}
+                    ],
+                    "targetResults": [
+                        {
+                            "targetId": 1,
+                            "targetName": "Airport Near",
+                            "ruleResults": [],
+                        }
+                    ],
+                }
+                session.commit()
+
+            app.state.dispatch_export_task = _DispatchRecorder().delay
+            runtime.dispatch_export_task = app.state.dispatch_export_task
+
+            response = client.post(
+                f"/polygon-obstacle/analysis/{analysis_task_id}/export?targetId=999"
+            )
+
+            assert response.status_code == 409
+
+    def test_export_per_target_produces_different_filenames(self):
+        """Different target_ids produce different download filenames."""
+        with _create_test_client() as client:
+            analysis_task_id = _create_succeeded_analysis_task(client)
+
+            with next(iter(app.dependency_overrides[get_db_session]())) as session:
+                task = session.get(AnalysisTask, analysis_task_id)
+                assert task is not None
+                task.selected_target_ids = [1, 2]
+                task.result_payload = {
+                    "summary": "done",
+                    "obstacleCount": 1,
+                    "selectedTargets": [
+                        {"id": 1, "name": "AirportA", "category": "机场"},
+                        {"id": 2, "name": "AirportB", "category": "机场"},
+                    ],
+                    "targetResults": [
+                        {
+                            "targetId": 1,
+                            "targetName": "AirportA",
+                            "ruleResults": [
+                                {
+                                    "obstacleName": "Obs1",
+                                    "rawObstacleType": "building",
+                                    "stationName": "NDB1",
+                                    "stationType": "NDB",
+                                    "isApplicable": True,
+                                    "isCompliant": True,
+                                    "zoneCode": "ndb_minimum_distance_50m",
+                                    "ruleCode": "ndb_minimum_distance_50m",
+                                    "metrics": {
+                                        "allowedHeightMeters": 50,
+                                        "overHeightMeters": 0,
+                                        "enteredProtectionZone": True,
+                                    },
+                                    "standards": {
+                                        "gb": [], "mh": [],
+                                    },
+                                    "message": "",
+                                }
+                            ],
+                        },
+                        {
+                            "targetId": 2,
+                            "targetName": "AirportB",
+                            "ruleResults": [
+                                {
+                                    "obstacleName": "Obs2",
+                                    "rawObstacleType": "building",
+                                    "stationName": "NDB2",
+                                    "stationType": "NDB",
+                                    "isApplicable": True,
+                                    "isCompliant": False,
+                                    "zoneCode": "ndb_minimum_distance_50m",
+                                    "ruleCode": "ndb_minimum_distance_50m",
+                                    "metrics": {
+                                        "allowedHeightMeters": 30,
+                                        "overHeightMeters": 5,
+                                        "enteredProtectionZone": True,
+                                    },
+                                    "standards": {
+                                        "gb": [], "mh": [],
+                                    },
+                                    "message": "",
+                                }
+                            ],
+                        },
+                    ],
+                }
+                session.commit()
+
+            app.state.dispatch_export_task = _DispatchRecorder().delay
+            runtime.dispatch_export_task = app.state.dispatch_export_task
+
+            r1 = client.post(
+                f"/polygon-obstacle/analysis/{analysis_task_id}/export?targetId=1"
+            )
+            r2 = client.post(
+                f"/polygon-obstacle/analysis/{analysis_task_id}/export?targetId=2"
+            )
+
+            assert r1.status_code == 201
+            assert r2.status_code == 201
+            eid1 = r1.json()["exportTaskId"]
+            eid2 = r2.json()["exportTaskId"]
+
+            _run_export_task(eid1)
+            _run_export_task(eid2)
+
+            dl1 = client.get(f"/polygon-obstacle/exports/{eid1}/download")
+            dl2 = client.get(f"/polygon-obstacle/exports/{eid2}/download")
+
+            assert dl1.status_code == 200
+            assert dl2.status_code == 200
+
+            h1 = dl1.headers.get("content-disposition", "")
+            h2 = dl2.headers.get("content-disposition", "")
+
+            assert "AirportA" in h1, f"Expected AirportA in header: {h1}"
+            assert "AirportB" in h2, f"Expected AirportB in header: {h2}"
+            assert h1 != h2, f"Download filenames should differ: {h1} vs {h2}"

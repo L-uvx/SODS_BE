@@ -183,11 +183,12 @@ class ImportBatchRepository:
 
     # 创建报告导出任务记录。
     def create_report_export(
-        self, *, task_id: str, analysis_task_id: str
+        self, *, task_id: str, analysis_task_id: str, target_id: int | None = None
     ) -> ReportExport:
         report_export = ReportExport(
             id=task_id,
             analysis_task_id=analysis_task_id,
+            target_id=target_id,
             status="pending",
             progress_percent=0,
             status_message="export task created",

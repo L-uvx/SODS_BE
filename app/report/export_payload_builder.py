@@ -344,9 +344,29 @@ def _build_em_zone_summary(em_zone_result: dict | None) -> str:
     )
 
 
-def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
+def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None = None) -> dict[str, Any]:
     result_payload = analysis_task.result_payload or {}
-    rule_results = result_payload.get("ruleResults", [])
+    target_results = result_payload.get("targetResults", [])
+    selected_targets = result_payload.get("selectedTargets", [])
+
+    if target_results:
+        if target_id is not None:
+            matched = [tr for tr in target_results if tr.get("targetId") == target_id]
+            rule_results = matched[0].get("ruleResults", []) if matched else []
+            airport_name = matched[0].get("targetName", "") if matched else ""
+        else:
+            rule_results = target_results[0].get("ruleResults", [])
+            airport_name = target_results[0].get("targetName", "")
+    elif "ruleResults" in result_payload:
+        # Fallback for legacy payloads with flat ruleResults
+        rule_results = result_payload.get("ruleResults", [])
+        if target_id is not None:
+            airport_name = ""
+        else:
+            airport_name = selected_targets[0].get("name", "") if selected_targets else ""
+    else:
+        rule_results = []
+        airport_name = ""
 
     station_names_set: set[str] = set()
     standard_codes: set[str] = set()
@@ -362,9 +382,6 @@ def build_export_payload(analysis_task: AnalysisTask) -> dict[str, Any]:
         for s in _normalize_standards(r.get("standards", {}).get("mh")):
             if s.get("code"):
                 standard_codes.add(s["code"])
-
-    selected_targets = result_payload.get("selectedTargets", [])
-    airport_name = selected_targets[0].get("name", "") if selected_targets else ""
 
     standard_names_set: set[str] = set()
     for code in standard_codes:

@@ -229,11 +229,12 @@ def get_analysis_task_result(
 )
 def create_export_task(
     task_id: str,
+    targetId: int | None = None,
     session: Session = Depends(get_db_session),
 ) -> ExportTaskStatusResponse:
     service = PolygonObstacleImportService(session)
     try:
-        result = service.create_export_task(task_id)
+        result = service.create_export_task(task_id, target_id=targetId)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

@@ -38,6 +38,7 @@ from app.schemas.polygon_obstacle import (
     AnalysisProtectionZoneResponse,
     AnalysisResultTargetResponse,
     AnalysisRuleResultResponse,
+    AnalysisTargetResultResponse,
     AnalysisTaskCreateRequest,
     AnalysisTaskResultResponse,
     AnalysisTaskStatusResponse,
@@ -557,6 +558,11 @@ class PolygonObstacleImportService:
             airport_facts = [
                 self._build_airport_analysis_result(context) for context in contexts
             ]
+            _facts_by_id: dict[int, dict[str, object]] = {
+                int(fact.get("airportId", 0)): fact
+                for fact in airport_facts
+                if fact.get("airportId") is not None
+            }
             obstacle_count = len(
                 self._repository.list_obstacles_by_batch_id(
                     analysis_task.import_batch_id
@@ -568,10 +574,19 @@ class PolygonObstacleImportService:
                     "selectedTargets": selected_targets,
                     "obstacleCount": obstacle_count,
                     "summary": "已完成局部坐标系与最小空间事实计算。",
-                    "ruleResults": [
-                        self._build_public_rule_result_payload(rule_result)
-                        for airport_fact in airport_facts
-                        for rule_result in airport_fact.get("ruleResults", [])
+                    "targetResults": [
+                        {
+                            "targetId": target["id"],
+                            "targetName": target["name"],
+                            "ruleResults": [
+                                self._build_public_rule_result_payload(rr)
+                                for rr in facts.get("ruleResults", [])
+                            ],
+                        }
+                        for target in selected_targets
+                        if (
+                            facts := _facts_by_id.get(target["id"])
+                        ) is not None
                     ],
                 },
             )
@@ -649,6 +664,7 @@ class PolygonObstacleImportService:
                     )
                 )
 
+        airport_facts["airportId"] = airport.id
         airport_facts["ruleResults"] = rule_results
         airport_facts["protectionZones"] = protection_zones
         return airport_facts
@@ -1249,11 +1265,7 @@ class PolygonObstacleImportService:
             return None
 
         result_payload = analysis_task.result_payload or {}
-        rule_results = []
-        for item in result_payload.get("ruleResults", []):
-            rule_results.append(
-                self._compat_rule_result_payload(item)
-            )
+        target_results = result_payload.get("targetResults", [])
         return AnalysisTaskResultResponse(
             analysisTaskId=analysis_task.id,
             status=analysis_task.status,
@@ -1265,9 +1277,18 @@ class PolygonObstacleImportService:
             ],
             obstacleCount=result_payload.get("obstacleCount", 0),
             summary=result_payload.get("summary", ""),
-            ruleResults=[
-                AnalysisRuleResultResponse(**item)
-                for item in rule_results
+            targetResults=[
+                AnalysisTargetResultResponse(
+                    targetId=tr["targetId"],
+                    targetName=tr["targetName"],
+                    ruleResults=[
+                        AnalysisRuleResultResponse(
+                            **self._compat_rule_result_payload(item)
+                        )
+                        for item in tr.get("ruleResults", [])
+                    ],
+                )
+                for tr in target_results
             ],
         )
 
@@ -1307,9 +1328,17 @@ class PolygonObstacleImportService:
         if runtime.dispatch_analysis_task is not None:
             runtime.dispatch_analysis_task(task_id)
 
+    # 根据 target_id 从 result_payload 中解析 target_name。
+    def _resolve_target_name(
+        self, result_payload: dict[str, object] | None, target_id: int
+    ) -> str | None:
+        target_results = (result_payload or {}).get("targetResults", [])
+        matched = [tr for tr in target_results if tr.get("targetId") == target_id]
+        return matched[0].get("targetName") if matched else None
+
     # 创建新的分析报告导出任务。
     def create_export_task(
-        self, analysis_task_id: str
+        self, analysis_task_id: str, target_id: int | None = None
     ) -> ExportTaskStatusResponse | None:
         analysis_task = self._repository.get_analysis_task(analysis_task_id)
         if analysis_task is None:
@@ -1317,15 +1346,27 @@ class PolygonObstacleImportService:
         if analysis_task.status != "succeeded":
             raise ValueError("analysis task is not ready for export")
 
+        if target_id is not None and target_id not in analysis_task.selected_target_ids:
+            raise ValueError(f"target {target_id} is not in the analysis selection")
+
+        target_name: str | None = None
+        if target_id is not None:
+            target_name = self._resolve_target_name(
+                analysis_task.result_payload, target_id
+            )
+
         export_task_id = self._build_export_task_id()
         report_export = self._repository.create_report_export(
             task_id=export_task_id,
             analysis_task_id=analysis_task_id,
+            target_id=target_id,
         )
         self._dispatch_export_task(report_export.id)
         return ExportTaskStatusResponse(
             exportTaskId=report_export.id,
             analysisTaskId=analysis_task_id,
+            targetId=target_id,
+            targetName=target_name,
             status=report_export.status,
             message=report_export.status_message,
             progressPercent=report_export.progress_percent,
@@ -1344,7 +1385,7 @@ class PolygonObstacleImportService:
             if analysis_task is None or analysis_task.status != "succeeded":
                 raise ValueError("analysis task is not ready for export")
 
-            payload = build_export_payload(analysis_task)
+            payload = build_export_payload(analysis_task, target_id=report_export.target_id)
             project_name = payload.get("projectName", "")
             airport_name = payload.get("airportName", "")
             file_path, file_name = self._build_export_output_path(
@@ -1369,9 +1410,19 @@ class PolygonObstacleImportService:
         if report_export is None or report_export.analysis_task_id != analysis_task_id:
             return None
 
+        target_name: str | None = None
+        if report_export.target_id is not None:
+            analysis_task = self._repository.get_analysis_task(analysis_task_id)
+            if analysis_task:
+                target_name = self._resolve_target_name(
+                    analysis_task.result_payload, report_export.target_id
+                )
+
         return ExportTaskStatusResponse(
             exportTaskId=report_export.id,
             analysisTaskId=report_export.analysis_task_id,
+            targetId=report_export.target_id,
+            targetName=target_name,
             status=report_export.status,
             message=report_export.status_message,
             progressPercent=report_export.progress_percent,
@@ -1385,9 +1436,19 @@ class PolygonObstacleImportService:
         if report_export is None or report_export.analysis_task_id != analysis_task_id:
             return None
 
+        target_name: str | None = None
+        if report_export.target_id is not None:
+            analysis_task = self._repository.get_analysis_task(analysis_task_id)
+            if analysis_task:
+                target_name = self._resolve_target_name(
+                    analysis_task.result_payload, report_export.target_id
+                )
+
         return ExportTaskResultResponse(
             exportTaskId=report_export.id,
             analysisTaskId=report_export.analysis_task_id,
+            targetId=report_export.target_id,
+            targetName=target_name,
             status=report_export.status,
             fileName=report_export.file_name,
             downloadUrl=(

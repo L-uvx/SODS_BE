@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -13,6 +13,7 @@ class ReportExport(Base):
     analysis_task_id: Mapped[str] = mapped_column(
         ForeignKey("analysis_tasks.id"), nullable=False
     )
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     progress_percent: Mapped[int] = mapped_column(nullable=False, default=0)
     status_message: Mapped[str] = mapped_column(String(255), nullable=False)

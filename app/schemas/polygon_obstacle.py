@@ -227,6 +227,17 @@ class AnalysisRuleResultResponse(BaseModel):
     )
 
 
+class AnalysisTargetResultResponse(BaseModel):
+    target_id: int = Field(alias="targetId")
+    target_name: str = Field(alias="targetName")
+    rule_results: list[AnalysisRuleResultResponse] = Field(alias="ruleResults")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
 class AnalysisStandardReferenceResponse(BaseModel):
     code: str
     text: str
@@ -505,8 +516,8 @@ class AnalysisTaskResultResponse(BaseModel):
     )
     obstacle_count: int = Field(alias="obstacleCount")
     summary: str
-    rule_results: list[AnalysisRuleResultResponse] = Field(
-        alias="ruleResults",
+    target_results: list[AnalysisTargetResultResponse] = Field(
+        alias="targetResults",
         default_factory=list,
     )
 
@@ -519,6 +530,8 @@ class AnalysisTaskResultResponse(BaseModel):
 class ExportTaskStatusResponse(BaseModel):
     export_task_id: str = Field(alias="exportTaskId")
     analysis_task_id: str = Field(alias="analysisTaskId")
+    target_id: int | None = Field(alias="targetId", default=None)
+    target_name: str | None = Field(alias="targetName", default=None)
     status: str
     message: str
     progress_percent: int = Field(alias="progressPercent")
@@ -532,6 +545,8 @@ class ExportTaskStatusResponse(BaseModel):
 class ExportTaskResultResponse(BaseModel):
     export_task_id: str = Field(alias="exportTaskId")
     analysis_task_id: str = Field(alias="analysisTaskId")
+    target_id: int | None = Field(alias="targetId", default=None)
+    target_name: str | None = Field(alias="targetName", default=None)
     status: str
     file_name: str | None = Field(alias="fileName")
     download_url: str | None = Field(alias="downloadUrl")

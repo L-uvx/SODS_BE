@@ -1024,7 +1024,10 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
     ]
     assert payload["obstacleCount"] == 2
     assert payload["summary"] == "已完成局部坐标系与最小空间事实计算。"
-    assert payload["ruleResults"] == []
+    assert payload["targetResults"] == [
+        {"targetId": 1, "targetName": "Airport Near", "ruleResults": []},
+        {"targetId": 2, "targetName": "Airport Far", "ruleResults": []},
+    ]
 
 
 def test_get_analysis_task_result_omits_spatial_facts_after_worker_runs() -> None:
@@ -1070,7 +1073,9 @@ def test_get_analysis_task_result_omits_spatial_facts_after_worker_runs() -> Non
     assert payload["analysisTaskId"] == analysis_task_id
     assert payload["status"] == "succeeded"
     assert "spatialFacts" not in payload
-    assert payload["ruleResults"] == []
+    assert payload["targetResults"] == [
+        {"targetId": 1, "targetName": "Airport A", "ruleResults": []},
+    ]
 
 
 def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
@@ -1124,7 +1129,11 @@ def test_get_analysis_task_result_returns_ndb_rule_results() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    rule_results = payload["ruleResults"]
+    target_results = payload["targetResults"]
+    assert len(target_results) == 1
+    assert target_results[0]["targetId"] == 1
+    assert target_results[0]["targetName"] == "Airport A"
+    rule_results = target_results[0]["ruleResults"]
     assert rule_results[0]["stationType"] == "NDB"
     assert rule_results[0]["stationName"] == "NDB Station"
     assert rule_results[0]["ruleCode"] == "ndb_minimum_distance_50m"
@@ -1222,7 +1231,9 @@ def test_get_analysis_task_result_returns_ndb_300m_rule_result_for_hill() -> Non
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
     assert response.status_code == 200
-    rule_results = response.json()["ruleResults"]
+    target_results = response.json()["targetResults"]
+    assert len(target_results) == 1
+    rule_results = target_results[0]["ruleResults"]
     assert rule_results[0]["ruleName"] == "ndb_minimum_distance_300m"
     assert rule_results[0]["metrics"]["minimumDistanceMeters"] == 300.0
 
@@ -1277,7 +1288,7 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_rule() -> 
         response = client.get(f"/polygon-obstacle/analysis/{analysis_task_id}/result")
 
     assert response.status_code == 200
-    rule_result = response.json()["ruleResults"][0]
+    rule_result = response.json()["targetResults"][0]["ruleResults"][0]
     assert rule_result["isCompliant"] is True
     assert rule_result["standards"] == {
         "gb": [{
@@ -1370,7 +1381,7 @@ def test_get_analysis_task_result_returns_gb_and_mh_standards_for_ndb_conical_ru
     assert response.status_code == 200
     radial_band_rule = next(
         item
-        for item in response.json()["ruleResults"]
+        for item in response.json()["targetResults"][0]["ruleResults"]
         if item["ruleName"] == "ndb_conical_clearance_3deg"
     )
     assert radial_band_rule["isCompliant"] is True
@@ -1710,7 +1721,9 @@ def test_run_analysis_task_skips_station_without_coordinates() -> None:
 
     payload = response.json()
     assert "spatialFacts" not in payload
-    assert payload["ruleResults"] == []
+    assert payload["targetResults"] == [
+        {"targetId": 1, "targetName": "Airport A", "ruleResults": []},
+    ]
 
 
 def test_run_analysis_task_returns_empty_for_surface_detection_radar_without_matching_runway() -> None:
@@ -1745,7 +1758,9 @@ def test_run_analysis_task_returns_empty_for_surface_detection_radar_without_mat
 
     payload = response.json()
     assert payload["status"] == "succeeded"
-    assert payload["ruleResults"] == []
+    assert payload["targetResults"] == [
+        {"targetId": 1, "targetName": "Airport A", "ruleResults": []},
+    ]
 
 
 def test_run_analysis_task_fails_when_airport_has_no_coordinates() -> None:
@@ -1851,7 +1866,7 @@ def test_get_analysis_task_result_returns_empty_payload_before_completion() -> N
         "selectedTargets": [],
         "obstacleCount": 0,
         "summary": "",
-        "ruleResults": [],
+        "targetResults": [],
     }
 
 
