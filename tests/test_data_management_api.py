@@ -627,7 +627,7 @@ def test_list_runways_passes_supported_query_contract() -> None:
         response = client.get(
             "/data-management/runways",
             params={
-                "airportId": 1,
+                "airportName": "Airport",
                 "keyword": "Runway",
                 "runNumber": "18",
                 "page": 2,
@@ -780,11 +780,11 @@ def test_create_runway_returns_write_response_with_alias_fields_accepted() -> No
     }
 
 
-def test_list_runways_accepts_string_airport_id_query_param() -> None:
+def test_list_runways_accepts_string_airport_name_query_param() -> None:
     with _create_test_client() as client:
         response = client.get(
             "/data-management/runways",
-            params={"airportId": "1"},
+            params={"airportName": "Test Airport"},
         )
 
     assert response.status_code == 200
@@ -884,7 +884,7 @@ def test_list_runways_includes_maximum_type_aircraft() -> None:
             )
             session.add(runway)
             session.commit()
-        response = client.get("/data-management/runways?airportId=1")
+        response = client.get("/data-management/runways?airportName=Test Airport")
 
     assert response.status_code == 200
     items = response.json()["items"]
@@ -948,7 +948,7 @@ def test_list_stations_passes_supported_query_contract() -> None:
         response = client.get(
             "/data-management/stations",
             params={
-                "airportId": 1,
+                "airportName": "Airport",
                 "stationType": "LOC",
                 "keyword": "Station",
                 "runwayNo": "18",
@@ -960,12 +960,12 @@ def test_list_stations_passes_supported_query_contract() -> None:
     assert response.status_code == 200
 
 
-def test_list_stations_accepts_string_airport_id_query_param() -> None:
+def test_list_stations_accepts_string_airport_name_query_param() -> None:
     with _create_test_client() as client:
         response = client.get(
             "/data-management/stations",
             params={
-                "airportId": "1",
+                "airportName": "Airport One",
                 "page": 1,
                 "pageSize": 20,
             },
@@ -1817,7 +1817,7 @@ def test_repository_lists_runways_with_filters() -> None:
         runways, total = repository.list_runways(
             offset=0,
             limit=20,
-            airport_id=airport.id,
+            airport_name="Airport One",
             keyword="Runway",
             run_number="02",
         )
@@ -1874,7 +1874,7 @@ def test_repository_lists_stations_with_filters() -> None:
         stations, total = repository.list_stations(
             offset=0,
             limit=20,
-            airport_id=airport.id,
+            airport_name="Airport One",
             station_type="LOC",
             keyword="Station",
             runway_no="02",
@@ -2146,14 +2146,14 @@ def test_obstacle_detail_not_found_returns_404() -> None:
     assert response.status_code == 404
 
 
-def test_obstacle_list_filters_by_project_id() -> None:
+def test_obstacle_list_filters_by_project_name() -> None:
     with _create_test_client() as client:
         _seed_project(name="Project 1")
         _seed_project(name="Project 2")
         _seed_obstacle(project_id=1, name="Obstacle A1")
         _seed_obstacle(project_id=1, name="Obstacle A2")
         _seed_obstacle(project_id=2, name="Obstacle B1")
-        response = client.get("/data-management/obstacles", params={"projectId": 1})
+        response = client.get("/data-management/obstacles", params={"projectName": "Project 1"})
 
     assert response.status_code == 200
     payload = response.json()

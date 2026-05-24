@@ -60,21 +60,21 @@ class DataManagementRepository:
         *,
         offset: int,
         limit: int,
-        airport_id: int | None = None,
+        airport_name: str | None = None,
         keyword: str | None = None,
         run_number: str | None = None,
     ) -> tuple[list[Runway], int]:
         statement = select(Runway)
-        if airport_id is not None:
-            statement = statement.where(Runway.airport_id == airport_id)
+        if airport_name:
+            statement = statement.join(Airport, Runway.airport_id == Airport.id).where(Airport.name.contains(airport_name))
         if keyword:
             statement = statement.where(Runway.name.contains(keyword))
         if run_number:
             statement = statement.where(Runway.run_number == run_number)
         statement = statement.order_by(Runway.id).offset(offset).limit(limit)
         count_statement = select(func.count()).select_from(Runway)
-        if airport_id is not None:
-            count_statement = count_statement.where(Runway.airport_id == airport_id)
+        if airport_name:
+            count_statement = count_statement.join(Airport, Runway.airport_id == Airport.id).where(Airport.name.contains(airport_name))
         if keyword:
             count_statement = count_statement.where(Runway.name.contains(keyword))
         if run_number:
@@ -88,14 +88,14 @@ class DataManagementRepository:
         *,
         offset: int,
         limit: int,
-        airport_id: int | None = None,
+        airport_name: str | None = None,
         station_type: str | None = None,
         keyword: str | None = None,
         runway_no: str | None = None,
     ) -> tuple[list[Station], int]:
         statement = select(Station)
-        if airport_id is not None:
-            statement = statement.where(Station.airport_id == airport_id)
+        if airport_name:
+            statement = statement.join(Airport, Station.airport_id == Airport.id).where(Airport.name.contains(airport_name))
         if station_type:
             statement = statement.where(Station.station_type == station_type)
         if keyword:
@@ -104,8 +104,8 @@ class DataManagementRepository:
             statement = statement.where(Station.runway_no == runway_no)
         statement = statement.order_by(Station.id).offset(offset).limit(limit)
         count_statement = select(func.count()).select_from(Station)
-        if airport_id is not None:
-            count_statement = count_statement.where(Station.airport_id == airport_id)
+        if airport_name:
+            count_statement = count_statement.join(Airport, Station.airport_id == Airport.id).where(Airport.name.contains(airport_name))
         if station_type:
             count_statement = count_statement.where(Station.station_type == station_type)
         if keyword:
@@ -289,7 +289,7 @@ class DataManagementRepository:
         *,
         offset: int,
         limit: int,
-        project_id: int | None = None,
+        project_name: str | None = None,
         keyword: str | None = None,
         obstacle_type: str | None = None,
     ) -> tuple[list[dict], int] | tuple[list[Obstacle], int]:
@@ -301,14 +301,14 @@ class DataManagementRepository:
             return self._list_obstacles_sqlite(
                 offset=offset,
                 limit=limit,
-                project_id=project_id,
+                project_name=project_name,
                 keyword=keyword,
                 obstacle_type=resolved_type,
             )
         return self._list_obstacles_orm(
             offset=offset,
             limit=limit,
-            project_id=project_id,
+            project_name=project_name,
             keyword=keyword,
             obstacle_type=resolved_type,
         )
@@ -329,25 +329,28 @@ class DataManagementRepository:
         *,
         offset: int,
         limit: int,
-        project_id: int | None,
+        project_name: str | None,
         keyword: str | None,
         obstacle_type: str | None,
     ) -> tuple[list[dict], int]:
+        joins: list[str] = []
         where_parts: list[str] = []
         params: dict[str, object] = {"limit": limit, "offset": offset}
-        if project_id is not None:
-            where_parts.append("obstacles.project_id = :project_id")
-            params["project_id"] = project_id
+        if project_name:
+            joins.append("JOIN projects ON obstacles.project_id = projects.id")
+            where_parts.append("projects.name LIKE :project_name")
+            params["project_name"] = f"%{project_name}%"
         if keyword:
             where_parts.append("obstacles.name LIKE :keyword")
             params["keyword"] = f"%{keyword}%"
         if obstacle_type:
             where_parts.append("obstacles.obstacle_type = :obstacle_type")
             params["obstacle_type"] = obstacle_type
+        join_clause = " ".join(joins)
         where_clause = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
 
         count_result = self._session.execute(
-            text(f"SELECT COUNT(*) AS cnt FROM obstacles {where_clause}"),
+            text(f"SELECT COUNT(*) AS cnt FROM obstacles {join_clause} {where_clause}"),
             {k: v for k, v in params.items() if k not in ("limit", "offset")},
         )
         total = int(count_result.scalar() or 0)
@@ -355,9 +358,10 @@ class DataManagementRepository:
         rows = (
             self._session.execute(
                 text(
-                    "SELECT id, project_id, name, obstacle_type, source_batch_id, "
-                    "source_row_no, top_elevation, geom, raw_payload, created_at, updated_at "
-                    f"FROM obstacles {where_clause} ORDER BY id LIMIT :limit OFFSET :offset"
+                    "SELECT obstacles.id, obstacles.project_id, obstacles.name, obstacles.obstacle_type, "
+                    "obstacles.source_batch_id, obstacles.source_row_no, obstacles.top_elevation, "
+                    "obstacles.geom, obstacles.raw_payload, obstacles.created_at, obstacles.updated_at "
+                    f"FROM obstacles {join_clause} {where_clause} ORDER BY obstacles.id LIMIT :limit OFFSET :offset"
                 ),
                 params,
             )
@@ -372,13 +376,13 @@ class DataManagementRepository:
         *,
         offset: int,
         limit: int,
-        project_id: int | None,
+        project_name: str | None,
         keyword: str | None,
         obstacle_type: str | None,
     ) -> tuple[list[Obstacle], int]:
         statement = select(Obstacle)
-        if project_id is not None:
-            statement = statement.where(Obstacle.project_id == project_id)
+        if project_name:
+            statement = statement.join(Project, Obstacle.project_id == Project.id).where(Project.name.contains(project_name))
         if keyword:
             statement = statement.where(Obstacle.name.contains(keyword))
         if obstacle_type:
@@ -386,8 +390,8 @@ class DataManagementRepository:
         statement = statement.order_by(Obstacle.id).offset(offset).limit(limit)
 
         count_statement = select(func.count()).select_from(Obstacle)
-        if project_id is not None:
-            count_statement = count_statement.where(Obstacle.project_id == project_id)
+        if project_name:
+            count_statement = count_statement.join(Project, Obstacle.project_id == Project.id).where(Project.name.contains(project_name))
         if keyword:
             count_statement = count_statement.where(Obstacle.name.contains(keyword))
         if obstacle_type:

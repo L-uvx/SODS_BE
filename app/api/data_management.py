@@ -147,7 +147,7 @@ def delete_airport(
 # 查询跑道列表。
 @router.get("/runways", response_model=RunwayListResponse)
 def list_runways(
-    airport_id: int | None = Query(default=None, alias="airportId"),
+    airport_name: str | None = Query(default=None, alias="airportName"),
     keyword: str | None = None,
     run_number: str | None = Query(default=None, alias="runNumber"),
     page: int = Query(default=1, ge=1),
@@ -156,7 +156,7 @@ def list_runways(
 ) -> RunwayListResponse:
     service = DataManagementService(session)
     return service.list_runways(
-        airport_id=airport_id,
+        airport_name=airport_name,
         keyword=keyword,
         run_number=run_number,
         page=page,
@@ -234,7 +234,7 @@ def delete_runway(
 # 查询台站列表。
 @router.get("/stations", response_model=StationListResponse)
 def list_stations(
-    airport_id: int | None = Query(default=None, alias="airportId"),
+    airport_name: str | None = Query(default=None, alias="airportName"),
     station_type: str | None = Query(default=None, alias="stationType"),
     keyword: str | None = None,
     runway_no: str | None = Query(default=None, alias="runwayNo"),
@@ -244,7 +244,7 @@ def list_stations(
 ) -> StationListResponse:
     service = DataManagementService(session)
     return service.list_stations(
-        airport_id=airport_id,
+        airport_name=airport_name,
         station_type=station_type,
         keyword=keyword,
         runway_no=runway_no,
@@ -374,7 +374,7 @@ def list_airport_runway_options(
 # 查询障碍物列表。
 @router.get("/obstacles", response_model=ObstacleListResponse)
 def list_obstacles(
-    project_id: int | None = Query(default=None, alias="projectId"),
+    project_name: str | None = Query(default=None, alias="projectName"),
     keyword: str | None = None,
     obstacle_type: str | None = Query(default=None, alias="obstacleType"),
     page: int = Query(default=1, ge=1),
@@ -383,7 +383,7 @@ def list_obstacles(
 ) -> ObstacleListResponse:
     service = DataManagementService(session)
     return service.list_obstacles(
-        project_id=project_id,
+        project_name=project_name,
         keyword=keyword,
         obstacle_type=obstacle_type,
         page=page,

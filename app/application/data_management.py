@@ -134,7 +134,7 @@ class DataManagementService:
     def list_runways(
         self,
         *,
-        airport_id: int | None,
+        airport_name: str | None,
         keyword: str | None,
         run_number: str | None,
         page: int,
@@ -144,7 +144,7 @@ class DataManagementService:
         runways, total = self._repository.list_runways(
             offset=offset,
             limit=page_size,
-            airport_id=airport_id,
+            airport_name=airport_name,
             keyword=keyword,
             run_number=run_number,
         )
@@ -216,7 +216,7 @@ class DataManagementService:
     def list_stations(
         self,
         *,
-        airport_id: int | None,
+        airport_name: str | None,
         station_type: str | None,
         keyword: str | None,
         runway_no: str | None,
@@ -227,7 +227,7 @@ class DataManagementService:
         stations, total = self._repository.list_stations(
             offset=offset,
             limit=page_size,
-            airport_id=airport_id,
+            airport_name=airport_name,
             station_type=station_type,
             keyword=keyword,
             runway_no=runway_no,
@@ -401,7 +401,7 @@ class DataManagementService:
     def list_obstacles(
         self,
         *,
-        project_id: int | None,
+        project_name: str | None,
         keyword: str | None,
         obstacle_type: str | None,
         page: int,
@@ -411,7 +411,7 @@ class DataManagementService:
         obstacles, total = self._repository.list_obstacles(
             offset=offset,
             limit=page_size,
-            project_id=project_id,
+            project_name=project_name,
             keyword=keyword,
             obstacle_type=obstacle_type,
         )
