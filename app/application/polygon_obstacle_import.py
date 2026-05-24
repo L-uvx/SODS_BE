@@ -563,6 +563,9 @@ class PolygonObstacleImportService:
                 for fact in airport_facts
                 if fact.get("airportId") is not None
             }
+            _contexts_by_id: dict[int, object] = {
+                context.airport.id: context for context in contexts
+            }
             obstacle_count = len(
                 self._repository.list_obstacles_by_batch_id(
                     analysis_task.import_batch_id
@@ -578,6 +581,15 @@ class PolygonObstacleImportService:
                         {
                             "targetId": target["id"],
                             "targetName": target["name"],
+                            "stationNames": [
+                                s.name
+                                for s in (
+                                    _contexts_by_id.get(target["id"]).stations
+                                    if _contexts_by_id.get(target["id"])
+                                    else []
+                                )
+                                if s.longitude is not None and s.latitude is not None
+                            ],
                             "ruleResults": [
                                 self._build_public_rule_result_payload(rr)
                                 for rr in facts.get("ruleResults", [])
@@ -1281,6 +1293,7 @@ class PolygonObstacleImportService:
                 AnalysisTargetResultResponse(
                     targetId=tr["targetId"],
                     targetName=tr["targetName"],
+                    stationNames=tr.get("stationNames", []),
                     ruleResults=[
                         AnalysisRuleResultResponse(
                             **self._compat_rule_result_payload(item)

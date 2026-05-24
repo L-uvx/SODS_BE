@@ -349,14 +349,18 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
     target_results = result_payload.get("targetResults", [])
     selected_targets = result_payload.get("selectedTargets", [])
 
+    target_result_for_export: dict[str, Any] | None = None
+
     if target_results:
         if target_id is not None:
             matched = [tr for tr in target_results if tr.get("targetId") == target_id]
-            rule_results = matched[0].get("ruleResults", []) if matched else []
-            airport_name = matched[0].get("targetName", "") if matched else ""
+            target_result_for_export = matched[0] if matched else None
+            rule_results = target_result_for_export.get("ruleResults", []) if target_result_for_export else []
+            airport_name = target_result_for_export.get("targetName", "") if target_result_for_export else ""
         else:
-            rule_results = target_results[0].get("ruleResults", [])
-            airport_name = target_results[0].get("targetName", "")
+            target_result_for_export = target_results[0] if target_results else None
+            rule_results = target_result_for_export.get("ruleResults", []) if target_result_for_export else []
+            airport_name = target_result_for_export.get("targetName", "") if target_result_for_export else ""
     elif "ruleResults" in result_payload:
         # Fallback for legacy payloads with flat ruleResults
         rule_results = result_payload.get("ruleResults", [])
@@ -370,12 +374,16 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
 
     station_names_set: set[str] = set()
     standard_codes: set[str] = set()
+    if target_result_for_export and "stationNames" in target_result_for_export:
+        station_names_set = set(target_result_for_export["stationNames"])
+    else:
+        for r in rule_results:
+            if r.get("zoneCode") == EM_ZONE_CODE:
+                continue
+            sn = r.get("stationName")
+            if sn:
+                station_names_set.add(sn)
     for r in rule_results:
-        if r.get("zoneCode") == EM_ZONE_CODE:
-            continue
-        sn = r.get("stationName")
-        if sn:
-            station_names_set.add(sn)
         for s in _normalize_standards(r.get("standards", {}).get("gb")):
             if s.get("code"):
                 standard_codes.add(s["code"])

@@ -1025,8 +1025,8 @@ def test_get_analysis_task_result_returns_minimal_result_payload() -> None:
     assert payload["obstacleCount"] == 2
     assert payload["summary"] == "已完成局部坐标系与最小空间事实计算。"
     assert payload["targetResults"] == [
-        {"targetId": 1, "targetName": "Airport Near", "ruleResults": []},
-        {"targetId": 2, "targetName": "Airport Far", "ruleResults": []},
+        {"targetId": 1, "targetName": "Airport Near", "stationNames": [], "ruleResults": []},
+        {"targetId": 2, "targetName": "Airport Far", "stationNames": [], "ruleResults": []},
     ]
 
 
@@ -1074,7 +1074,7 @@ def test_get_analysis_task_result_omits_spatial_facts_after_worker_runs() -> Non
     assert payload["status"] == "succeeded"
     assert "spatialFacts" not in payload
     assert payload["targetResults"] == [
-        {"targetId": 1, "targetName": "Airport A", "ruleResults": []},
+        {"targetId": 1, "targetName": "Airport A", "stationNames": [], "ruleResults": []},
     ]
 
 
@@ -1722,7 +1722,7 @@ def test_run_analysis_task_skips_station_without_coordinates() -> None:
     payload = response.json()
     assert "spatialFacts" not in payload
     assert payload["targetResults"] == [
-        {"targetId": 1, "targetName": "Airport A", "ruleResults": []},
+        {"targetId": 1, "targetName": "Airport A", "stationNames": [], "ruleResults": []},
     ]
 
 
@@ -1759,7 +1759,7 @@ def test_run_analysis_task_returns_empty_for_surface_detection_radar_without_mat
     payload = response.json()
     assert payload["status"] == "succeeded"
     assert payload["targetResults"] == [
-        {"targetId": 1, "targetName": "Airport A", "ruleResults": []},
+        {"targetId": 1, "targetName": "Airport A", "stationNames": ["Radar Station"], "ruleResults": []},
     ]
 
 

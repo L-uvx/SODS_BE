@@ -1625,3 +1625,81 @@ class TestPerTargetExport:
             assert "AirportA" in h1, f"Expected AirportA in header: {h1}"
             assert "AirportB" in h2, f"Expected AirportB in header: {h2}"
             assert h1 != h2, f"Download filenames should differ: {h1} vs {h2}"
+
+
+class TestStationNamesInExport:
+    """测试导出报告中的台站名称列表构建"""
+
+    def _make_rule_dict(self, obstacle_name: str, station_name: str, **overrides):
+        base = {
+            "obstacleName": obstacle_name,
+            "rawObstacleType": "建筑物/构建物",
+            "stationName": station_name,
+            "stationType": "NDB",
+            "isApplicable": True,
+            "isCompliant": False,
+            "zoneCode": "ndb_minimum_distance_50m",
+            "ruleCode": "ndb_minimum_distance_50m",
+            "metrics": {
+                "allowedHeightMeters": 50.0,
+                "overHeightMeters": 5.0,
+                "enteredProtectionZone": True,
+            },
+            "standards": {
+                "gb": [{"code": "GB_TEST", "text": "clause"}],
+                "mh": [],
+            },
+            "message": "",
+        }
+        base.update(overrides)
+        return base
+
+    def test_uses_stationNames_from_target_result(self):
+        """当 targetResult 包含 stationNames 时，应直接使用该列表"""
+        from unittest.mock import MagicMock
+
+        mock_task = MagicMock()
+        mock_task.result_payload = {
+            "targetResults": [
+                {
+                    "targetId": 1,
+                    "targetName": "Airport Alpha",
+                    "stationNames": ["Station A", "Station B", "Station C"],
+                    "ruleResults": [
+                        self._make_rule_dict("Obstacle X", "Station A"),
+                    ],
+                },
+            ],
+            "obstacleCount": 1,
+            "selectedTargets": [{"id": 1, "name": "Airport Alpha", "category": "机场"}],
+        }
+        mock_task.import_batch = None
+
+        payload = build_export_payload(mock_task)
+        assert payload["stationNames"] == "Station A、Station B、Station C"
+
+    def test_fallback_when_stationNames_missing(self):
+        """当 targetResult 不含 stationNames 时，回退到从 ruleResults 提取"""
+        from unittest.mock import MagicMock
+
+        mock_task = MagicMock()
+        mock_task.result_payload = {
+            "targetResults": [
+                {
+                    "targetId": 1,
+                    "targetName": "Airport Beta",
+                    "ruleResults": [
+                        self._make_rule_dict("Obstacle X", "Station X"),
+                        self._make_rule_dict("Obstacle Y", "Station Y"),
+                    ],
+                },
+            ],
+            "obstacleCount": 2,
+            "selectedTargets": [{"id": 1, "name": "Airport Beta", "category": "机场"}],
+        }
+        mock_task.import_batch = None
+
+        payload = build_export_payload(mock_task)
+        assert "Station X" in payload["stationNames"]
+        assert "Station Y" in payload["stationNames"]
+        assert "Station A" not in payload["stationNames"]

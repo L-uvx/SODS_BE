@@ -230,6 +230,7 @@ class AnalysisRuleResultResponse(BaseModel):
 class AnalysisTargetResultResponse(BaseModel):
     target_id: int = Field(alias="targetId")
     target_name: str = Field(alias="targetName")
+    station_names: list[str] = Field(alias="stationNames")
     rule_results: list[AnalysisRuleResultResponse] = Field(alias="ruleResults")
 
     model_config = ConfigDict(
