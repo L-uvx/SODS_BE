@@ -382,8 +382,6 @@ def _parse_gp(ws, row_index, base):
     if da is None:
         da = 3.0
     ga = _get_number_from_string(ws.cell(row=row_index, column=14).value)
-    if ga is None:
-        ga = base.get('altitude') or 0.0
     alt = base.get('altitude') or 0.0
     return {
         **base, 'station_type': 'GP', 'antenna_hag': ah, 'coverage_radius': 18520.0,

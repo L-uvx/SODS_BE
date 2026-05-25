@@ -31,9 +31,7 @@ class Gp1DegZoneGeometry:
 
 # 解析 GP 1 度仰角限制区的基准高程。
 def resolve_gp_1deg_reference_height_meters(station: object) -> float:
-    raw_value = getattr(station, "gp360_altitude", None)
-    if raw_value is None:
-        raw_value = getattr(station, "GP360Altitude", None)
+    raw_value = getattr(station, "antenna_height", None)
     if raw_value is not None:
         value = float(raw_value)
         if math.isfinite(value) and value > 0.0:
