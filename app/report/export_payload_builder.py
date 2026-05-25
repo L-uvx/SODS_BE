@@ -373,7 +373,7 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
         airport_name = ""
 
     station_names_set: set[str] = set()
-    standard_codes: set[str] = set()
+    # standard_codes: set[str] = set()
     if target_result_for_export and "stationNames" in target_result_for_export:
         station_names_set = set(target_result_for_export["stationNames"])
     else:
@@ -383,20 +383,22 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
             sn = r.get("stationName")
             if sn:
                 station_names_set.add(sn)
-    for r in rule_results:
-        for s in _normalize_standards(r.get("standards", {}).get("gb")):
-            if s.get("code"):
-                standard_codes.add(s["code"])
-        for s in _normalize_standards(r.get("standards", {}).get("mh")):
-            if s.get("code"):
-                standard_codes.add(s["code"])
 
-    standard_names_set: set[str] = set()
-    for code in standard_codes:
-        name = _format_standard_for_list(_extract_standard_name(code))
-        if name:
-            standard_names_set.add(name)
-    standards_used = "、".join(sorted(standard_names_set)) if standard_names_set else ""
+    # standard_codes: set[str] = set()
+    # for r in rule_results:
+    #     for s in _normalize_standards(r.get("standards", {}).get("gb")):
+    #         if s.get("code"):
+    #             standard_codes.add(s["code"])
+    #     for s in _normalize_standards(r.get("standards", {}).get("mh")):
+    #         if s.get("code"):
+    #             standard_codes.add(s["code"])
+    # standard_names_set: set[str] = set()
+    # for code in standard_codes:
+    #     name = _format_standard_for_list(_extract_standard_name(code))
+    #     if name:
+    #         standard_names_set.add(name)
+    # standards_used = "、".join(sorted(standard_names_set)) if standard_names_set else ""
+    standards_used = "GB6364-2013、MH/T 4003.1-2021、MH/T 4003.2-2014、AP-118-TM-2013-01、AC-118-TM-2011-01"
 
     obstacle_count = result_payload.get("obstacleCount", 0)
     table_rows = _flatten_rule_results(rule_results)
