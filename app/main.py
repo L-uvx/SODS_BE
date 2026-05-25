@@ -1,4 +1,10 @@
 from contextlib import asynccontextmanager
+import mimetypes
+
+# 修复 Windows 环境下 StaticFiles 对 .js/.mjs 的 MIME 类型识别问题
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("application/javascript", ".mjs")
+mimetypes.add_type("text/css", ".css")
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles

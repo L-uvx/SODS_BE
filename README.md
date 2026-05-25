@@ -44,3 +44,10 @@ uv run alembic upgrade head --sql  # 生成离线 SQL
 | `EXPORT_SUCCESS_RETENTION_MINUTES` | `10` | 导出成功保留分钟数 |
 | `EXPORT_FAILED_RETENTION_MINUTES` | `30` | 导出失败保留分钟数 |
 | `EXPORT_STALE_RETENTION_MINUTES` | `30` | 导出残留清理分钟数 |
+| `FRONTEND_DIST_DIR` | `../../frontend/dist` | 前端静态文件目录（便携部署时通过环境变量覆盖为绝对路径） |
+
+## Windows 便携部署
+
+项目支持脱离 Docker/WSL 在 Windows 上运行，详见 `../SODS_Portable/README.md`。
+
+Windows 下需注意：`localhost` 可能在 psycopg 中先尝试 IPv6 导致连接挂死。若遇到数据库连接超时，将 `DATABASE_URL` 中的 `@localhost` 改为 `@127.0.0.1`。此外 Python `mimetypes` 在 Windows 上可能将 `.js` 映射为 `text/plain` 导致前端模块加载失败，`app/main.py` 启动时已通过 `mimetypes.add_type` 修复。
