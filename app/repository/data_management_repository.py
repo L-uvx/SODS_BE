@@ -313,14 +313,9 @@ class DataManagementRepository:
             obstacle_type=resolved_type,
         )
 
-    # 将中文障碍物类型标签转为英文 key。
+    # 障碍物类型筛选值直接透传，DB 中存的是中文标签，不需要转英文。
     @staticmethod
     def _resolve_obstacle_type(obstacle_type: str | None) -> str | None:
-        if obstacle_type is None:
-            return None
-        from app.analysis.obstacle_categories import GLOBAL_OBSTACLE_CATEGORY_MAPPING
-        if obstacle_type in GLOBAL_OBSTACLE_CATEGORY_MAPPING:
-            return GLOBAL_OBSTACLE_CATEGORY_MAPPING[obstacle_type]
         return obstacle_type
 
     # 在 SQLite 环境下列查询障碍物。
