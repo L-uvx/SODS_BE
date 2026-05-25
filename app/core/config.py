@@ -17,6 +17,7 @@ class Settings:
     export_success_retention_minutes: int = 10
     export_failed_retention_minutes: int = 30
     export_stale_retention_minutes: int = 30
+    frontend_dist_dir: Path = field(default_factory=lambda: Path("../frontend/dist"))
 
     # 从环境变量加载应用配置。
     @classmethod
@@ -48,4 +49,5 @@ class Settings:
             export_stale_retention_minutes=int(
                 os.getenv("EXPORT_STALE_RETENTION_MINUTES", "30")
             ),
+            frontend_dist_dir=Path(os.getenv("FRONTEND_DIST_DIR", "../frontend/dist")),
         )

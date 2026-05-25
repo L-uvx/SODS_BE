@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.data_management import router as data_management_router
@@ -53,3 +54,13 @@ app.include_router(data_management_router)
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# 便携部署：如果前端 dist 目录存在，挂载静态文件并提供 SPA 路由回退
+_frontend_dir = app.state.settings.frontend_dist_dir
+if _frontend_dir.exists():
+    app.mount(
+        "/",
+        StaticFiles(directory=str(_frontend_dir), html=True),
+        name="frontend",
+    )
