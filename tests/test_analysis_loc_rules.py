@@ -1277,7 +1277,7 @@ def test_loc_rule_profile_skips_run_area_and_building_restriction_prebind_for_hi
         calls["run_area_builder"] += 1
         return object()
 
-    def _record_building_builder(*, station_point: tuple[float, float], runway_context: dict[str, object]) -> object:
+    def _record_building_builder(*, station_point: tuple[float, float], runway_context: dict[str, object], distance_endo_runway: float | None = None) -> object:
         calls["building_builder"] += 1
         return object()
 
@@ -1345,7 +1345,7 @@ def test_loc_rule_profile_only_prebinds_run_area_for_mobile_obstacle_batch(
         calls["run_area_builder"] += 1
         return object()
 
-    def _record_building_builder(*, station_point: tuple[float, float], runway_context: dict[str, object]) -> object:
+    def _record_building_builder(*, station_point: tuple[float, float], runway_context: dict[str, object], distance_endo_runway: float | None = None) -> object:
         calls["building_builder"] += 1
         return object()
 
@@ -1446,7 +1446,7 @@ def test_loc_rule_profile_only_prebinds_building_groups_for_building_obstacle_ba
         calls["run_area_builder"] += 1
         return object()
 
-    def _record_building_builder(*, station_point: tuple[float, float], runway_context: dict[str, object]) -> object:
+    def _record_building_builder(*, station_point: tuple[float, float], runway_context: dict[str, object], distance_endo_runway: float | None = None) -> object:
         calls["building_builder"] += 1
         return object()
 
@@ -2777,7 +2777,7 @@ def test_loc_building_restriction_zone_region_3_bind_uses_shared_context_and_reg
         loc_region_3_module.build_loc_building_restriction_zone_region_3_geometry
     )
 
-    def _record_shared_context(*, station_point: tuple[float, float], runway_context: dict[str, object]):
+    def _record_shared_context(*, station_point: tuple[float, float], runway_context: dict[str, object], distance_endo_runway: float | None = None):
         captured["station_point"] = station_point
         captured["runway_context"] = runway_context
         return original_build_shared_context(
@@ -3148,7 +3148,7 @@ def test_loc_rule_profile_builds_building_restriction_shared_context_once_per_st
     )
     captured: dict[str, object] = {"bind_shared_contexts": []}
 
-    def _record_shared_context(*, station_point: tuple[float, float], runway_context: dict[str, object]):
+    def _record_shared_context(*, station_point: tuple[float, float], runway_context: dict[str, object], distance_endo_runway: float | None = None):
         captured["build_calls"] = int(captured.get("build_calls", 0)) + 1
         captured["station_point"] = station_point
         captured["runway_context"] = runway_context
@@ -3313,7 +3313,7 @@ def test_loc_rule_profile_prebind_gating_follows_patched_rule_group_declarations
         return object()
 
     def _record_building_builder(
-        *, station_point: tuple[float, float], runway_context: dict[str, object]
+        *, station_point: tuple[float, float], runway_context: dict[str, object], distance_endo_runway: float | None = None
     ) -> object:
         calls["building_builder"] += 1
         return object()
@@ -3470,7 +3470,7 @@ def test_loc_building_restriction_zone_region_4_bind_uses_shared_context_and_reg
         loc_region_4_module.build_loc_building_restriction_zone_region_4_geometry
     )
 
-    def _record_shared_context(*, station_point: tuple[float, float], runway_context: dict[str, object]):
+    def _record_shared_context(*, station_point: tuple[float, float], runway_context: dict[str, object], distance_endo_runway: float | None = None):
         captured["station_point"] = station_point
         captured["runway_context"] = runway_context
         return original_build_shared_context(
@@ -3586,7 +3586,7 @@ def test_loc_building_restriction_zone_region_1_bind_uses_shared_context_and_reg
     )
 
     def _record_shared_context(
-        *, station_point: tuple[float, float], runway_context: dict[str, object]
+        *, station_point: tuple[float, float], runway_context: dict[str, object], distance_endo_runway: float | None = None
     ):
         captured["station_point"] = station_point
         captured["runway_context"] = runway_context
@@ -3703,7 +3703,7 @@ def test_loc_building_restriction_zone_region_2_bind_uses_shared_context_and_reg
     )
 
     def _record_shared_context(
-        *, station_point: tuple[float, float], runway_context: dict[str, object]
+        *, station_point: tuple[float, float], runway_context: dict[str, object], distance_endo_runway: float | None = None
     ):
         captured["station_point"] = station_point
         captured["runway_context"] = runway_context

@@ -126,6 +126,7 @@ class LocRuleProfile:
                 build_loc_building_restriction_zone_shared_context(
                     station_point=station_point,
                     runway_context=runway_context,
+                    distance_endo_runway=getattr(station, "distance_endo_runway", None),
                 )
             )
             building_restriction_rules = [
@@ -193,6 +194,7 @@ class LocRuleProfile:
             shared_ctx = build_loc_building_restriction_zone_shared_context(
                 station_point=station_point,
                 runway_context=runway_context,
+                distance_endo_runway=getattr(station, "distance_endo_runway", None),
             )
             for rule in self._building_restriction_rules:
                 bound = rule.bind(

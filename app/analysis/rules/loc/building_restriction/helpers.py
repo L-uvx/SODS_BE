@@ -1,3 +1,4 @@
+import logging
 import math
 from dataclasses import dataclass
 
@@ -9,6 +10,8 @@ from shapely.geometry import (
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.rules.geometry_helpers import ensure_multipolygon
 from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -67,6 +70,7 @@ def build_loc_building_restriction_zone_shared_context(
     *,
     station_point: tuple[float, float],
     runway_context: dict[str, object],
+    distance_endo_runway: float | None = None,
 ) -> LocBuildingRestrictionZoneSharedContext:
     center_x, center_y = runway_context["localCenterPoint"]
     original_direction_degrees = float(runway_context["directionDegrees"])
@@ -74,15 +78,23 @@ def build_loc_building_restriction_zone_shared_context(
     original_radians = math.radians(original_direction_degrees)
     original_axis_unit = (math.sin(original_radians), math.cos(original_radians))
 
-    apex_point = (
-        center_x - original_axis_unit[0] * (runway_length_meters / 2.0),
-        center_y - original_axis_unit[1] * (runway_length_meters / 2.0),
-    )
-    station_to_apex_distance_meters = math.hypot(
-        apex_point[0] - station_point[0],
-        apex_point[1] - station_point[1],
-    )
     axis_unit = (-original_axis_unit[0], -original_axis_unit[1])
+
+    if distance_endo_runway is not None:
+        station_to_apex_distance_meters = float(distance_endo_runway) + runway_length_meters
+        apex_point = (
+            station_point[0] + axis_unit[0] * station_to_apex_distance_meters,
+            station_point[1] + axis_unit[1] * station_to_apex_distance_meters,
+        )
+    else:
+        apex_point = (
+            center_x - original_axis_unit[0] * (runway_length_meters / 2.0),
+            center_y - original_axis_unit[1] * (runway_length_meters / 2.0),
+        )
+        station_to_apex_distance_meters = math.hypot(
+            apex_point[0] - station_point[0],
+            apex_point[1] - station_point[1],
+        )
     normal_unit = (-axis_unit[1], axis_unit[0])
     root_half_width_m = float(LOC_BUILDING_RESTRICTION_ZONE["root_half_width_m"])
     root_left_point = (
@@ -286,7 +298,17 @@ def calculate_region_3_allowed_height_meters(
     if height_offset_meters < 0.0:
         height_offset_meters = 0.0
 
-    return station_altitude_meters + height_offset_meters
+    allowed = station_altitude_meters + height_offset_meters
+    _logger.info(
+        "region_3: min_dist=%.3f center=(%.1f,%.1f) station=(%.1f,%.1f) "
+        "e=%.3f cos_theta=%.6f runway_proj=%.3f "
+        "height_off=%.6f base_h=%.3f allowed=%.6f",
+        min_distance_meters, center_x, center_y,
+        zone_geometry.station_point[0], zone_geometry.station_point[1],
+        zone_geometry.station_to_apex_distance_meters, cos_theta, runway_project_meters,
+        height_offset_meters, station_altitude_meters, allowed,
+    )
+    return allowed
 
 
 def _resolve_alpha_degrees(
