@@ -78,7 +78,7 @@ class BoundWeatherRadarElevationAngleRule(BoundObstacleRule):
             message=f"对天气雷达的俯仰遮蔽角为{round(angle_degrees, 2)}°",
             metrics=metrics,
             standards_rule_code=self.standards_rule_code,
-            over_distance_meters=0.0,
+            over_distance_meters=max(0.0, top_elevation_meters - limit_height_meters) if not is_compliant else 0.0,
             azimuth_degrees=azimuth_degrees,
             max_horizontal_angle_degrees=max_horizontal_angle_degrees,
             min_horizontal_angle_degrees=min_horizontal_angle_degrees,

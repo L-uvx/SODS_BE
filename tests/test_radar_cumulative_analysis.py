@@ -323,12 +323,14 @@ class TestEndToEnd:
                 obstacleId=1,
                 minHorizontalAngleDegrees=10.0,
                 maxHorizontalAngleDegrees=20.0,
+                metrics={"verticalMaskAngleDegrees": 0.5, "isInRunwayTriangle": True},
             ),
             _make_result(
                 stationType="Surface_Detection_Radar",
                 obstacleId=2,
                 minHorizontalAngleDegrees=30.0,
                 maxHorizontalAngleDegrees=35.0,
+                metrics={"verticalMaskAngleDegrees": 0.5, "isInRunwayTriangle": True},
             ),
         ])
         assert len(results) == 1
@@ -417,6 +419,160 @@ class TestBuildConclusion:
             0.5, 0.5, "TEST_RADAR", ["obs1"],
         )
         assert "相对于TEST_RADAR的垂直遮蔽角" in result
+
+
+class TestSurfaceDetectionRadarFilter:
+    """Fix: Surface_Detection_Radar 累计分析仅包含跑道三角区内障碍物"""
+
+    def test_sdr_non_triangle_obstacle_skipped(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=1,
+                obstacleName="obs1",
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+                metrics={"verticalMaskAngleDegrees": 0.5, "isInRunwayTriangle": False},
+            ),
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=2,
+                obstacleName="obs2",
+                minHorizontalAngleDegrees=30.0,
+                maxHorizontalAngleDegrees=35.0,
+                metrics={"verticalMaskAngleDegrees": 0.5, "isInRunwayTriangle": False},
+            ),
+        ])
+        assert results == []
+
+    def test_sdr_triangle_obstacle_included(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=1,
+                obstacleName="obs1",
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+                metrics={"verticalMaskAngleDegrees": 0.5, "isInRunwayTriangle": True},
+            ),
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=2,
+                obstacleName="obs2",
+                minHorizontalAngleDegrees=30.0,
+                maxHorizontalAngleDegrees=35.0,
+                metrics={"verticalMaskAngleDegrees": 0.5, "isInRunwayTriangle": True},
+            ),
+        ])
+        assert len(results) == 1
+        assert results[0]["stationType"] == "Surface_Detection_Radar"
+        assert sorted(results[0]["obstacleNames"]) == ["obs1", "obs2"]
+
+    def test_sdr_mixed_triangle_filter(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=1,
+                obstacleName="obs1",
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+                metrics={"verticalMaskAngleDegrees": 0.5, "isInRunwayTriangle": True},
+            ),
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=2,
+                obstacleName="obs2",
+                minHorizontalAngleDegrees=30.0,
+                maxHorizontalAngleDegrees=35.0,
+                metrics={"verticalMaskAngleDegrees": 0.5, "isInRunwayTriangle": False},
+            ),
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=3,
+                obstacleName="obs3",
+                minHorizontalAngleDegrees=40.0,
+                maxHorizontalAngleDegrees=45.0,
+                metrics={"verticalMaskAngleDegrees": 0.5, "isInRunwayTriangle": True},
+            ),
+        ])
+        assert len(results) == 1
+        assert sorted(results[0]["obstacleNames"]) == ["obs1", "obs3"]
+
+    def test_sdr_no_metrics_isinrunwaytriangle_treated_as_false(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=1,
+                obstacleName="obs1",
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+                metrics={"verticalMaskAngleDegrees": 0.5},
+            ),
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=2,
+                obstacleName="obs2",
+                minHorizontalAngleDegrees=30.0,
+                maxHorizontalAngleDegrees=35.0,
+                metrics={"verticalMaskAngleDegrees": 0.5},
+            ),
+        ])
+        assert results == []
+
+    def test_sdr_null_metrics_ignored(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=1,
+                obstacleName="obs1",
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+                metrics=None,
+            ),
+            _make_result(
+                stationId=1,
+                stationType="Surface_Detection_Radar",
+                obstacleId=2,
+                obstacleName="obs2",
+                minHorizontalAngleDegrees=30.0,
+                maxHorizontalAngleDegrees=35.0,
+                metrics=None,
+            ),
+        ])
+        assert results == []
+
+    def test_radar_station_not_affected_by_sdr_filter(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                stationId=1,
+                stationType="RADAR",
+                obstacleId=1,
+                obstacleName="obs1",
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=20.0,
+                metrics={"verticalMaskAngleDegrees": 0.5},
+            ),
+            _make_result(
+                stationId=1,
+                stationType="RADAR",
+                obstacleId=2,
+                obstacleName="obs2",
+                minHorizontalAngleDegrees=30.0,
+                maxHorizontalAngleDegrees=35.0,
+                metrics={"verticalMaskAngleDegrees": 0.5},
+            ),
+        ])
+        assert len(results) == 1
 
 
 class TestEndToEndFormat:

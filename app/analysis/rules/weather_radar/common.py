@@ -41,6 +41,7 @@ class BoundWeatherRadarCircleRule(BoundObstacleRule):
             "actualDistanceMeters": actual_distance_meters,
             "minimumDistanceMeters": self.minimum_distance_meters,
             "topElevationMeters": top_elevation_meters,
+            "overHeightMeters": max(0.0, top_elevation_meters - self.base_height_meters),
         }
 
         centroid = obstacle_shape.centroid
@@ -77,7 +78,7 @@ class BoundWeatherRadarCircleRule(BoundObstacleRule):
             region_name=self.protection_zone.region_name,
             is_applicable=True,
             is_compliant=is_compliant,
-            is_filter_limit=True,
+            is_filter_limit=False,
             message=(
                 f"在{self.minimum_distance_meters}米范围内"
                 if not is_compliant

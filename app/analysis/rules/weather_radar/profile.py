@@ -89,8 +89,6 @@ class WeatherRadarRuleProfile:
                 should_apply_1deg = False
             elif actual_distance_meters < WEATHER_RADAR_MINIMUM_DISTANCE_800M and is_special_category:
                 should_apply_1deg = False
-            elif actual_distance_meters > float(getattr(station, "coverage_radius", 0.0) or 0.0):
-                should_apply_1deg = False
 
             if should_apply_1deg and bound_1deg_rule is not None:
                     rule_results.append(bound_1deg_rule.analyze(obstacle))

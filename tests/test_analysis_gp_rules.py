@@ -1542,6 +1542,104 @@ def test_gp_region_b_mh_other_station_type_entered_is_non_compliant() -> None:
     assert result.metrics["overHeightMeters"] == 10.0
 
 
+def test_gp_1deg_compliant_below_limit_has_zero_over_height() -> None:
+    rule_1deg = importlib.import_module(
+        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
+    )
+    helpers = importlib.import_module(
+        "app.analysis.rules.gp.elevation_restriction.helpers"
+    )
+
+    station = _make_gp_station(antenna_height=6.0, distance_v_to_runway=180.0)
+    station_point = (0.0, 0.0)
+    runway_context = {
+        "runNumber": "18",
+        "directionDegrees": 0.0,
+        "widthMeters": 40.0,
+        "lengthMeters": 600.0,
+        "localCenterPoint": (0.0, -600.0),
+    }
+
+    shared_context = helpers.build_gp_1deg_shared_context(
+        station=station,
+        station_point=station_point,
+        runway_context=runway_context,
+    )
+    bound_rule = rule_1deg.GpElevationRestriction1DegRule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 50,
+            "name": "Below Limit Obstacle",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 6.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [0.0, -400.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [0.0, -400.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is True
+    assert result.metrics["overHeightMeters"] == 0.0
+
+
+def test_gp_1deg_non_compliant_above_limit_has_positive_over_height() -> None:
+    rule_1deg = importlib.import_module(
+        "app.analysis.rules.gp.elevation_restriction.rule_1deg"
+    )
+    helpers = importlib.import_module(
+        "app.analysis.rules.gp.elevation_restriction.helpers"
+    )
+
+    station = _make_gp_station(antenna_height=6.0, distance_v_to_runway=180.0)
+    station_point = (0.0, 0.0)
+    runway_context = {
+        "runNumber": "18",
+        "directionDegrees": 0.0,
+        "widthMeters": 40.0,
+        "lengthMeters": 600.0,
+        "localCenterPoint": (0.0, -600.0),
+    }
+
+    shared_context = helpers.build_gp_1deg_shared_context(
+        station=station,
+        station_point=station_point,
+        runway_context=runway_context,
+    )
+    bound_rule = rule_1deg.GpElevationRestriction1DegRule().bind(
+        station=station,
+        shared_context=shared_context,
+    )
+    result = bound_rule.analyze(
+        {
+            "obstacleId": 51,
+            "name": "Above Limit Obstacle",
+            "rawObstacleType": "建筑物",
+            "globalObstacleCategory": "building_general",
+            "topElevation": 20.0,
+            "localGeometry": {
+                "type": "Point",
+                "coordinates": [0.0, -400.0],
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [0.0, -400.0],
+            },
+        }
+    )
+
+    assert result.is_compliant is False
+    assert result.metrics["overHeightMeters"] > 0.0
+
+
 def _make_gp_shared_context(*, standard_version: str):
     helpers = importlib.import_module("app.analysis.rules.gp.site_protection.helpers")
     return helpers.build_gp_site_protection_shared_context(

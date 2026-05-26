@@ -85,7 +85,7 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
                 "enteredProtectionZone": entered_protection_zone,
                 "allowedHeightMeters": limit_height_meters,
                 "topElevationMeters": top_elevation_meters,
-                "overHeightMeters": top_elevation_meters - limit_height_meters,
+                "overHeightMeters": max(0.0, top_elevation_meters - limit_height_meters),
                 "actualDistanceMeters": (
                     None
                     if obstacle_metrics is None

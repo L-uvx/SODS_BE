@@ -192,6 +192,12 @@ def compute_cumulative_horizontal_mask_angles(
         if vertical <= 0.25:
             continue
 
+        station_type = str(r.get("stationType", ""))
+        if station_type == "Surface_Detection_Radar":
+            metrics_ = r.get("metrics") or {}
+            if not metrics_.get("isInRunwayTriangle", False):
+                continue
+
         station_id = int(r["stationId"])
         if station_id not in radar_station_spans:
             radar_station_spans[station_id] = {

@@ -160,7 +160,7 @@ def test_weather_radar_1deg_fails_when_elevation_angle_exceeds_1deg() -> None:
     result = _find_rule_result(payload, "weather_radar_elevation_angle_1deg")
     assert result.is_compliant is False
 
-    assert result.over_distance_meters >= 0.0
+    assert result.over_distance_meters > 0.0
     assert 0.0 <= result.azimuth_degrees < 360.0
     assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
     assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
@@ -171,14 +171,28 @@ def test_weather_radar_1deg_fails_when_elevation_angle_exceeds_1deg() -> None:
     assert len(result.details) > 0
 
 
-def test_weather_radar_1deg_skips_obstacle_outside_coverage_radius() -> None:
+def test_weather_radar_1deg_evaluates_obstacle_outside_coverage_radius() -> None:
     payload = WeatherRadarRuleProfile().analyze(
         station=_make_station(coverage_radius=1500.0),
         obstacles=[_make_obstacle(category="building_general", local_geometry=_point_geometry(1600.0, 0.0), top_elevation=60.0)],
         station_point=(0.0, 0.0),
     )
 
-    assert not any(result.rule_code == "weather_radar_elevation_angle_1deg" for result in payload.rule_results)
+    result = _find_rule_result(payload, "weather_radar_elevation_angle_1deg")
+    assert result.is_compliant is False
+    assert result.metrics["enteredProtectionZone"] is False
+
+
+def test_weather_radar_1deg_compliant_over_distance_is_zero() -> None:
+    payload = WeatherRadarRuleProfile().analyze(
+        station=_make_station(),
+        obstacles=[_make_obstacle(category="building_general", local_geometry=_point_geometry(1000.0, 0.0), top_elevation=30.0)],
+        station_point=(0.0, 0.0),
+    )
+
+    result = _find_rule_result(payload, "weather_radar_elevation_angle_1deg")
+    assert result.is_compliant is True
+    assert result.over_distance_meters == 0.0
 
 
 def test_weather_radar_1deg_protection_zone_uses_analytic_surface_vertical_definition() -> None:
@@ -196,14 +210,25 @@ def test_weather_radar_1deg_protection_zone_uses_analytic_surface_vertical_defin
     assert vertical_definition["surface"]["heightModel"]["angleDegrees"] == 1.0
 
 
-def test_weather_radar_minimum_distance_rule_has_is_filter_limit() -> None:
+def test_weather_radar_minimum_distance_rule_is_filter_limit_is_false() -> None:
     from app.analysis.rules.weather_radar.minimum_distance_450m import WeatherRadarMinimumDistance450mRule
     bound = WeatherRadarMinimumDistance450mRule().bind(
         station=_make_station(),
         station_point=(0.0, 0.0),
     )
     result = bound.analyze(_make_obstacle(category="building_general", local_geometry=_point_geometry(600.0, 0.0)))
-    assert result.is_filter_limit is True
+    assert result.is_filter_limit is False
+
+
+def test_weather_radar_minimum_distance_rule_includes_over_height_meters() -> None:
+    from app.analysis.rules.weather_radar.minimum_distance_450m import WeatherRadarMinimumDistance450mRule
+    bound = WeatherRadarMinimumDistance450mRule().bind(
+        station=_make_station(),
+        station_point=(0.0, 0.0),
+    )
+    result = bound.analyze(_make_obstacle(category="building_general", local_geometry=_point_geometry(600.0, 0.0), top_elevation=50.0))
+    assert "overHeightMeters" in result.metrics
+    assert result.metrics["overHeightMeters"] == 40.0
 
 
 def test_weather_radar_elevation_angle_does_not_have_is_filter_limit() -> None:

@@ -8,7 +8,6 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_horizontal_angular_width,
-    compute_over_distance_meters,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -98,9 +97,9 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             )
         metrics["verticalMaskAngleDegrees"] = vertical_mask_angle_degrees
         metrics["allowedHeightMeters"] = limit_height_meters
-        metrics["overHeightMeters"] = max(0.0, top_elevation_meters - limit_height_meters)
+        metrics["overHeightMeters"] = top_elevation_meters - limit_height_meters
         if entered_protection_zone:
-            over_distance = compute_over_distance_meters(top_elevation_meters, limit_height_meters)
+            over_distance = top_elevation_meters - limit_height_meters
 
         is_compliant = not (
             vertical_mask_angle_degrees > self.vertical_limit_angle_degrees

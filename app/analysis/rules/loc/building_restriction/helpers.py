@@ -285,7 +285,7 @@ def _calculate_region_3_height_offset_meters(
         return 0.0
 
     axis_projection_ratio = abs(
-        (vector_x * axis_unit[0] + vector_y * axis_unit[1]) / min_distance_meters
+        (vector_x * axis_unit[1] - vector_y * axis_unit[0]) / min_distance_meters
     )
     if axis_projection_ratio <= 0.0:
         return 0.0

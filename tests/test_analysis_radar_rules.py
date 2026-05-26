@@ -787,3 +787,41 @@ def test_radar_site_protection_does_not_have_is_filter_limit() -> None:
     assert bound is not None
     result = bound.analyze(_make_obstacle(category="building_general", local_geometry=_point_geometry(1000.0, 0.0)))
     assert result.is_filter_limit is False
+
+
+def test_radar_a_over_height_meters_raw_allows_negative_when_compliant() -> None:
+    """Fix: overHeightMeters 使用原始减法，不高程满足时可为负值"""
+    bound = RadarSiteProtectionRule().bind(
+        station=_make_station(station_sub_type="PSR", altitude=10.0, antenna_hag=15.0),
+        station_point=(0.0, 0.0),
+        radius_meters=30000.0,
+        vertical_limit_angle_degrees=0.25,
+        horizontal_limit_angle_degrees=1.5,
+    )
+    assert bound is not None
+    result = bound.analyze(_make_obstacle(
+        category="building_general",
+        local_geometry=_point_geometry(1000.0, 0.0),
+        top_elevation=20.0,
+    ))
+    assert result.is_compliant is True
+    assert result.metrics["overHeightMeters"] < 0.0
+
+
+def test_radar_a_over_distance_raw_allows_negative_when_compliant() -> None:
+    """Fix: over_distance_meters 使用原始减法，不高程满足时可为负值"""
+    bound = RadarSiteProtectionRule().bind(
+        station=_make_station(station_sub_type="PSR", altitude=10.0, antenna_hag=15.0),
+        station_point=(0.0, 0.0),
+        radius_meters=30000.0,
+        vertical_limit_angle_degrees=0.25,
+        horizontal_limit_angle_degrees=1.5,
+    )
+    assert bound is not None
+    result = bound.analyze(_make_obstacle(
+        category="building_general",
+        local_geometry=_point_geometry(1000.0, 0.0),
+        top_elevation=20.0,
+    ))
+    assert result.is_compliant is True
+    assert result.over_distance_meters < 0.0
