@@ -7,7 +7,6 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
-    compute_over_height_fixed_limit,
     precise_diff_ceil2,
     precise_relative_height,
 )
@@ -20,7 +19,7 @@ from app.analysis.rules.loc.building_restriction.helpers import (
     LocBuildingRestrictionZoneSharedContext,
     build_loc_building_restriction_zone_region_3_geometry,
     build_loc_building_restriction_zone_shared_context,
-    calculate_region_3_worst_allowed_height_meters,
+    calculate_region_3_allowed_height_meters,
 )
 from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
 from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
@@ -46,16 +45,15 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
         base_height_meters = float(getattr(self.station, "altitude", 0.0) or 0.0)
         top_elevation_meters = float(obstacle.get("topElevation") or base_height_meters)
         ceiled_relative_height = precise_relative_height(top_elevation_meters, base_height_meters)
-        worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+        allowed_height_meters = calculate_region_3_allowed_height_meters(
             zone_geometry=self.zone_geometry,
             obstacle_geometry=obstacle_shape,
             station_altitude_meters=base_height_meters,
         )
-        allowed_height_meters = worst_allowed_height_meters
 
         is_compliant = True
-        if entered_protection_zone and worst_allowed_height_meters is not None:
-            is_compliant = (ceiled_relative_height + base_height_meters) <= worst_allowed_height_meters
+        if entered_protection_zone:
+            is_compliant = (ceiled_relative_height + base_height_meters) <= allowed_height_meters
 
         over_height_meters = (
             float(max(Decimal("0.00"), Decimal(str(ceiled_relative_height + base_height_meters)) - Decimal(str(allowed_height_meters or 0.0))))
@@ -85,14 +83,14 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
 
         gb_name, mh_name = _resolve_loc_standard_names(standards_rule_code)
         joined_names = _join_loc_standard_names(gb_name, mh_name)
-        limit = precise_diff_ceil2((worst_allowed_height_meters or base_height_meters), base_height_meters)
+        limit = precise_diff_ceil2((allowed_height_meters or base_height_meters), base_height_meters)
         if is_compliant:
             details = (
                 f"满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定。"
             )
         else:
             actual = precise_diff_ceil2(top_elevation_meters, base_height_meters)
-            over = precise_diff_ceil2(top_elevation_meters, (worst_allowed_height_meters or 0.0))
+            over = precise_diff_ceil2(top_elevation_meters, (allowed_height_meters or 0.0))
             details = (
                 f"不满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定，"
                 f"实际高度{actual}m，超出{over}m。"
@@ -120,7 +118,6 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
                 "topElevationMeters": top_elevation_meters,
                 "allowedHeightMeters": allowed_height_meters,
                 "overHeightMeters": over_height_meters,
-                "worstAllowedHeightMeters": worst_allowed_height_meters,
                 "actualDistanceMeters": actual_distance_meters,
             },
             standards_rule_code=standards_rule_code,

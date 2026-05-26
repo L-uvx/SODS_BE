@@ -1,11 +1,3 @@
-from shapely.geometry import MultiPolygon, shape
-
-from app.analysis.rules.geometry_evaluation import evaluate_geometry_metric
-from app.analysis.rules.gp.site_protection.helpers import (
-    GpSiteProtectionSharedContext,
-)
-
-
 GP_CABLE_CATEGORIES = frozenset({"power_or_communication_cable"})
 GP_AIRPORT_RING_ROAD_CATEGORIES = frozenset({"airport_ring_road"})
 GP_ROAD_OR_RAIL_CATEGORIES = frozenset(
@@ -28,28 +20,7 @@ def is_gp_road_or_rail_category(category: str) -> bool:
     return category in GP_ROAD_OR_RAIL_CATEGORIES
 
 
-# 计算障碍物进入保护区后的最小前向投影距离。
-def calculate_gp_zone_intersection_min_forward_distance_meters(
-    *,
-    obstacle_geometry: dict[str, object],
-    zone_geometry: MultiPolygon,
-    shared_context: GpSiteProtectionSharedContext,
-) -> float | None:
-    obstacle = shape(obstacle_geometry)
-    station_x, station_y = shared_context.station_point
-    axis_x, axis_y = shared_context.axis_unit
-    evaluation = evaluate_geometry_metric(
-        obstacle_geometry=obstacle,
-        protection_zone_geometry=zone_geometry,
-        point_metric=lambda point: (point.x - station_x) * axis_x
-        + (point.y - station_y) * axis_y,
-        collect_point_candidates=True,
-    )
-    return evaluation.min_metric
-
-
 __all__ = [
-    "calculate_gp_zone_intersection_min_forward_distance_meters",
     "is_gp_airport_ring_road_category",
     "is_gp_cable_category",
     "is_gp_road_or_rail_category",

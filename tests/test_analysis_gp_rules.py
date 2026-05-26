@@ -258,140 +258,6 @@ def test_gp_judgement_recognizes_road_or_rail_categories() -> None:
     assert judgement.is_gp_road_or_rail_category("building_general") is False
 
 
-def test_gp_judgement_calculates_region_intersection_forward_distance_for_point() -> None:
-    helpers = importlib.import_module("app.analysis.rules.gp.site_protection.helpers")
-    judgement = importlib.import_module(
-        "app.analysis.rules.gp.site_protection.judgement"
-    )
-    shared_context = helpers.build_gp_site_protection_shared_context(
-        station=_make_gp_station(distance_v_to_runway=180.0),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-        },
-        standard_version="GB",
-    )
-    region_geometry = helpers.build_gp_site_protection_region_b_geometry(shared_context)
-
-    distance = judgement.calculate_gp_zone_intersection_min_forward_distance_meters(
-        obstacle_geometry={
-            "type": "Point",
-            "coordinates": [60.0, -500.0],
-        },
-        zone_geometry=region_geometry.local_geometry,
-        shared_context=shared_context,
-    )
-
-    assert distance == 500.0
-
-
-def test_gp_judgement_returns_none_when_obstacle_stays_outside_zone() -> None:
-    helpers = importlib.import_module("app.analysis.rules.gp.site_protection.helpers")
-    judgement = importlib.import_module(
-        "app.analysis.rules.gp.site_protection.judgement"
-    )
-    shared_context = helpers.build_gp_site_protection_shared_context(
-        station=_make_gp_station(distance_v_to_runway=180.0),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-        },
-        standard_version="GB",
-    )
-    region_geometry = helpers.build_gp_site_protection_region_b_geometry(shared_context)
-
-    distance = judgement.calculate_gp_zone_intersection_min_forward_distance_meters(
-        obstacle_geometry={
-            "type": "Point",
-            "coordinates": [80.0, 200.0],
-        },
-        zone_geometry=region_geometry.local_geometry,
-        shared_context=shared_context,
-    )
-
-    assert distance is None
-
-
-def test_gp_judgement_calculates_min_forward_distance_for_partial_linestring_intersection() -> None:
-    helpers = importlib.import_module("app.analysis.rules.gp.site_protection.helpers")
-    judgement = importlib.import_module(
-        "app.analysis.rules.gp.site_protection.judgement"
-    )
-    shared_context = helpers.build_gp_site_protection_shared_context(
-        station=_make_gp_station(distance_v_to_runway=180.0),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-        },
-        standard_version="GB",
-    )
-    region_geometry = helpers.build_gp_site_protection_region_b_geometry(shared_context)
-
-    distance = judgement.calculate_gp_zone_intersection_min_forward_distance_meters(
-        obstacle_geometry={
-            "type": "LineString",
-            "coordinates": [
-                [60.0, -700.0],
-                [60.0, -500.0],
-            ],
-        },
-        zone_geometry=region_geometry.local_geometry,
-        shared_context=shared_context,
-    )
-
-    assert distance == 500.0
-
-
-def test_gp_judgement_uses_segment_minimum_for_polygon_intersection() -> None:
-    helpers = importlib.import_module("app.analysis.rules.gp.site_protection.helpers")
-    judgement = importlib.import_module(
-        "app.analysis.rules.gp.site_protection.judgement"
-    )
-    shared_context = helpers.build_gp_site_protection_shared_context(
-        station=_make_gp_station(distance_v_to_runway=180.0),
-        station_point=(0.0, 0.0),
-        runway_context={
-            "runNumber": "18",
-            "directionDegrees": 0.0,
-            "widthMeters": 40.0,
-            "lengthMeters": 600.0,
-            "localCenterPoint": (0.0, -600.0),
-        },
-        standard_version="GB",
-    )
-    region_geometry = helpers.build_gp_site_protection_region_b_geometry(shared_context)
-
-    distance = judgement.calculate_gp_zone_intersection_min_forward_distance_meters(
-        obstacle_geometry={
-            "type": "Polygon",
-            "coordinates": [
-                [
-                    [60.0, -700.0],
-                    [60.0, -500.0],
-                    [80.0, -700.0],
-                    [60.0, -700.0],
-                ]
-            ],
-        },
-        zone_geometry=region_geometry.local_geometry,
-        shared_context=shared_context,
-    )
-
-    assert distance == pytest.approx(500.0)
-
-
 def test_gp_judgement_geometry_evaluation_helper_minimizes_metric_across_polygon_segments() -> None:
     geometry_evaluation = importlib.import_module(
         "app.analysis.rules.geometry_evaluation"
@@ -1124,7 +990,7 @@ def test_gp_region_b_gb_entered_within_600m_is_non_compliant() -> None:
     assert result.is_compliant is False
     assert result.message == "在B区范围600米内"
     assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["forwardDistanceMeters"] == 500.0
+    assert result.metrics["actualDistanceMeters"] == pytest.approx(503.6, abs=0.2)
     assert result.metrics["requiresClearanceEvaluation"] is False
     assert result.metrics["overHeightMeters"] == 10.0
 
@@ -1195,7 +1061,7 @@ def test_gp_region_b_mh_ii_ring_road_within_600m_is_non_compliant() -> None:
     assert result.is_compliant is False
     assert result.message == "在B区范围600米内"
     assert result.metrics["isAirportRingRoad"] is True
-    assert result.metrics["forwardDistanceMeters"] == 500.0
+    assert result.metrics["actualDistanceMeters"] == pytest.approx(503.6, abs=0.2)
     assert result.metrics["overHeightMeters"] == 10.0
 
 
@@ -1230,7 +1096,7 @@ def test_gp_region_b_mh_ii_ring_road_outside_600m_is_compliant() -> None:
     assert result.is_compliant is True
     assert result.message == "不在B区范围内"
     assert result.metrics["isAirportRingRoad"] is True
-    assert result.metrics["forwardDistanceMeters"] is None
+    assert result.metrics["enteredProtectionZone"] is False
 
 
 def test_gp_region_b_mh_iii_non_ring_road_entered_is_non_compliant() -> None:
@@ -1299,7 +1165,7 @@ def test_gp_region_b_gb_entered_outside_600m_with_unavailable_clearance_is_non_c
     assert result.is_compliant is True
     assert result.message == "gp clearance evaluation pending"
     assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["forwardDistanceMeters"] == 700.0
+    assert result.metrics["actualDistanceMeters"] == pytest.approx(702.6, abs=0.2)
     assert result.metrics["requiresClearanceEvaluation"] is True
 
 
@@ -1341,7 +1207,7 @@ def test_gp_region_b_gb_entered_outside_600m_with_available_clearance_can_be_com
 
     assert result.is_compliant is True
     assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["forwardDistanceMeters"] == 700.0
+    assert result.metrics["actualDistanceMeters"] == pytest.approx(702.6, abs=0.2)
     assert result.metrics["requiresClearanceEvaluation"] is True
     assert result.metrics["clearanceLimitHeightMeters"] == 520.0
     assert result.metrics["overHeightMeters"] == -10.0
@@ -1385,7 +1251,7 @@ def test_gp_region_b_gb_entered_outside_600m_with_available_clearance_can_be_non
 
     assert result.is_compliant is False
     assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["forwardDistanceMeters"] == 700.0
+    assert result.metrics["actualDistanceMeters"] == pytest.approx(702.6, abs=0.2)
     assert result.metrics["requiresClearanceEvaluation"] is True
     assert result.metrics["clearanceLimitHeightMeters"] == 520.0
     assert result.metrics["overHeightMeters"] == 10.0

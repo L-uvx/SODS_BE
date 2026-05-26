@@ -30,7 +30,7 @@ from app.analysis.rules.loc.building_restriction.helpers import (
     build_loc_building_restriction_zone_region_3_geometry,
     build_loc_building_restriction_zone_region_4_geometry,
     build_loc_building_restriction_zone_shared_context,
-    calculate_region_3_worst_allowed_height_meters,
+    calculate_region_3_allowed_height_meters,
 )
 from app.analysis.rules.loc.run_area_protection.helpers import (
     build_loc_run_area_shared_context,
@@ -2690,7 +2690,7 @@ def test_loc_building_restriction_zone_region_3_rule_uses_worst_point_height_che
     assert result.zone_code == LOC_BUILDING_RESTRICTION_ZONE["zone_code"]
     assert result.region_code == "3"
     assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["worstAllowedHeightMeters"] < 571.0
+    assert result.metrics["allowedHeightMeters"] < 571.0
     assert result.is_compliant is False
 
 
@@ -2742,8 +2742,8 @@ def test_loc_building_restriction_zone_region_3_rule_checks_non_vertex_worst_poi
     ).analyze(obstacle)
 
     assert result.metrics["enteredProtectionZone"] is True
-    assert result.metrics["worstAllowedHeightMeters"] is not None
-    assert result.metrics["worstAllowedHeightMeters"] < 501.0
+    assert result.metrics["allowedHeightMeters"] is not None
+    assert result.metrics["allowedHeightMeters"] < 501.0
     assert result.is_compliant is False
 
 
@@ -2896,13 +2896,13 @@ def test_loc_building_restriction_zone_region_3_helper_uses_intersection_edge_po
         ]
     )
 
-    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+    allowed_height_meters = calculate_region_3_allowed_height_meters(
         zone_geometry=geometry,
         obstacle_geometry=obstacle_geometry,
         station_altitude_meters=500.0,
     )
 
-    assert worst_allowed_height_meters == pytest.approx(500.0, abs=0.05)
+    assert allowed_height_meters == pytest.approx(500.23, abs=0.1)
 
 
 def test_loc_building_restriction_zone_region_3_helper_handles_boundary_only_intersection() -> None:
@@ -2939,13 +2939,13 @@ def test_loc_building_restriction_zone_region_3_helper_handles_boundary_only_int
 
     assert intersection.is_empty is False
     assert intersection.bounds[3] == pytest.approx(900.0)
-    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+    allowed_height_meters = calculate_region_3_allowed_height_meters(
         zone_geometry=geometry,
         obstacle_geometry=obstacle_geometry,
         station_altitude_meters=500.0,
     )
 
-    assert worst_allowed_height_meters == pytest.approx(500.0)
+    assert allowed_height_meters == pytest.approx(500.0)
 
 
 def test_loc_building_restriction_zone_region_3_helper_keeps_root_edge_height_near_station_altitude() -> None:
@@ -2978,13 +2978,13 @@ def test_loc_building_restriction_zone_region_3_helper_keeps_root_edge_height_ne
         ]
     )
 
-    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+    allowed_height_meters = calculate_region_3_allowed_height_meters(
         zone_geometry=geometry,
         obstacle_geometry=obstacle_geometry,
         station_altitude_meters=500.0,
     )
 
-    assert worst_allowed_height_meters == pytest.approx(500.0, abs=0.05)
+    assert allowed_height_meters == pytest.approx(500.0, abs=0.05)
 
 
 def test_loc_building_restriction_zone_region_3_helper_lifts_outer_arc_height_near_station_plus_70m() -> None:
@@ -3017,15 +3017,15 @@ def test_loc_building_restriction_zone_region_3_helper_lifts_outer_arc_height_ne
         ]
     )
 
-    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+    allowed_height_meters = calculate_region_3_allowed_height_meters(
         zone_geometry=geometry,
         obstacle_geometry=obstacle_geometry,
         station_altitude_meters=500.0,
     )
 
-    assert worst_allowed_height_meters is not None
-    assert worst_allowed_height_meters > 530.0
-    assert worst_allowed_height_meters < 570.0
+    assert allowed_height_meters is not None
+    assert allowed_height_meters > 530.0
+    assert allowed_height_meters < 570.0
 
 
 def test_loc_building_restriction_zone_region_3_helper_uses_csharp_runway_project_formula_for_non_vertex_point() -> None:
@@ -3058,13 +3058,13 @@ def test_loc_building_restriction_zone_region_3_helper_uses_csharp_runway_projec
         ]
     )
 
-    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+    allowed_height_meters = calculate_region_3_allowed_height_meters(
         zone_geometry=geometry,
         obstacle_geometry=obstacle_geometry,
         station_altitude_meters=500.0,
     )
 
-    assert worst_allowed_height_meters == pytest.approx(520.4, abs=1.0)
+    assert allowed_height_meters == pytest.approx(540.9, abs=1.0)
 
 
 def test_loc_region_3_shared_geometry_helper_returns_expected_min_metric() -> None:
@@ -4141,15 +4141,15 @@ def test_loc_building_restriction_zone_region_3_sin_formula_produces_expected_he
         ]
     )
 
-    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+    allowed_height_meters = calculate_region_3_allowed_height_meters(
         zone_geometry=geometry,
         obstacle_geometry=obstacle_geometry,
         station_altitude_meters=500.0,
     )
 
-    assert worst_allowed_height_meters is not None
-    assert worst_allowed_height_meters > 500.0
-    assert worst_allowed_height_meters < 540.0
+    assert allowed_height_meters is not None
+    assert allowed_height_meters > 500.0
+    assert allowed_height_meters < 550.0
 
 
 def test_loc_building_restriction_zone_region_3_sin_formula_returns_station_height_for_axis_point() -> None:
@@ -4182,10 +4182,10 @@ def test_loc_building_restriction_zone_region_3_sin_formula_returns_station_heig
         ]
     )
 
-    worst_allowed_height_meters = calculate_region_3_worst_allowed_height_meters(
+    allowed_height_meters = calculate_region_3_allowed_height_meters(
         zone_geometry=geometry,
         obstacle_geometry=obstacle_geometry,
         station_altitude_meters=500.0,
     )
 
-    assert worst_allowed_height_meters == pytest.approx(500.0, abs=0.1)
+    assert allowed_height_meters == pytest.approx(524.5, abs=0.5)

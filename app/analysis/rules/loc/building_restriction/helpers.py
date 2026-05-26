@@ -7,7 +7,6 @@ from shapely.geometry import (
 )
 
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
-from app.analysis.rules.geometry_evaluation import evaluate_geometry_metric
 from app.analysis.rules.geometry_helpers import ensure_multipolygon
 from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
 
@@ -244,59 +243,50 @@ def build_loc_building_restriction_zone_region_4_geometry(
     )
 
 
-# 计算区域 3 的最不利允许高度。
-def calculate_region_3_worst_allowed_height_meters(
+# 计算区域 3 的允许高度，对齐 C# LOCStandardC.cs 单点公式。
+def calculate_region_3_allowed_height_meters(
     *,
     zone_geometry: LocBuildingRestrictionZoneRegion3AnalysisGeometry,
     obstacle_geometry: MultiPolygon,
     station_altitude_meters: float,
-) -> float | None:
-    evaluation = evaluate_geometry_metric(
-        obstacle_geometry=obstacle_geometry,
-        protection_zone_geometry=zone_geometry.local_geometry,
-        point_metric=lambda point: station_altitude_meters
-        + _calculate_region_3_height_offset_meters(
-            point=(point.x, point.y),
-            station_point=zone_geometry.station_point,
-            axis_unit=zone_geometry.axis_unit,
-            station_to_apex_distance_meters=zone_geometry.station_to_apex_distance_meters,
-            limit_angle_radians=math.asin(
-                zone_geometry.arc_height_offset_meters
-                / float(LOC_BUILDING_RESTRICTION_ZONE["arc_radius_offset_m"])
-            ),
-        ),
-        collect_point_candidates=True,
-    )
-    return evaluation.min_metric
-
-
-def _calculate_region_3_height_offset_meters(
-    *,
-    point: tuple[float, float],
-    station_point: tuple[float, float],
-    axis_unit: tuple[float, float],
-    station_to_apex_distance_meters: float,
-    limit_angle_radians: float,
 ) -> float:
-    vector_x = point[0] - station_point[0]
-    vector_y = point[1] - station_point[1]
-    min_distance_meters = math.hypot(vector_x, vector_y)
-    if min_distance_meters == 0.0:
-        return 0.0
+    from shapely.geometry import Point
 
-    axis_projection_ratio = abs(
-        (vector_x * axis_unit[1] - vector_y * axis_unit[0]) / min_distance_meters
-    )
-    if axis_projection_ratio <= 0.0:
-        return 0.0
+    centroid = obstacle_geometry.centroid
+    center_x = centroid.x
+    center_y = centroid.y
+    min_distance_meters = float(obstacle_geometry.distance(
+        Point(zone_geometry.station_point[0], zone_geometry.station_point[1])
+    ))
 
-    runway_project_meters = (
-        station_to_apex_distance_meters / axis_projection_ratio
+    vector_x = center_x - zone_geometry.station_point[0]
+    vector_y = center_y - zone_geometry.station_point[1]
+    center_distance_meters = math.hypot(vector_x, vector_y)
+
+    if center_distance_meters == 0.0:
+        cos_theta = 0.0
+    else:
+        cos_theta = abs(
+            (vector_x * zone_geometry.axis_unit[0]
+             + vector_y * zone_geometry.axis_unit[1])
+            / center_distance_meters
+        )
+
+    limit_angle_radians = math.asin(
+        float(LOC_BUILDING_RESTRICTION_ZONE["arc_height_offset_m"])
+        / float(LOC_BUILDING_RESTRICTION_ZONE["arc_radius_offset_m"])
     )
-    height_offset_meters = (
-        min_distance_meters - runway_project_meters
-    ) * math.tan(limit_angle_radians)
-    return max(height_offset_meters, 0.0)
+
+    if cos_theta > 0.0:
+        runway_project_meters = zone_geometry.station_to_apex_distance_meters / cos_theta
+    else:
+        runway_project_meters = float("inf")
+
+    height_offset_meters = (min_distance_meters - runway_project_meters) * math.tan(limit_angle_radians)
+    if height_offset_meters < 0.0:
+        height_offset_meters = 0.0
+
+    return station_altitude_meters + height_offset_meters
 
 
 def _resolve_alpha_degrees(

@@ -17,7 +17,6 @@ from app.analysis.rules.gp.site_protection.helpers import (
     build_gp_site_protection_region_b_geometry,
 )
 from app.analysis.rules.gp.site_protection.judgement import (
-    calculate_gp_zone_intersection_min_forward_distance_meters,
     is_gp_airport_ring_road_category,
 )
 from app.analysis.rules.protection_zone_helpers import build_protection_zone_spec
@@ -39,7 +38,6 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
         )
         global_obstacle_category = str(obstacle["globalObstacleCategory"])
         is_airport_ring_road = is_gp_airport_ring_road_category(global_obstacle_category)
-        forward_distance_meters = None
         requires_clearance_evaluation = False
         clearance_limit_height_meters = None
         over_height_meters = None
@@ -62,20 +60,8 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
             over = 0.0
             details = "障碍物未进入GP场地保护区B区。"
         else:
-            forward_distance_meters = (
-                calculate_gp_zone_intersection_min_forward_distance_meters(
-                    obstacle_geometry=dict(obstacle_shape.__geo_interface__),
-                    zone_geometry=self.protection_zone.local_geometry,
-                    shared_context=self.shared_context,
-                )
-            )
-            if forward_distance_meters is None:
-                is_compliant = True
-                message = "在B区范围内"
-                over = 0.0
-                details = "障碍物进入GP场地保护区B区。"
-            elif self.protection_zone.zone_code == "gp_site_protection_gb":
-                if forward_distance_meters <= 600.0:
+            if self.protection_zone.zone_code == "gp_site_protection_gb":
+                if actual_distance_meters <= 600.0:
                     is_compliant = False
                     message = "在B区范围600米内"
                     over = 0.0
@@ -113,7 +99,7 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
                 details = f"障碍物进入{self.protection_zone.zone_name}B区。"
             elif station_sub_type in {"II", "III"}:
                 if is_airport_ring_road:
-                    is_compliant = forward_distance_meters > 600.0
+                    is_compliant = actual_distance_meters > 600.0
                     message = (
                         "在B区范围内"
                         if is_compliant
@@ -144,15 +130,14 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
                 "enteredProtectionZone": entered_protection_zone,
                 "topElevationMeters": top_elev,
                 "actualDistanceMeters": actual_distance_meters,
-                "forwardDistanceMeters": forward_distance_meters,
                 "isAirportRingRoad": is_airport_ring_road,
                 "requiresClearanceEvaluation": requires_clearance_evaluation,
                 "overHeightMeters": over_height_for_metrics,
                 **(
                     {}
                     if self.protection_zone.zone_code != "gp_site_protection_gb"
-                    or forward_distance_meters is None
-                    or forward_distance_meters <= 600.0
+                    or clearance_limit_height_meters is None
+                    or actual_distance_meters <= 600.0
                     else {
                         "clearanceLimitHeightMeters": clearance_limit_height_meters,
                         "allowedHeightMeters": clearance_limit_height_meters,

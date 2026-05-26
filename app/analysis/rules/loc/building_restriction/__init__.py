@@ -10,7 +10,7 @@ from app.analysis.rules.loc.building_restriction.helpers import (
     build_loc_building_restriction_zone_region_3_geometry,
     build_loc_building_restriction_zone_region_4_geometry,
     build_loc_building_restriction_zone_shared_context,
-    calculate_region_3_worst_allowed_height_meters,
+    calculate_region_3_allowed_height_meters,
 )
 from app.analysis.rules.loc.building_restriction.region_1 import (
     LocBuildingRestrictionZoneRegion1Rule,
@@ -43,7 +43,7 @@ __all__ = [
     "build_loc_building_restriction_zone_region_3_geometry",
     "build_loc_building_restriction_zone_region_4_geometry",
     "build_loc_building_restriction_zone_shared_context",
-    "calculate_region_3_worst_allowed_height_meters",
+    "calculate_region_3_allowed_height_meters",
     "LocBuildingRestrictionZoneRegion1Rule",
     "LocBuildingRestrictionZoneRegion2Rule",
     "LocBuildingRestrictionZoneRegion3Rule",
