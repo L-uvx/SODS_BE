@@ -427,7 +427,7 @@ class ImportBatchRepository:
     # 查询机场下的台站列表。
     def list_stations_by_airport_id(self, airport_id: int) -> list[Station]:
         statement = (
-            select(Station).where(Station.airport_id == airport_id).order_by(Station.id)
+            select(Station).where(Station.airport_id == airport_id).order_by(Station.id.desc())
         )
         return list(self._session.scalars(statement))
 

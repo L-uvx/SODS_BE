@@ -372,17 +372,17 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
         rule_results = []
         airport_name = ""
 
-    station_names_set: set[str] = set()
-    # standard_codes: set[str] = set()
     if target_result_for_export and "stationNames" in target_result_for_export:
-        station_names_set = set(target_result_for_export["stationNames"])
+        station_names_ordered = list(dict.fromkeys(target_result_for_export["stationNames"]))
     else:
+        raw_names: list[str] = []
         for r in rule_results:
             if r.get("zoneCode") == EM_ZONE_CODE:
                 continue
             sn = r.get("stationName")
             if sn:
-                station_names_set.add(sn)
+                raw_names.append(sn)
+        station_names_ordered = list(dict.fromkeys(raw_names))
 
     # standard_codes: set[str] = set()
     # for r in rule_results:
@@ -409,7 +409,7 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
             "projectName": project_name,
             "airportName": airport_name,
             "standardsUsed": standards_used,
-            "stationNames": "、".join(sorted(station_names_set)),
+        "stationNames": "、".join(station_names_ordered),
             "cumulativeMaskAngleResults": [],
             "electromagneticZoneResult": "",
             "isEmpty": True,
@@ -497,7 +497,7 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
         "projectName": project_name,
         "airportName": airport_name,
         "standardsUsed": standards_used,
-        "stationNames": "、".join(sorted(station_names_set)),
+        "stationNames": "、".join(station_names_ordered),
         "cumulativeMaskAngleResults": cumulative_mask_angle_results,
         "electromagneticZoneResult": em_zone_summary,
         "obstacleCount": obstacle_count,
