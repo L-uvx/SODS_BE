@@ -1490,7 +1490,7 @@ def test_gp_1deg_non_compliant_above_limit_has_positive_over_height() -> None:
             "name": "Above Limit Obstacle",
             "rawObstacleType": "建筑物",
             "globalObstacleCategory": "building_general",
-            "topElevation": 20.0,
+            "topElevation": 520.0,
             "localGeometry": {
                 "type": "Point",
                 "coordinates": [0.0, -400.0],

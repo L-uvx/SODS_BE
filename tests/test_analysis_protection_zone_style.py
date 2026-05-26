@@ -22,8 +22,8 @@ def test_resolve_protection_zone_style_returns_default_palette_item_when_mapping
     )
 
     assert style["colorKey"] == "default_blue"
-    assert style["fill"] == "rgba(64, 158, 255, 0.5)"
-    assert style["stroke"] == "rgba(64, 158, 255, 0.9)"
+    assert style["fill"] == "rgba(64, 158, 255, 0.8)"
+    assert style["stroke"] == "rgba(64, 158, 255, 1)"
 
 
 def test_resolve_protection_zone_style_explicitly_maps_all_current_protection_zones() -> None:
@@ -212,8 +212,8 @@ def test_resolve_protection_zone_style_returns_radar_a_style() -> None:
     )
 
     assert style["colorKey"] == "violet_purple"
-    assert style["fill"] == "rgba(167, 139, 250, 0.5)"
-    assert style["stroke"] == "rgba(167, 139, 250, 0.9)"
+    assert style["fill"] == "rgba(167, 139, 250, 0.8)"
+    assert style["stroke"] == "rgba(167, 139, 250, 1)"
 
 
 def test_resolve_protection_zone_style_returns_surface_detection_radar_triangle_style() -> None:
@@ -223,8 +223,8 @@ def test_resolve_protection_zone_style_returns_surface_detection_radar_triangle_
     )
 
     assert style["colorKey"] == "pink_rose"
-    assert style["fill"] == "rgba(244, 114, 182, 0.5)"
-    assert style["stroke"] == "rgba(244, 114, 182, 0.9)"
+    assert style["fill"] == "rgba(244, 114, 182, 0.8)"
+    assert style["stroke"] == "rgba(244, 114, 182, 1)"
 
 
 def test_resolve_protection_zone_name_returns_ads_b_zone_names() -> None:
