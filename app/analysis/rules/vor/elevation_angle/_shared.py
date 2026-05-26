@@ -95,36 +95,6 @@ class BoundVorElevationAngleRule(BoundObstacleRule):
                 details="障碍物未进入仰角限制区。",
             )
 
-        if height_diff <= 0:
-            metrics["verticalAngleDegrees"] = 0.0
-            return AnalysisRuleResult(
-                station_id=self.protection_zone.station_id,
-                station_type=self.protection_zone.station_type,
-                obstacle_id=int(obstacle["obstacleId"]),
-                obstacle_name=str(obstacle["name"]),
-                raw_obstacle_type=obstacle["rawObstacleType"],
-                global_obstacle_category=str(obstacle["globalObstacleCategory"]),
-                rule_code=self.protection_zone.rule_code,
-                rule_name=self.protection_zone.rule_name,
-                zone_code=self.protection_zone.zone_code,
-                zone_name=self.protection_zone.zone_name,
-                region_code=self.protection_zone.region_code,
-                region_name=self.protection_zone.region_name,
-                is_applicable=True,
-                is_compliant=True,
-                message="障碍物低于基准面",
-                metrics=metrics,
-                standards_rule_code=self.protection_zone.rule_code,
-                over_distance_meters=0.0,
-                azimuth_degrees=az,
-                max_horizontal_angle_degrees=max_h,
-                min_horizontal_angle_degrees=min_h,
-                relative_height_meters=height_diff,
-                is_in_radius=entered,
-                is_in_zone=entered,
-                details="障碍物低于基准面，满足仰角要求。",
-            )
-
         vertical_angle = math.degrees(math.atan(height_diff / max(actual_distance, 0.001)))
         metrics["verticalAngleDegrees"] = vertical_angle
 

@@ -20,6 +20,7 @@ class BoundWindRadarElevationAngleRule(BoundObstacleRule):
     base_height_meters: float
     coverage_radius_meters: float
     limit_angle_degrees: float
+    limit_height_angle_degrees: float
     standards_rule_code: str
 
     # 执行已绑定的 WindRadar 仰角判定。
@@ -32,7 +33,7 @@ class BoundWindRadarElevationAngleRule(BoundObstacleRule):
         relative_height_meters = top_elevation_meters - self.base_height_meters
         angle_degrees = math.degrees(math.atan(relative_height_meters / max(actual_distance_meters, 0.001)))
         limit_height_meters = self.base_height_meters + (
-            actual_distance_meters * math.tan(math.radians(self.limit_angle_degrees))
+            actual_distance_meters * math.tan(math.radians(self.limit_height_angle_degrees))
         )
         metrics: dict[str, float | bool] = {
             "enteredProtectionZone": actual_distance_meters <= self.coverage_radius_meters,
@@ -94,6 +95,7 @@ class WindRadarElevationAngle15degRule(WindRadarRule):
     zone_code = "wind_radar_elevation_angle_15deg"
     standards_rule_code = "wind_radar_elevation_angle_15deg"
     limit_angle_degrees = 15.0
+    limit_height_angle_degrees = 5.0
 
     def __init__(self) -> None:
         self.zone_name = resolve_protection_zone_name(zone_code=self.zone_code)
@@ -143,7 +145,7 @@ class WindRadarElevationAngle15degRule(WindRadarRule):
                         },
                         "heightModel": {
                             "type": "angle_linear_rise",
-                            "angleDegrees": self.limit_angle_degrees,
+                            "angleDegrees": self.limit_height_angle_degrees,
                             "distanceOffsetMeters": 0.0,
                         },
                     },
@@ -153,5 +155,6 @@ class WindRadarElevationAngle15degRule(WindRadarRule):
             base_height_meters=base_height_meters,
             coverage_radius_meters=coverage_radius_meters,
             limit_angle_degrees=self.limit_angle_degrees,
+            limit_height_angle_degrees=self.limit_height_angle_degrees,
             standards_rule_code=self.standards_rule_code,
         )

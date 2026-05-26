@@ -346,7 +346,27 @@ def test_vor_100_200_1_5_analyze_below_benchmark_plane_is_compliant():
 
     result = bound.analyze(obstacle)
     assert result.is_compliant is True
-    assert "低于基准面" in result.message
+    assert "低于基准面" not in result.message
+    assert "与基准面形成的垂直仰角为" in result.message
+    assert result.metrics["verticalAngleDegrees"] <= 0
+
+
+def test_vor_200_300_1_5_analyze_below_benchmark_plane_is_compliant():
+    station = _make_station()
+    bound = Vor200_300_1_5_Rule().bind(station=station, station_point=(0.0, 0.0))
+
+    obstacle = _make_obstacle(
+        local_geometry=_point_geometry(250.0, 0.0),
+        geometry=_point_geometry(250.0, 0.0),
+        top_elevation=station.altitude + station.reflection_net_hag - 0.2,
+        category="building_general",
+    )
+
+    result = bound.analyze(obstacle)
+    assert result.is_compliant is True
+    assert "低于基准面" not in result.message
+    assert "与基准面形成的垂直仰角为" in result.message
+    assert result.metrics["verticalAngleDegrees"] <= 0
 
 
 def test_vor_100_200_1_5_analyze_vertical_angle_exceeded_is_non_compliant():

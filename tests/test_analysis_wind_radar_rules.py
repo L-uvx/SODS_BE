@@ -1,4 +1,7 @@
+import math
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.analysis.rules.wind_radar.profile import WindRadarRuleProfile
 
@@ -46,7 +49,7 @@ def _find_rule_result(payload, rule_code):
     return next(result for result in payload.rule_results if result.rule_code == rule_code)
 
 
-def test_wind_radar_15deg_fails_when_angle_exceeds_limit() -> None:
+def test_wind_radar_fails_when_angle_exceeds_15deg_threshold() -> None:
     payload = WindRadarRuleProfile().analyze(
         station=_make_station(),
         obstacles=[_make_obstacle(local_geometry=_point_geometry(1000.0, 0.0), top_elevation=400.0)],
@@ -67,7 +70,7 @@ def test_wind_radar_15deg_fails_when_angle_exceeds_limit() -> None:
     assert len(result.details) > 0
 
 
-def test_wind_radar_15deg_vertical_payload_uses_15deg() -> None:
+def test_wind_radar_protection_zone_angle_is_5deg_not_15deg() -> None:
     payload = WindRadarRuleProfile().analyze(
         station=_make_station(),
         obstacles=[_make_obstacle(local_geometry=_point_geometry(1000.0, 0.0), top_elevation=20.0)],
@@ -78,4 +81,63 @@ def test_wind_radar_15deg_vertical_payload_uses_15deg() -> None:
     assert zone.vertical_definition["mode"] == "analytic_surface"
     assert zone.vertical_definition["surface"]["type"] == "radial_cone_surface"
     assert zone.vertical_definition["surface"]["heightModel"]["type"] == "angle_linear_rise"
-    assert zone.vertical_definition["surface"]["heightModel"]["angleDegrees"] == 15.0
+    assert zone.vertical_definition["surface"]["heightModel"]["angleDegrees"] == 5.0
+
+
+def test_wind_radar_limit_height_uses_tan_5deg() -> None:
+    station = _make_station()
+    distance = 1000.0
+    expected_allowed = float(station.altitude + station.antenna_hag) + distance * math.tan(
+        math.radians(5.0)
+    )
+
+    payload = WindRadarRuleProfile().analyze(
+        station=station,
+        obstacles=[
+            _make_obstacle(
+                local_geometry=_point_geometry(distance, 0.0), top_elevation=0.0
+            )
+        ],
+        station_point=(0.0, 0.0),
+    )
+
+    result = _find_rule_result(payload, "wind_radar_elevation_angle_15deg")
+    assert result.is_compliant is True
+    assert result.metrics["allowedHeightMeters"] == pytest.approx(expected_allowed, rel=1e-6)
+    assert result.metrics["limitAngleDegrees"] == 15.0
+
+
+def test_wind_radar_14deg_elevation_is_compliant() -> None:
+    station = _make_station()
+    base_height = float(station.altitude + station.antenna_hag)
+    distance = 1000.0
+    top = base_height + distance * math.tan(math.radians(14.0))
+
+    payload = WindRadarRuleProfile().analyze(
+        station=station,
+        obstacles=[
+            _make_obstacle(local_geometry=_point_geometry(distance, 0.0), top_elevation=top)
+        ],
+        station_point=(0.0, 0.0),
+    )
+
+    result = _find_rule_result(payload, "wind_radar_elevation_angle_15deg")
+    assert result.is_compliant is True
+
+
+def test_wind_radar_16deg_elevation_is_non_compliant() -> None:
+    station = _make_station()
+    base_height = float(station.altitude + station.antenna_hag)
+    distance = 1000.0
+    top = base_height + distance * math.tan(math.radians(16.0))
+
+    payload = WindRadarRuleProfile().analyze(
+        station=station,
+        obstacles=[
+            _make_obstacle(local_geometry=_point_geometry(distance, 0.0), top_elevation=top)
+        ],
+        station_point=(0.0, 0.0),
+    )
+
+    result = _find_rule_result(payload, "wind_radar_elevation_angle_15deg")
+    assert result.is_compliant is False
