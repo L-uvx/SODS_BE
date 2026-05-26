@@ -6,6 +6,7 @@ from app.analysis.rules.radar.cumulative_analysis import (
     AngleSnapshot,
     _unwrap_angles,
     _merge_overlapping,
+    _merge_spans_to_disjoint,
     _scan_sector,
     _evaluate_threshold,
     _build_conclusion,
@@ -133,32 +134,24 @@ class TestMergeOverlapping:
 
 
 class TestScanSector:
-    def test_single_snapshot(self):
-        snaps = [AngleSnapshot(start=10.0, end=20.0, cumulative=10.0)]
-        result = _scan_sector(snaps, 15.0)
+    def test_single_interval(self):
+        disjoint = [(10.0, 20.0)]
+        result = _scan_sector(disjoint, 15.0)
         assert result == pytest.approx(10.0)
 
     def test_two_non_overlapping_in_window(self):
-        snaps = [
-            AngleSnapshot(start=10.0, end=18.0, cumulative=8.0),
-            AngleSnapshot(start=20.0, end=25.0, cumulative=13.0),
-        ]
-        result = _scan_sector(snaps, 15.0)
+        disjoint = [(10.0, 18.0), (20.0, 25.0)]
+        result = _scan_sector(disjoint, 15.0)
         assert result == pytest.approx(13.0)
 
     def test_outside_window_not_counted(self):
-        snaps = [
-            AngleSnapshot(start=10.0, end=12.0, cumulative=2.0),
-            AngleSnapshot(start=30.0, end=40.0, cumulative=12.0),
-        ]
-        result = _scan_sector(snaps, 15.0)
+        disjoint = [(10.0, 12.0), (30.0, 40.0)]
+        result = _scan_sector(disjoint, 15.0)
         assert result == pytest.approx(10.0)
 
     def test_partial_overlap(self):
-        snaps = [
-            AngleSnapshot(start=10.0, end=25.0, cumulative=15.0),
-        ]
-        result = _scan_sector(snaps, 12.0)
+        disjoint = [(10.0, 25.0)]
+        result = _scan_sector(disjoint, 12.0)
         assert result == pytest.approx(12.0)
 
 
@@ -182,31 +175,22 @@ class TestEvaluateThreshold:
         assert max_45_d == 1.0
 
     def test_large_span_high_cumulative_scan_15_passes(self):
-        snaps = [
-            AngleSnapshot(start=10.0, end=10.5, cumulative=0.5),
-        ]
-        ok, max_15_d, max_45_d = _evaluate_threshold(20.0, 3.0, snaps)
+        disjoint = [(10.0, 10.5)]
+        ok, max_15_d, max_45_d = _evaluate_threshold(20.0, 3.0, disjoint)
         assert ok is True
         assert max_15_d <= 1.5
         assert max_45_d == 3.0
 
     def test_large_span_scan_15_fails_span_under_45(self):
-        snaps = [
-            AngleSnapshot(start=10.0, end=22.0, cumulative=12.0),
-            AngleSnapshot(start=22.0, end=34.0, cumulative=24.0),
-        ]
-        ok, max_15_d, max_45_d = _evaluate_threshold(30.0, 4.0, snaps)
+        disjoint = [(10.0, 34.0)]
+        ok, max_15_d, max_45_d = _evaluate_threshold(30.0, 4.0, disjoint)
         assert ok is False
         assert max_15_d > 1.5
         assert max_45_d == 4.0
 
     def test_large_span_scan_45(self):
-        snaps = [
-            AngleSnapshot(start=10.0, end=22.0, cumulative=12.0),
-            AngleSnapshot(start=22.0, end=34.0, cumulative=24.0),
-            AngleSnapshot(start=40.0, end=60.0, cumulative=44.0),
-        ]
-        ok, max_15_d, max_45_d = _evaluate_threshold(50.0, 4.0, snaps)
+        disjoint = [(10.0, 34.0), (40.0, 60.0)]
+        ok, max_15_d, max_45_d = _evaluate_threshold(50.0, 4.0, disjoint)
         assert ok is False
         assert max_15_d > 1.5
         assert max_45_d > 3.0
@@ -506,3 +490,94 @@ class TestEndToEndFormat:
         conclusion = results[0]["conclusion"]
         assert "任意15°方位范围" in conclusion
         assert "任意45°方位范围" in conclusion
+
+
+class TestMergeSpansToDisjoint:
+    def test_empty(self):
+        assert _merge_spans_to_disjoint([]) == []
+
+    def test_single(self):
+        spans = [ObstacleAngleSpan(1, "a", 10.0, 20.0)]
+        assert _merge_spans_to_disjoint(spans) == [(10.0, 20.0)]
+
+    def test_non_overlapping(self):
+        spans = [
+            ObstacleAngleSpan(1, "a", 10.0, 20.0),
+            ObstacleAngleSpan(2, "b", 30.0, 45.0),
+        ]
+        result = _merge_spans_to_disjoint(spans)
+        assert result == [(10.0, 20.0), (30.0, 45.0)]
+
+    def test_overlapping_extend(self):
+        spans = [
+            ObstacleAngleSpan(1, "a", 10.0, 25.0),
+            ObstacleAngleSpan(2, "b", 20.0, 35.0),
+        ]
+        result = _merge_spans_to_disjoint(spans)
+        assert result == [(10.0, 35.0)]
+
+    def test_contained(self):
+        spans = [
+            ObstacleAngleSpan(1, "a", 10.0, 50.0),
+            ObstacleAngleSpan(2, "b", 20.0, 30.0),
+        ]
+        result = _merge_spans_to_disjoint(spans)
+        assert result == [(10.0, 50.0)]
+
+    def test_three_partial_overlap(self):
+        spans = [
+            ObstacleAngleSpan(1, "a", 10.0, 20.0),
+            ObstacleAngleSpan(2, "b", 15.0, 30.0),
+            ObstacleAngleSpan(3, "c", 40.0, 50.0),
+        ]
+        result = _merge_spans_to_disjoint(spans)
+        assert result == [(10.0, 30.0), (40.0, 50.0)]
+
+
+class TestOverlappingSpansNoDoubleCounting:
+    def test_max_15_not_greater_than_max_45(self):
+        results = compute_cumulative_horizontal_mask_angles([
+            _make_result(
+                stationId=1, stationName="Radar_1",
+                obstacleId=1, obstacleName="o1",
+                minHorizontalAngleDegrees=10.0,
+                maxHorizontalAngleDegrees=12.0,
+            ),
+            _make_result(
+                stationId=1, stationName="Radar_1",
+                obstacleId=2, obstacleName="o2",
+                minHorizontalAngleDegrees=11.0,
+                maxHorizontalAngleDegrees=13.0,
+            ),
+            _make_result(
+                stationId=1, stationName="Radar_1",
+                obstacleId=3, obstacleName="o3",
+                minHorizontalAngleDegrees=12.0,
+                maxHorizontalAngleDegrees=14.0,
+            ),
+            _make_result(
+                stationId=1, stationName="Radar_1",
+                obstacleId=4, obstacleName="o4",
+                minHorizontalAngleDegrees=13.0,
+                maxHorizontalAngleDegrees=15.0,
+            ),
+            _make_result(
+                stationId=1, stationName="Radar_1",
+                obstacleId=5, obstacleName="o5",
+                minHorizontalAngleDegrees=14.0,
+                maxHorizontalAngleDegrees=16.0,
+            ),
+        ])
+        assert len(results) == 1
+        r = results[0]
+        max_15 = r["maxCumulativeIn15Deg"]
+        max_45 = r["maxCumulativeIn45Deg"]
+        cumulative = r["cumulativeHorizontalAngleDegrees"]
+        assert max_15 <= max_45, (
+            f"maxCumulativeIn15Deg ({max_15}) should not exceed "
+            f"maxCumulativeIn45Deg ({max_45})"
+        )
+        assert max_15 <= cumulative, (
+            f"maxCumulativeIn15Deg ({max_15}) should not exceed "
+            f"cumulative ({cumulative})"
+        )

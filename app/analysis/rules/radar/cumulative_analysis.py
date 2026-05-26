@@ -52,6 +52,24 @@ def _unwrap_angles(spans: list[ObstacleAngleSpan]) -> list[ObstacleAngleSpan]:
     return unwrapped
 
 
+# 将排序展开后的障碍物角度跨段合并为互不相交的覆盖区间
+def _merge_spans_to_disjoint(spans: list[ObstacleAngleSpan]) -> list[tuple[float, float]]:
+    if not spans:
+        return []
+    merged: list[tuple[float, float]] = []
+    cur_start = spans[0].min_azimuth
+    cur_end = spans[0].max_azimuth
+    for span in spans[1:]:
+        if span.min_azimuth <= cur_end:
+            cur_end = max(cur_end, span.max_azimuth)
+        else:
+            merged.append((cur_start, cur_end))
+            cur_start = span.min_azimuth
+            cur_end = span.max_azimuth
+    merged.append((cur_start, cur_end))
+    return merged
+
+
 # 顺序合并重叠区间并返回累计角
 def _merge_overlapping(spans: list[ObstacleAngleSpan]) -> tuple[float, float, list[AngleSnapshot]]:
     if not spans:
@@ -80,22 +98,22 @@ def _merge_overlapping(spans: list[ObstacleAngleSpan]) -> tuple[float, float, li
 
 # 扫描任意 sector_width 扇区内的最大累计水平遮蔽角
 def _scan_sector(
-    snapshots: list[AngleSnapshot],
+    disjoint: list[tuple[float, float]],
     sector_width: float,
 ) -> float:
     max_acc = 0.0
-    for i, base in enumerate(snapshots):
-        window_start = base.start
+    n = len(disjoint)
+    for i in range(n):
+        window_start = disjoint[i][0]
         window_end = window_start + sector_width
         acc = 0.0
-        for j in range(i, len(snapshots)):
-            snap = snapshots[j]
-            if snap.start >= window_end:
-                break
-            overlap_start = max(snap.start, window_start)
-            overlap_end = min(snap.end, window_end)
+        j = i
+        while j < n and disjoint[j][0] < window_end:
+            overlap_start = max(disjoint[j][0], window_start)
+            overlap_end = min(disjoint[j][1], window_end)
             if overlap_end > overlap_start:
                 acc += overlap_end - overlap_start
+            j += 1
         max_acc = max(max_acc, acc)
     return max_acc
 
@@ -105,7 +123,7 @@ def _scan_sector(
 def _evaluate_threshold(
     total_span: float,
     cumulative: float,
-    snapshots: list[AngleSnapshot],
+    disjoint: list[tuple[float, float]],
 ) -> tuple[bool, float, float]:
     max_15 = 0.0
     max_45 = 0.0
@@ -118,11 +136,11 @@ def _evaluate_threshold(
     if cumulative <= 1.5:
         return True, cumulative, cumulative
 
-    max_15 = _scan_sector(snapshots, 15.0)
+    max_15 = _scan_sector(disjoint, 15.0)
 
     if max_15 <= 1.5:
         if total_span >= 45.0:
-            max_45 = _scan_sector(snapshots, 45.0)
+            max_45 = _scan_sector(disjoint, 45.0)
             return True, max_15, max_45
         else:
             return True, max_15, cumulative
@@ -131,7 +149,7 @@ def _evaluate_threshold(
         ok = cumulative <= 3.0
         return ok, max_15, cumulative
 
-    max_45 = _scan_sector(snapshots, 45.0)
+    max_45 = _scan_sector(disjoint, 45.0)
     ok = max_45 <= 3.0
     return ok, max_15, max_45
 
@@ -226,8 +244,9 @@ def compute_cumulative_horizontal_mask_angles(
 
         unwrapped = _unwrap_angles(spans)
         total_span, cumulative, snapshots = _merge_overlapping(unwrapped)
+        disjoint = _merge_spans_to_disjoint(unwrapped)
         is_compliant, max_15_display, max_45_display = _evaluate_threshold(
-            total_span, cumulative, snapshots,
+            total_span, cumulative, disjoint,
         )
 
         obstacle_names: list[str] = []
