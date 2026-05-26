@@ -7,7 +7,6 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
-    precise_diff_ceil2,
     precise_relative_height,
 )
 from app.analysis.rule_result import AnalysisRuleResult
@@ -83,16 +82,16 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
 
         gb_name, mh_name = _resolve_loc_standard_names(standards_rule_code)
         joined_names = _join_loc_standard_names(gb_name, mh_name)
-        limit = precise_diff_ceil2((allowed_height_meters or base_height_meters), base_height_meters)
+        limit = ceil2(allowed_height_meters or base_height_meters)
         if is_compliant:
             details = (
-                f"满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定。"
+                f"满足{joined_names}中'障碍物高度不超过{limit}m'的规定。"
             )
         else:
-            actual = precise_diff_ceil2(top_elevation_meters, base_height_meters)
-            over = precise_diff_ceil2(top_elevation_meters, (allowed_height_meters or 0.0))
+            actual = ceil2(top_elevation_meters)
+            over = ceil2(over_height_meters)
             details = (
-                f"不满足{joined_names}中'障碍物高度不超过台站基准面{limit}m'的规定，"
+                f"不满足{joined_names}中'障碍物高度不超过{limit}m'的规定，"
                 f"实际高度{actual}m，超出{over}m。"
             )
 
