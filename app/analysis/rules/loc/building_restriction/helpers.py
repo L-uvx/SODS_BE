@@ -1,4 +1,3 @@
-import logging
 import math
 from dataclasses import dataclass
 
@@ -10,8 +9,6 @@ from shapely.geometry import (
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.rules.geometry_helpers import ensure_multipolygon
 from app.analysis.rules.loc.config import LOC_BUILDING_RESTRICTION_ZONE
-
-_logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -299,15 +296,7 @@ def calculate_region_3_allowed_height_meters(
         height_offset_meters = 0.0
 
     allowed = station_altitude_meters + height_offset_meters
-    _logger.info(
-        "region_3: min_dist=%.3f center=(%.1f,%.1f) station=(%.1f,%.1f) "
-        "e=%.3f cos_theta=%.6f runway_proj=%.3f "
-        "height_off=%.6f base_h=%.3f allowed=%.6f",
-        min_distance_meters, center_x, center_y,
-        zone_geometry.station_point[0], zone_geometry.station_point[1],
-        zone_geometry.station_to_apex_distance_meters, cos_theta, runway_project_meters,
-        height_offset_meters, station_altitude_meters, allowed,
-    )
+    
     return allowed
 
 

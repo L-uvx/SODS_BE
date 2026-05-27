@@ -286,17 +286,23 @@ def _build_summary(rule_results: list[dict], obstacle_count: int, radar_unmet_ob
             non_compliant_obstacles[name] = min(prev, height) if prev is not None else height
 
     if not non_compliant_obstacles:
-        base = f"共分析障碍物{obstacle_count}个，均满足标准限高要求。"
+        base = f"共分析障碍物{obstacle_count}个。"
     else:
         names = sorted(non_compliant_obstacles)
         heights = [
             f"{floor2(non_compliant_obstacles[n]):.2f}"
             for n in names
         ]
-        base = (
-            f"共分析障碍物{obstacle_count}个，其中{','.join(names)}"
-            f"不满足标准限高要求，限制顶部高程为 {'、'.join(heights)}米。"
-        )
+        if len(names) == 1:
+            base = (
+                f"共分析障碍物{obstacle_count}个，{names[0]}"
+                f"不满足标准限高要求，限制顶部高程为 {heights[0]}米。"
+            )
+        else:
+            base = (
+                f"共分析障碍物{obstacle_count}个，其中{','.join(names)}"
+                f"不满足标准限高要求，限制顶部高程为 {'、'.join(heights)}米。"
+            )
 
     all_unmet = set(non_compliant_obstacles.keys()) | radar_unmet_obstacle_names
 
@@ -323,28 +329,29 @@ def _build_summary(rule_results: list[dict], obstacle_count: int, radar_unmet_ob
     return base + suffix
 
 
-# 将电磁环境保护区结果解析为摘要字符串。
+# 将电磁环境保护区结果解析为摘要字符串，对齐 C# WriteDetailsAsync 中 EM 区输出。
 def _build_em_zone_summary(em_zone_result: dict | None) -> str:
     if not em_zone_result or em_zone_result.get("totalRunways", 0) == 0:
-        return "未发现机场电磁环境保护区。"
+        return "1、位于机场电磁环境保护区的情况:未发现机场电磁环境保护区。"
     total = em_zone_result.get("totalObstacles", 0)
     total_inside = em_zone_result.get("totalInside", 0)
-    total_outside = em_zone_result.get("totalOutside", 0)
-    if total_outside == 0:
-        return "所有障碍物均在机场电磁环境保护区内。"
+
+    if total_inside == total:
+        return "1、位于机场电磁环境保护区的情况:所有障碍物均在机场电磁环境保护区内。"
     if total_inside == 0:
-        return "所有障碍物均不在机场电磁环境保护区内。"
-    runway_parts: list[str] = []
+        return "1、位于机场电磁环境保护区的情况:障碍物不在机场电磁环境保护区内。"
+
+    inside_names: list[str] = []
+    seen: set[str] = set()
     for rw in em_zone_result.get("runways", []):
-        runway_parts.append(
-            f"{rw['runwayName']}（区内{rw['insideCount']}个、"
-            f"区外{rw['outsideCount']}个）"
-        )
-    runways_text = "；".join(runway_parts)
-    return (
-        f"共{total}个障碍物，{total_inside}个在机场电磁环境保护区内，"
-        f"{total_outside}个不在。{runways_text}。"
-    )
+        for item in rw.get("obstaclesInside", []):
+            name = item.get("obstacleName", "")
+            if name and name not in seen:
+                seen.add(name)
+                inside_names.append(name)
+
+    names_text = "、".join(inside_names)
+    return f"1、位于机场电磁环境保护区的情况:{names_text}在机场电磁环境保护区内。"
 
 
 def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None = None) -> dict[str, Any]:

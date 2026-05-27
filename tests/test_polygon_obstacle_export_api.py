@@ -1067,7 +1067,8 @@ class TestBuildSummaryRadarIntegration:
             },
         ]
         result = _build_summary(rr, obstacle_count=1, radar_unmet_obstacle_names=set())
-        assert "均满足标准限高要求" in result
+        assert "共分析障碍物1个。，满足标准要求" in result
+        assert "不满足标准限高要求" not in result
 
     # ---- T8: _build_summary skips LOC BRZ special ----
     def test_build_summary_skips_loc_brz_entered(self):
@@ -1081,7 +1082,7 @@ class TestBuildSummaryRadarIntegration:
             },
         ]
         result = _build_summary(rr, obstacle_count=1, radar_unmet_obstacle_names=set())
-        assert "均满足标准限高要求" in result
+        assert "不满足标准限高要求" not in result
 
     # ---- T9: _build_summary skips Radar 16KM special ----
     def test_build_summary_skips_radar_16km_entered(self):
@@ -1096,7 +1097,7 @@ class TestBuildSummaryRadarIntegration:
             },
         ]
         result = _build_summary(rr, obstacle_count=1, radar_unmet_obstacle_names=set())
-        assert "均满足标准限高要求" in result
+        assert "不满足标准限高要求" not in result
 
     # ---- T10: radar unmet (all fail) ----
     def test_build_summary_radar_all_fail(self):
@@ -1178,8 +1179,7 @@ class TestBuildSummaryRadarIntegration:
             },
         ]
         result = _build_summary(rr, obstacle_count=2, radar_unmet_obstacle_names=set())
-        assert "均满足标准限高要求" in result
-        assert "均满足标准要求，可按报批高度进行审批" in result
+        assert "共分析障碍物2个。，均满足标准要求，可按报批高度进行审批" in result
 
     # ---- T14: no radar unmet (all non-compliant) ----
     def test_build_summary_no_radar_all_noncompliant(self):

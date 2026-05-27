@@ -138,20 +138,18 @@ def _evaluate_threshold(
 
     max_15 = _scan_sector(disjoint, 15.0)
 
-    if max_15 <= 1.5:
+    if max_15 > 1.5:
         if total_span >= 45.0:
             max_45 = _scan_sector(disjoint, 45.0)
-            return True, max_15, max_45
+            return False, max_15, max_45
         else:
-            return True, max_15, cumulative
+            return False, max_15, cumulative
 
-    if total_span < 45.0:
-        ok = cumulative <= 3.0
-        return ok, max_15, cumulative
-
-    max_45 = _scan_sector(disjoint, 45.0)
-    ok = max_45 <= 3.0
-    return ok, max_15, max_45
+    if total_span >= 45.0:
+        max_45 = _scan_sector(disjoint, 45.0)
+        return max_45 <= 3.0, max_15, max_45
+    else:
+        return cumulative <= 3.0, max_15, cumulative
 
 
 # 构建雷达累计水平遮蔽角结论文案

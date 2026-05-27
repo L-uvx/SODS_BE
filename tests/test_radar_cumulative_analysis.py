@@ -188,6 +188,13 @@ class TestEvaluateThreshold:
         assert max_15_d > 1.5
         assert max_45_d == 4.0
 
+    def test_large_span_scan_15_fails_cumulative_under_3(self):
+        disjoint = [(10.0, 11.0), (20.0, 21.0)]
+        ok, max_15_d, max_45_d = _evaluate_threshold(30.0, 2.0, disjoint)
+        assert ok is False
+        assert max_15_d > 1.5
+        assert max_45_d == 2.0
+
     def test_large_span_scan_45(self):
         disjoint = [(10.0, 34.0), (40.0, 60.0)]
         ok, max_15_d, max_45_d = _evaluate_threshold(50.0, 4.0, disjoint)
