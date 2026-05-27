@@ -27,18 +27,22 @@ class BoundRadarCircleRule(BoundObstacleRule):
     minimum_distance_meters: float | None
     standards_rule_code: str
     base_height_meters: float = 0.0
-    is_filter_limit: bool = True
+    is_filter_limit: bool = False
 
     # 执行已绑定的 Radar 圆形保护区判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         obstacle_shape = resolve_obstacle_shape(obstacle)
-        entered_protection_zone = obstacle_shape.intersects(
-            self.protection_zone.local_geometry
-        )
-        actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         top_elevation_meters = float(
             obstacle.get("topElevation") if obstacle.get("topElevation") is not None else 0.0
         )
+        # Radar C: 对齐 C#，涡轮类型不判断距离，直接视为进入保护区
+        if self.minimum_distance_meters is None:
+            entered_protection_zone = True
+        else:
+            entered_protection_zone = obstacle_shape.intersects(
+                self.protection_zone.local_geometry
+            )
+        actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         is_compliant = not entered_protection_zone
         metrics: dict[str, float | bool | None] = {
             "enteredProtectionZone": entered_protection_zone,
@@ -47,7 +51,7 @@ class BoundRadarCircleRule(BoundObstacleRule):
         }
         if self.minimum_distance_meters is not None:
             metrics["minimumDistanceMeters"] = self.minimum_distance_meters
-        over_height_meters = max(0.0, top_elevation_meters - self.base_height_meters)
+        over_height_meters = top_elevation_meters
         metrics["overHeightMeters"] = over_height_meters
 
         centroid = obstacle_shape.centroid
@@ -60,19 +64,15 @@ class BoundRadarCircleRule(BoundObstacleRule):
         relative_height_meters = top_elevation_meters - self.base_height_meters
 
         over_distance = 0.0
-        if not is_compliant and self.minimum_distance_meters is not None:
+        if self.minimum_distance_meters is None:
+            details = "障碍物进入雷达旋转反射体保护区。"
+        elif not is_compliant:
             over_distance = compute_over_distance_meters(
                 self.minimum_distance_meters, actual_distance_meters
             )
             details = f"不满足规定要求，实际距离{int(actual_distance_meters)}m，所需最小间距{int(self.minimum_distance_meters)}m。"
-        elif self.minimum_distance_meters is not None:
-            details = f"满足规定要求，实际距离{int(actual_distance_meters)}m。"
         else:
-            details = (
-                "障碍物进入雷达旋转反射体保护区。"
-                if entered_protection_zone
-                else "障碍物位于保护区外。"
-            )
+            details = f"满足规定要求，实际距离{int(actual_distance_meters)}m。"
 
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,

@@ -141,13 +141,15 @@ def test_radar_a_passes_when_vertical_angle_is_below_0_25_deg() -> None:
 
     result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
     assert result.is_compliant is True
-    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["enteredProtectionZone"] is True  # 几何值：在 30km 内
+    assert result.metrics["intersectionViolation"] is False  # C# Intersect：仅水平角超标不构成
     assert result.metrics["actualDistanceMeters"] == pytest.approx(10000.0)
     assert result.metrics["verticalMaskAngleDegrees"] <= 0.25
     assert result.metrics["horizontalMaskAngleDegrees"] > 1.5
     assert result.metrics["verticalLimitAngleDegrees"] == 0.25
     assert result.metrics["horizontalLimitAngleDegrees"] == 1.5
     assert result.metrics["allowedHeightMeters"] > result.metrics["baseHeightMeters"]
+    assert "overHeightMeters" not in result.metrics  # 对齐 C#：theta <= 0.25 时不设置 OverDistance
 
 
 def test_radar_a_passes_when_horizontal_angle_is_not_greater_than_1_5_deg() -> None:
@@ -165,12 +167,14 @@ def test_radar_a_passes_when_horizontal_angle_is_not_greater_than_1_5_deg() -> N
 
     result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
     assert result.is_compliant is True
-    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["enteredProtectionZone"] is True  # 几何值：在 30km 内
+    assert result.metrics["intersectionViolation"] is False  # C# Intersect：仅垂直角超标不构成
     assert result.metrics["verticalMaskAngleDegrees"] > 0.25
     assert result.metrics["horizontalMaskAngleDegrees"] <= 1.5
     assert result.metrics["verticalLimitAngleDegrees"] == 0.25
     assert result.metrics["horizontalLimitAngleDegrees"] == 1.5
     assert result.metrics["allowedHeightMeters"] < result.metrics["topElevationMeters"]
+    assert result.metrics["overHeightMeters"] > 0.0  # 对齐 C#：theta > 0.25 时设置 OverDistance
 
 
 def test_radar_a_fails_when_vertical_and_horizontal_angles_both_exceed_limits() -> None:
@@ -188,7 +192,8 @@ def test_radar_a_fails_when_vertical_and_horizontal_angles_both_exceed_limits() 
 
     result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
     assert result.is_compliant is False
-    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["enteredProtectionZone"] is True  # 几何值：在 30km 内
+    assert result.metrics["intersectionViolation"] is True  # C# Intersect：两角都超标
     assert result.metrics["verticalMaskAngleDegrees"] > 0.25
     assert result.metrics["horizontalMaskAngleDegrees"] > 1.5
     assert result.metrics["verticalLimitAngleDegrees"] == 0.25
@@ -211,7 +216,8 @@ def test_radar_a_station_point_zero_distance_does_not_crash() -> None:
     )
 
     result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
-    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["enteredProtectionZone"] is True  # 几何值：在 30km 内
+    assert result.metrics["intersectionViolation"] is False  # C# Intersect：水平角为 0
     assert result.metrics["actualDistanceMeters"] == 0.0
     assert result.metrics["verticalMaskAngleDegrees"] > result.metrics["verticalLimitAngleDegrees"]
     assert result.is_compliant is True
@@ -240,7 +246,8 @@ def test_radar_a_uses_zero_horizontal_mask_angle_for_point_or_degenerate_geometr
     )
 
     result = next(result for result in payload.rule_results if result.rule_code == "radar_site_protection")
-    assert result.metrics["enteredProtectionZone"] is True
+    assert result.metrics["enteredProtectionZone"] is True  # 几何值：在 30km 内
+    assert result.metrics["intersectionViolation"] is False  # C# Intersect：水平角为 0
     assert result.metrics["horizontalMaskAngleDegrees"] == pytest.approx(0.0)
 
 
@@ -683,7 +690,8 @@ def test_radar_c_fails_when_rotating_reflector_is_inside_16km() -> None:
     assert result.is_compliant is False
 
 
-def test_radar_c_passes_when_rotating_reflector_is_outside_16km() -> None:
+def test_radar_c_always_enters_protection_zone_regardless_of_distance() -> None:
+    # 对齐 C#：涡轮类型不判断距离，始终视为进入保护区
     payload = RadarRuleProfile().analyze(
         station=_make_station(),
         obstacles=[
@@ -697,8 +705,8 @@ def test_radar_c_passes_when_rotating_reflector_is_outside_16km() -> None:
 
     result = _find_rule_result(payload, "radar_rotating_reflector_16km")
     assert result.rule_code == "radar_rotating_reflector_16km"
-    assert result.metrics["enteredProtectionZone"] is False
-    assert result.is_compliant is True
+    assert result.metrics["enteredProtectionZone"] is True
+    assert result.is_compliant is False
 
 
 def test_radar_c_treats_boundary_as_entered() -> None:
@@ -763,7 +771,7 @@ def test_radar_minimum_distance_rule_has_is_filter_limit() -> None:
         station_point=(0.0, 0.0),
     )
     result = bound.analyze(_make_obstacle(category="building_general", local_geometry=_point_geometry(600.0, 0.0)))
-    assert result.is_filter_limit is True
+    assert result.is_filter_limit is False  # 对齐 C#：IsFilterLimit 在 Radar B 中被注释掉，默认为 false
 
 
 def test_radar_rotating_reflector_16km_rule_has_is_filter_limit_false() -> None:
@@ -789,8 +797,27 @@ def test_radar_site_protection_does_not_have_is_filter_limit() -> None:
     assert result.is_filter_limit is False
 
 
-def test_radar_a_over_height_meters_raw_allows_negative_when_compliant() -> None:
-    """Fix: overHeightMeters 使用原始减法，不高程满足时可为负值"""
+def test_radar_a_over_height_meters_set_when_vertical_exceeds() -> None:
+    # 对齐 C#：仅 theta > 0.25° 时设置 OverDistance，且此时 overHeightMeters > 0
+    bound = RadarSiteProtectionRule().bind(
+        station=_make_station(station_sub_type="PSR", altitude=10.0, antenna_hag=15.0),
+        station_point=(0.0, 0.0),
+        radius_meters=30000.0,
+        vertical_limit_angle_degrees=0.25,
+        horizontal_limit_angle_degrees=1.5,
+    )
+    assert bound is not None
+    result = bound.analyze(_make_obstacle(
+        category="building_general",
+        local_geometry=_point_geometry(1000.0, 0.0),
+        top_elevation=50.0,
+    ))
+    assert result.is_compliant is True  # 水平角为 0 ≤ 1.5，合规
+    assert result.metrics["overHeightMeters"] > 0.0
+
+
+def test_radar_a_over_distance_zero_when_vertical_within_limit() -> None:
+    # 对齐 C#：theta <= 0.25° 时不设置 OverDistance，保持默认值 0
     bound = RadarSiteProtectionRule().bind(
         station=_make_station(station_sub_type="PSR", altitude=10.0, antenna_hag=15.0),
         station_point=(0.0, 0.0),
@@ -805,23 +832,4 @@ def test_radar_a_over_height_meters_raw_allows_negative_when_compliant() -> None
         top_elevation=20.0,
     ))
     assert result.is_compliant is True
-    assert result.metrics["overHeightMeters"] < 0.0
-
-
-def test_radar_a_over_distance_raw_allows_negative_when_compliant() -> None:
-    """Fix: over_distance_meters 使用原始减法，不高程满足时可为负值"""
-    bound = RadarSiteProtectionRule().bind(
-        station=_make_station(station_sub_type="PSR", altitude=10.0, antenna_hag=15.0),
-        station_point=(0.0, 0.0),
-        radius_meters=30000.0,
-        vertical_limit_angle_degrees=0.25,
-        horizontal_limit_angle_degrees=1.5,
-    )
-    assert bound is not None
-    result = bound.analyze(_make_obstacle(
-        category="building_general",
-        local_geometry=_point_geometry(1000.0, 0.0),
-        top_elevation=20.0,
-    ))
-    assert result.is_compliant is True
-    assert result.over_distance_meters < 0.0
+    assert result.over_distance_meters == 0.0

@@ -27,7 +27,7 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
     # 执行已绑定的 Radar A 场地保护区判定。
     def analyze(self, obstacle: dict[str, object]) -> AnalysisRuleResult:
         obstacle_shape = resolve_obstacle_shape(obstacle)
-        entered_protection_zone = obstacle_shape.intersects(self.protection_zone.local_geometry)
+        in_zone_geometry = obstacle_shape.intersects(self.protection_zone.local_geometry)
         actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         top_elevation_meters = float(
             obstacle.get("topElevation") if obstacle.get("topElevation") is not None else 0.0
@@ -47,7 +47,7 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
         relative_height_meters = top_elevation_meters - self.base_height_meters
 
         metrics: dict[str, float | bool] = {
-            "enteredProtectionZone": entered_protection_zone,
+            "enteredProtectionZone": in_zone_geometry,
             "actualDistanceMeters": actual_distance_meters,
             "verticalMaskAngleDegrees": 0.0,
             "horizontalMaskAngleDegrees": horizontal_mask_angle_degrees,
@@ -61,7 +61,7 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
         over_distance = 0.0
         limit_height_meters = self.base_height_meters
 
-        if (not entered_protection_zone) or actual_distance_meters > self.radius_meters:
+        if (not in_zone_geometry) or actual_distance_meters > self.radius_meters:
             details = "障碍物位于保护区外。"
             return self._build_result(
                 obstacle=obstacle,
@@ -72,8 +72,8 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
                 max_horizontal_angle_degrees=max_horizontal_angle_degrees,
                 min_horizontal_angle_degrees=min_horizontal_angle_degrees,
                 relative_height_meters=relative_height_meters,
-                is_in_radius=entered_protection_zone,
-                is_in_zone=entered_protection_zone,
+                is_in_radius=in_zone_geometry,
+                is_in_zone=in_zone_geometry,
                 over_distance_meters=over_distance,
                 details=details,
             )
@@ -97,14 +97,18 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             )
         metrics["verticalMaskAngleDegrees"] = vertical_mask_angle_degrees
         metrics["allowedHeightMeters"] = limit_height_meters
-        metrics["overHeightMeters"] = top_elevation_meters - limit_height_meters
-        if entered_protection_zone:
+
+        vertical_exceeds = vertical_mask_angle_degrees > self.vertical_limit_angle_degrees
+        horizontal_exceeds = horizontal_mask_angle_degrees > self.horizontal_limit_angle_degrees
+
+        if vertical_exceeds:
+            metrics["overHeightMeters"] = top_elevation_meters - limit_height_meters
             over_distance = top_elevation_meters - limit_height_meters
 
-        is_compliant = not (
-            vertical_mask_angle_degrees > self.vertical_limit_angle_degrees
-            and horizontal_mask_angle_degrees > self.horizontal_limit_angle_degrees
-        )
+        csharp_intersect = vertical_exceeds and horizontal_exceeds
+        metrics["intersectionViolation"] = csharp_intersect
+
+        is_compliant = not csharp_intersect
         v_angle = round(vertical_mask_angle_degrees, 2)
         h_angle = round(horizontal_mask_angle_degrees, 2)
         message = f"对台站的垂直遮蔽角为{v_angle}°，水平遮蔽角为{h_angle}°"
@@ -119,8 +123,8 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             max_horizontal_angle_degrees=max_horizontal_angle_degrees,
             min_horizontal_angle_degrees=min_horizontal_angle_degrees,
             relative_height_meters=relative_height_meters,
-            is_in_radius=entered_protection_zone,
-            is_in_zone=entered_protection_zone,
+            is_in_radius=in_zone_geometry,
+            is_in_zone=in_zone_geometry,
             over_distance_meters=over_distance,
             details=details,
         )

@@ -151,7 +151,7 @@ def test_base_radar_result_remains_applicable_inside_triangle() -> None:
 
 
 def test_gated_radar_b_result_preserves_additional_fields_when_not_in_triangle() -> None:
-    """方方 Radar B 最小值规则设置了 is_filter_limit=True，场监 gating 时应保留"""
+    # 对齐 C#：Radar B 的 is_filter_limit 默认为 False（C# 中 IsFilterLimit 被注释掉）
     payload = SurfaceDetectionRadarRuleProfile().analyze(
         station=_make_station(),
         obstacles=[_make_obstacle(obstacle_id=1, local_geometry=_point_geometry(200.0, 150.0), top_elevation=25.0)],
@@ -163,7 +163,7 @@ def test_gated_radar_b_result_preserves_additional_fields_when_not_in_triangle()
 
     assert result.is_applicable is True
     assert result.is_compliant is True
-    assert result.is_filter_limit is True
+    assert result.is_filter_limit is False
     assert 0.0 <= result.azimuth_degrees < 360.0
     assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
     assert 0.0 <= result.min_horizontal_angle_degrees < 360.0
@@ -177,7 +177,7 @@ def test_gated_radar_b_result_preserves_additional_fields_when_not_in_triangle()
 
 
 def test_gated_radar_b_result_preserves_additional_fields_when_in_triangle() -> None:
-    """在三角区内 is_applicable 保持为 True，其它字段也应完整保留"""
+    # 对齐 C#：Radar B 的 is_filter_limit 默认为 False
     payload = SurfaceDetectionRadarRuleProfile().analyze(
         station=_make_station(),
         obstacles=[_make_obstacle(obstacle_id=1, local_geometry=_point_geometry(0.0, 150.0), top_elevation=25.0)],
@@ -188,7 +188,7 @@ def test_gated_radar_b_result_preserves_additional_fields_when_in_triangle() -> 
     result = _find_rule_result(payload, "radar_minimum_distance_460m")
 
     assert result.is_applicable is True
-    assert result.is_filter_limit is True
+    assert result.is_filter_limit is False
     assert 0.0 <= result.azimuth_degrees < 360.0
     assert 0.0 <= result.max_horizontal_angle_degrees < 360.0
     assert 0.0 <= result.min_horizontal_angle_degrees < 360.0

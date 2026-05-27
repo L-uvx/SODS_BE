@@ -123,6 +123,9 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
         is_sdr_gated = metrics.get("triangleGateApplied") is True
         is_in_triangle = metrics.get("isInRunwayTriangle") is True
 
+        intersection_violation = metrics.get("intersectionViolation")
+        track_zone = (intersection_violation is True) if intersection_violation is not None else entered_zone
+
         # Priority 4: isMid or isFilterLimit → special display
         is_special_no_judge = bool(r.get("isMid") or r.get("isFilterLimit"))
         is_compliant: bool = bool(r.get("isCompliant", True))
@@ -193,7 +196,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
             # C# L661-666: detection radar requires IsInTriangle (skip non-triangle)
             should_track_overheight = (
                 not skip_overheight_tracking
-                and entered_zone
+                and track_zone
                 and (not is_sdr_gated or is_in_triangle)
             )
             if should_track_overheight:
@@ -222,7 +225,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
                     # C# L661-666: detection radar requires IsInTriangle (skip non-triangle)
                     should_track_overheight = (
                         not skip_overheight_tracking
-                        and entered_zone
+                        and track_zone
                         and (not is_sdr_gated or is_in_triangle)
                     )
                     if should_track_overheight:
