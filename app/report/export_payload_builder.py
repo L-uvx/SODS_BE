@@ -402,6 +402,11 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
 
     obstacle_count = result_payload.get("obstacleCount", 0)
     table_rows = _flatten_rule_results(rule_results)
+
+    obstacle_names_from_rows = list(dict.fromkeys(r["obstacleName"] for r in table_rows))
+    obstacle_order_map = {name: idx for idx, name in enumerate(obstacle_names_from_rows)}
+    station_order_map = {name: idx for idx, name in enumerate(station_names_ordered)}
+
     project_name = analysis_task.import_batch.project.name if analysis_task.import_batch and analysis_task.import_batch.project else ""
 
     if not table_rows:
@@ -436,6 +441,13 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
         if (row["isCompliant"] or row["complianceStatus"] == "不判断")
         and row["enteredProtectionZone"]
     ]
+
+    _report_sort_key = lambda r: (
+        obstacle_order_map.get(r["obstacleName"], 99999),
+        station_order_map.get(r["stationName"], 99999)
+    )
+    non_compliant_rows.sort(key=_report_sort_key)
+    compliant_rows.sort(key=_report_sort_key)
 
     em_zone_results = [
         r for r in rule_results
