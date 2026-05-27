@@ -7,6 +7,7 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    floor2,
     precise_relative_height,
 )
 from app.analysis.rule_result import AnalysisRuleResult
@@ -59,13 +60,13 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
             if entered_protection_zone
             else 0.0
         )
+        display_limit = floor2(allowed_height_meters or base_height_meters)
         if entered_protection_zone:
-            limit = ceil2(allowed_height_meters or base_height_meters)
             if is_compliant:
-                message = f"位于建筑物限制区内,此处限制顶部高程为{limit}米，未超出标准要求"
+                message = f"位于建筑物限制区内,此处限制顶部高程为{display_limit}米，未超出标准要求"
             else:
                 over = ceil2(over_height_meters)
-                message = f"位于建筑物限制区内,此处限制顶部高程为{limit}米,超出标准要求{over}米"
+                message = f"位于建筑物限制区内,此处限制顶部高程为{display_limit}米,超出标准要求{over}米"
         else:
             message = "不位于建筑物限制区内"
 
@@ -82,16 +83,15 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
 
         gb_name, mh_name = _resolve_loc_standard_names(standards_rule_code)
         joined_names = _join_loc_standard_names(gb_name, mh_name)
-        limit = ceil2(allowed_height_meters or base_height_meters)
         if is_compliant:
             details = (
-                f"满足{joined_names}中'障碍物高度不超过{limit}m'的规定。"
+                f"满足{joined_names}中'障碍物高度不超过{display_limit}m'的规定。"
             )
         else:
             actual = ceil2(top_elevation_meters)
             over = ceil2(over_height_meters)
             details = (
-                f"不满足{joined_names}中'障碍物高度不超过{limit}m'的规定，"
+                f"不满足{joined_names}中'障碍物高度不超过{display_limit}m'的规定，"
                 f"实际高度{actual}m，超出{over}m。"
             )
 
@@ -115,7 +115,7 @@ class BoundLocBuildingRestrictionZoneRegion3Rule(BoundObstacleRule):
                 "enteredProtectionZone": entered_protection_zone,
                 "baseHeightMeters": base_height_meters,
                 "topElevationMeters": top_elevation_meters,
-                "allowedHeightMeters": allowed_height_meters,
+                "allowedHeightMeters": display_limit,
                 "overHeightMeters": over_height_meters,
                 "actualDistanceMeters": actual_distance_meters,
             },

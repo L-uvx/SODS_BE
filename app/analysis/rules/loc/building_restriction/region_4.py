@@ -7,6 +7,7 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_height_fixed_limit,
+    floor2,
     precise_diff_ceil2,
     precise_relative_height,
 )
@@ -50,13 +51,13 @@ class BoundLocBuildingRestrictionZoneRegion4Rule(BoundObstacleRule):
         over_height_meters = compute_over_height_fixed_limit(
             top_elevation_meters, base_height_meters, 0.0,
         )
+        display_limit = floor2(allowed_height_meters)
         if entered_protection_zone:
-            limit = ceil2(allowed_height_meters)
             if is_compliant:
-                message = f"位于建筑物限制区内,此处限制顶部高程为{limit}米，未超出标准要求"
+                message = f"位于建筑物限制区内,此处限制顶部高程为{display_limit}米，未超出标准要求"
             else:
                 over = ceil2(over_height_meters)
-                message = f"位于建筑物限制区内,此处限制顶部高程为{limit}米,超出标准要求{over}米"
+                message = f"位于建筑物限制区内,此处限制顶部高程为{display_limit}米,超出标准要求{over}米"
         else:
             message = "不位于建筑物限制区内"
 
@@ -106,7 +107,7 @@ class BoundLocBuildingRestrictionZoneRegion4Rule(BoundObstacleRule):
             metrics={
                 "enteredProtectionZone": entered_protection_zone,
                 "baseHeightMeters": base_height_meters,
-                "allowedHeightMeters": allowed_height_meters,
+                "allowedHeightMeters": display_limit,
                 "topElevationMeters": top_elevation_meters,
                 "overHeightMeters": over_height_meters,
                 "actualDistanceMeters": actual_distance_meters,

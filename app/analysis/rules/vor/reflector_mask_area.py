@@ -10,6 +10,7 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
+    floor2,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
@@ -107,7 +108,7 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
         top_elevation = float(raw_top if raw_top is not None else 0.0)
 
         is_compliant = not entered or top_elevation <= allowed_h
-        limit = ceil2(allowed_h)
+        limit = floor2(allowed_h)
         if not entered:
             message = "不在VOR 100米阴影区范围内"
         elif is_compliant:
@@ -129,9 +130,9 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
         if not entered:
             details = "障碍物未进入反射网阴影区。"
         elif is_compliant:
-            details = f"满足规定要求，障碍物高度{top_elevation}m，允许高度{ceil2(allowed_h)}m。"
+            details = f"满足规定要求，障碍物高度{top_elevation}m，允许高度{limit}m。"
         else:
-            details = f"不满足规定要求，障碍物高度{top_elevation}m，允许高度{ceil2(allowed_h)}m，超出{ceil2(over)}m。"
+            details = f"不满足规定要求，障碍物高度{top_elevation}m，允许高度{limit}m，超出{ceil2(over)}m。"
 
         return AnalysisRuleResult(
             station_id=self.protection_zone.station_id,
@@ -153,7 +154,7 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
                 "enteredProtectionZone": entered,
                 "maxDistanceMeters": max_distance,
                 "clampedDistanceMeters": x,
-                "allowedHeightMeters": allowed_h,
+                "allowedHeightMeters": limit,
                 "topElevationMeters": top_elevation,
                 "overHeightMeters": max(0.0, top_elevation - allowed_h),
                 "actualDistanceMeters": max_distance,
