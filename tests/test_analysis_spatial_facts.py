@@ -200,9 +200,10 @@ def test_create_station_projector_centered_on_station() -> None:
 
     projector = create_station_projector(station)
 
+    origin_x, origin_y = projector.project_point(104.0, 30.0)
     local_x, local_y = projector.project_point(104.0, 30.0)
-    assert math.isclose(local_x, 0.0, abs_tol=1.0)
-    assert math.isclose(local_y, 0.0, abs_tol=1.0)
+    assert math.isclose(local_x - origin_x, 0.0, abs_tol=1.0)
+    assert math.isclose(local_y - origin_y, 0.0, abs_tol=1.0)
 
 
 def test_project_obstacle_for_station_point() -> None:
@@ -229,8 +230,11 @@ def test_project_obstacle_for_station_point() -> None:
     assert result["localGeometry"]["type"] == "Point"
     local_coords = result["localGeometry"]["coordinates"]
     assert len(local_coords) == 2
-    assert local_coords[0] > 0
-    assert math.isclose(local_coords[1], 0.0, abs_tol=10.0)
+    origin_x, origin_y = projector.project_point(104.0, 30.0)
+    rel_x = local_coords[0] - origin_x
+    rel_y = local_coords[1] - origin_y
+    assert rel_x > 0
+    assert math.isclose(rel_y, 0.0, abs_tol=10.0)
 
 
 def test_project_obstacle_for_station_polygon() -> None:
@@ -289,7 +293,10 @@ def test_project_obstacle_for_station_overwrites_existing_local_geometry() -> No
 
     result = project_obstacle_for_station(projector, obstacle)
 
+    origin_x, origin_y = projector.project_point(104.0, 30.0)
     local_coords = result["localGeometry"]["coordinates"]
-    assert math.isclose(local_coords[0], 0.0, abs_tol=200.0)
-    assert math.isclose(local_coords[1], 0.0, abs_tol=200.0)
+    rel_x = local_coords[0] - origin_x
+    rel_y = local_coords[1] - origin_y
+    assert math.isclose(rel_x, 0.0, abs_tol=200.0)
+    assert math.isclose(rel_y, 0.0, abs_tol=200.0)
     assert local_coords[0] != 999.0

@@ -16,10 +16,11 @@ def test_build_protection_zone_geometry_builds_circle_as_multipolygon() -> None:
         reference_longitude=104.123456,
         reference_latitude=30.123456,
     )
+    center_x, center_y = projector.project_point(104.123456, 30.123456)
 
     geometry = build_protection_zone_geometry(
         projector=projector,
-        center_point=(0.0, 0.0),
+        center_point=(center_x, center_y),
         zone_definition={"shape": "circle", "radius_m": 50.0},
     )
 
@@ -329,20 +330,21 @@ def test_build_protection_zone_geometry_unprojects_multipolygon_coordinates() ->
         reference_longitude=104.123456,
         reference_latitude=30.123456,
     )
+    base_x, base_y = projector.project_point(104.123456, 30.123456)
 
     geometry = build_protection_zone_geometry(
         projector=projector,
-        center_point=(0.0, 0.0),
+        center_point=(base_x, base_y),
         zone_definition={
             "shape": "multipolygon",
             "coordinates": [
                 [
                     [
-                        [0.0, 0.0],
-                        [100.0, 0.0],
-                        [100.0, 100.0],
-                        [0.0, 100.0],
-                        [0.0, 0.0],
+                        [base_x, base_y],
+                        [base_x + 100.0, base_y],
+                        [base_x + 100.0, base_y + 100.0],
+                        [base_x, base_y + 100.0],
+                        [base_x, base_y],
                     ]
                 ]
             ],

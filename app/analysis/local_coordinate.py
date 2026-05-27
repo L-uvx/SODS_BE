@@ -22,11 +22,11 @@ class AirportLocalProjector:
             always_xy=True,
         )
 
-    # 构建机场局部等距方位投影坐标系定义。
+    # 构建局部米制投影坐标系（横轴墨卡托，对齐 C# IAG 1975 椭球）。
     def _build_aeqd_crs(self) -> str:
         return (
-            f"+proj=aeqd +lat_0={self.reference_latitude} "
-            f"+lon_0={self.reference_longitude} +datum=WGS84 +units=m +no_defs"
+            f"+proj=tmerc +lat_0=0 +lon_0={self.reference_longitude} "
+            f"+k=1 +x_0=500000 +y_0=0 +ellps=IAU76 +units=m +no_defs"
         )
 
     # 将经纬度点投影到机场局部米制坐标系。
