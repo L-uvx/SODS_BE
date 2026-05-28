@@ -70,7 +70,7 @@ def test_wind_radar_fails_when_angle_exceeds_15deg_threshold() -> None:
     assert len(result.details) > 0
 
 
-def test_wind_radar_protection_zone_angle_is_5deg_not_15deg() -> None:
+def test_wind_radar_protection_zone_angle_is_15deg() -> None:
     payload = WindRadarRuleProfile().analyze(
         station=_make_station(),
         obstacles=[_make_obstacle(local_geometry=_point_geometry(1000.0, 0.0), top_elevation=20.0)],
@@ -81,14 +81,14 @@ def test_wind_radar_protection_zone_angle_is_5deg_not_15deg() -> None:
     assert zone.vertical_definition["mode"] == "analytic_surface"
     assert zone.vertical_definition["surface"]["type"] == "radial_cone_surface"
     assert zone.vertical_definition["surface"]["heightModel"]["type"] == "angle_linear_rise"
-    assert zone.vertical_definition["surface"]["heightModel"]["angleDegrees"] == 5.0
+    assert zone.vertical_definition["surface"]["heightModel"]["angleDegrees"] == 15.0
 
 
-def test_wind_radar_limit_height_uses_tan_5deg() -> None:
+def test_wind_radar_limit_height_uses_tan_15deg() -> None:
     station = _make_station()
     distance = 1000.0
     expected_allowed = float(station.altitude + station.antenna_hag) + distance * math.tan(
-        math.radians(5.0)
+        math.radians(15.0)
     )
 
     payload = WindRadarRuleProfile().analyze(
