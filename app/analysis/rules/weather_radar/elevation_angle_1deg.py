@@ -7,6 +7,7 @@ from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    compute_shape_center_azimuth_degrees,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
@@ -49,9 +50,8 @@ class BoundWeatherRadarElevationAngleRule(BoundObstacleRule):
         }
         is_compliant = angle_degrees <= self.limit_angle_degrees
 
-        centroid = obstacle_shape.centroid
-        azimuth_degrees = compute_azimuth_degrees(
-            self.station_point[0], self.station_point[1], centroid.x, centroid.y
+        azimuth_degrees = compute_shape_center_azimuth_degrees(
+            self.station_point[0], self.station_point[1], obstacle_shape
         )
         min_horizontal_angle_degrees, max_horizontal_angle_degrees = (
             compute_horizontal_angle_range_from_geometry(self.station_point, obstacle_shape)

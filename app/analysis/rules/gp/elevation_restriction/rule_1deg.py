@@ -10,6 +10,7 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
+    compute_shape_center_azimuth_degrees,
     floor2,
 )
 from app.analysis.rule_result import AnalysisRuleResult
@@ -42,8 +43,7 @@ class BoundGpElevationRestriction1DegRule(BoundGpElevationRestrictionRule):
         obstacle_metrics = None
 
         sp = self.shared_context.station_point
-        obstacle_centroid = obstacle_shape.centroid
-        az = compute_azimuth_degrees(sp[0], sp[1], obstacle_centroid.x, obstacle_centroid.y)
+        az = compute_shape_center_azimuth_degrees(sp[0], sp[1], obstacle_shape)
         min_h, max_h = compute_horizontal_angle_range_from_geometry(sp, obstacle_shape)
         rel_height = top_elevation_meters - base_height_meters
 

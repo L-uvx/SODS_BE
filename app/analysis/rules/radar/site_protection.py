@@ -8,6 +8,7 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_horizontal_angular_width,
+    compute_shape_center_azimuth_degrees,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.geometry_helpers import resolve_obstacle_shape
@@ -37,9 +38,8 @@ class BoundRadarSiteProtectionRule(BoundObstacleRule):
             station_point=self.station_point,
         )
 
-        centroid = obstacle_shape.centroid
-        azimuth_degrees = compute_azimuth_degrees(
-            self.station_point[0], self.station_point[1], centroid.x, centroid.y
+        azimuth_degrees = compute_shape_center_azimuth_degrees(
+            self.station_point[0], self.station_point[1], obstacle_shape
         )
         min_horizontal_angle_degrees, max_horizontal_angle_degrees = (
             compute_horizontal_angle_range_from_geometry(self.station_point, obstacle_shape)

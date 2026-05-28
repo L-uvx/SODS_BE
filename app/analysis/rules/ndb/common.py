@@ -10,6 +10,7 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    compute_shape_center_azimuth_degrees,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
@@ -54,10 +55,9 @@ class BoundNdbMinimumDistanceRule(BoundObstacleRule):
         actual_distance_meters = float(obstacle_shape.distance(Point(self.station_point)))
         is_compliant = not entered_protection_zone
 
-        obstacle_centroid = obstacle_shape.centroid
-        az = compute_azimuth_degrees(
+        az = compute_shape_center_azimuth_degrees(
             self.station_point[0], self.station_point[1],
-            obstacle_centroid.x, obstacle_centroid.y,
+            obstacle_shape,
         )
         min_h, max_h = compute_horizontal_angle_range_from_geometry(
             self.station_point, obstacle_shape,
@@ -163,10 +163,9 @@ class BoundNdbConicalClearanceRule(BoundObstacleRule):
                 actual_elevation_angle_degrees <= self.elevation_angle_degrees
             )
 
-        obstacle_centroid = obstacle_shape.centroid
-        az = compute_azimuth_degrees(
+        az = compute_shape_center_azimuth_degrees(
             self.station_point[0], self.station_point[1],
-            obstacle_centroid.x, obstacle_centroid.y,
+            obstacle_shape,
         )
         min_h, max_h = compute_horizontal_angle_range_from_geometry(
             self.station_point, obstacle_shape,

@@ -7,6 +7,7 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    compute_shape_center_azimuth_degrees,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.vhf.config import VHF_STANDARDS_RULE_CODE_BY_CATEGORY
@@ -45,10 +46,9 @@ class BoundVhfCircleRule(BoundObstacleRule):
         )
         is_compliant = actual_distance_meters >= self.minimum_distance_meters
 
-        obstacle_centroid = obstacle_shape.centroid
-        az = compute_azimuth_degrees(
+        az = compute_shape_center_azimuth_degrees(
             self.station_point[0], self.station_point[1],
-            obstacle_centroid.x, obstacle_centroid.y,
+            obstacle_shape,
         )
         min_h, max_h = compute_horizontal_angle_range_from_geometry(
             self.station_point, obstacle_shape,

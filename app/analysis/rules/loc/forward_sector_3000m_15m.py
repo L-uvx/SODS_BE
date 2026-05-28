@@ -10,6 +10,7 @@ from app.analysis.result_helpers import (
     ceil2,
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    compute_shape_center_azimuth_degrees,
     precise_diff_ceil2,
     precise_relative_height,
 )
@@ -55,10 +56,9 @@ class BoundLocForwardSector3000m15mRule(BoundObstacleRule):
         else:
             message = f"位于航向信标天线中心前向±10°、距离航向信标天线3000m的区域内，顶部高程与航向信标天线地势高度差为{height_diff}米"
 
-        obstacle_centroid = obstacle_shape.centroid
-        az = compute_azimuth_degrees(
+        az = compute_shape_center_azimuth_degrees(
             self.station_point[0], self.station_point[1],
-            obstacle_centroid.x, obstacle_centroid.y,
+            obstacle_shape,
         )
         min_h, max_h = compute_horizontal_angle_range_from_geometry(
             self.station_point, obstacle_shape,

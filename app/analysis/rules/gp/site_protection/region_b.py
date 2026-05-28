@@ -5,6 +5,7 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
+    compute_shape_center_azimuth_degrees,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import ObstacleRule
@@ -46,10 +47,9 @@ class BoundGpSiteProtectionRegionBRule(BoundGpSiteProtectionRegionRule):
         base_h = float(
             self.protection_zone.vertical_definition.get("baseHeightMeters", 0.0) or 0.0
         )
-        obstacle_centroid = obstacle_shape.centroid
         sp = self.shared_context.station_point
         actual_distance_meters = float(obstacle_shape.distance(Point(sp)))
-        az = compute_azimuth_degrees(sp[0], sp[1], obstacle_centroid.x, obstacle_centroid.y)
+        az = compute_shape_center_azimuth_degrees(sp[0], sp[1], obstacle_shape)
         min_h, max_h = compute_horizontal_angle_range_from_geometry(sp, obstacle_shape)
         rel_height = top_elev - base_h
         over_height_for_metrics = max(0.0, rel_height)

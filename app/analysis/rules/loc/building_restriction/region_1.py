@@ -7,6 +7,7 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_height_fixed_limit,
+    compute_shape_center_azimuth_degrees,
     floor2,
     precise_diff_ceil2,
     precise_relative_height,
@@ -63,10 +64,9 @@ class BoundLocBuildingRestrictionZoneRegion1Rule(BoundObstacleRule):
         else:
             message = "不位于建筑物限制区内"
 
-        obstacle_centroid = obstacle_shape.centroid
-        az = compute_azimuth_degrees(
+        az = compute_shape_center_azimuth_degrees(
             self.station_point[0], self.station_point[1],
-            obstacle_centroid.x, obstacle_centroid.y,
+            obstacle_shape,
         )
         min_h, max_h = compute_horizontal_angle_range_from_geometry(
             self.station_point, obstacle_shape,

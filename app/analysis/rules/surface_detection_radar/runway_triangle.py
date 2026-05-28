@@ -7,6 +7,7 @@ from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
+    compute_shape_center_azimuth_degrees,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule, ObstacleRule
@@ -31,9 +32,8 @@ class BoundSurfaceDetectionRadarRunwayTriangleRule(BoundObstacleRule):
             obstacle.get("topElevation") if obstacle.get("topElevation") is not None else 0.0
         )
 
-        centroid = obstacle_shape.centroid
-        azimuth_degrees = compute_azimuth_degrees(
-            self.station_point[0], self.station_point[1], centroid.x, centroid.y
+        azimuth_degrees = compute_shape_center_azimuth_degrees(
+            self.station_point[0], self.station_point[1], obstacle_shape
         )
         min_horizontal_angle_degrees, max_horizontal_angle_degrees = (
             compute_horizontal_angle_range_from_geometry(self.station_point, obstacle_shape)

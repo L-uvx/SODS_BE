@@ -10,6 +10,7 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
+    compute_shape_center_azimuth_degrees,
 )
 from app.analysis.rule_result import AnalysisRuleResult
 from app.analysis.rules.base import BoundObstacleRule
@@ -90,10 +91,9 @@ class BoundVorDatumPlaneRule(BoundObstacleRule):
                 diff = top_elevation - self.benchmark_height
                 message = f"基准面高度为{self.benchmark_height}米，超出基准面高度{diff}米"
 
-        obstacle_centroid = shape.centroid
-        az = compute_azimuth_degrees(
+        az = compute_shape_center_azimuth_degrees(
             self.station_point[0], self.station_point[1],
-            obstacle_centroid.x, obstacle_centroid.y,
+            shape,
         )
         min_h, max_h = compute_horizontal_angle_range_from_geometry(
             self.station_point, shape,
