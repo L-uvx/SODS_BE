@@ -8,9 +8,9 @@ class AirportLocalProjector:
     reference_longitude: float
     reference_latitude: float
 
-    # 初始化机场局部坐标投影器。
+    # 初始化机场局部坐标投影器（横轴墨卡托，对齐 C# Xian 1980 3° GK，k=1）。
     def __post_init__(self) -> None:
-        local_crs = self._build_aeqd_crs()
+        local_crs = self._build_local_crs()
         self._to_local = Transformer.from_crs(
             "EPSG:4326",
             local_crs,
@@ -22,8 +22,8 @@ class AirportLocalProjector:
             always_xy=True,
         )
 
-    # 构建局部米制投影坐标系（横轴墨卡托，对齐 C# IAG 1975 椭球）。
-    def _build_aeqd_crs(self) -> str:
+    # 构建局部米制投影坐标系（横轴墨卡托，对齐 C# Xian 1980 3° GK）。
+    def _build_local_crs(self) -> str:
         return (
             f"+proj=tmerc +lat_0=0 +lon_0={self.reference_longitude} "
             f"+k=1 +x_0=500000 +y_0=0 +ellps=IAU76 +units=m +no_defs"

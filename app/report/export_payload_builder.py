@@ -50,7 +50,7 @@ def _build_relative_position(metrics: dict | None, rule: dict | None = None) -> 
     if max_h is None and rule:
         max_h = rule.get("maxHorizontalAngleDegrees")
 
-    azimuth = rule.get("azimuth_degrees") if rule else None
+    azimuth = rule.get("azimuthDegrees") if rule else None
     if azimuth is not None:
         azimuth_str = f"{azimuth:.2f}°"
     elif min_h is not None and max_h is not None:
@@ -159,7 +159,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
             height_limit_display = floor2(height_val or 0)
             over = _float_or_none(metrics.get("overHeightMeters"))
-            over_height_display = ceil2(over or 0)
+            over_height_display = 0.0 if is_compliant else ceil2(over or 0)
         elif is_radar_16km_special:
             compliance_status = (
                 "位于台站16km范围内，根据MHT4003.2-2014《民用航空通信导航监视台(站)"
@@ -168,13 +168,13 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
             height_limit_display = floor2(height_val or 0)
             over = _float_or_none(metrics.get("overHeightMeters"))
-            over_height_display = ceil2(over or 0)
+            over_height_display = 0.0 if is_compliant else ceil2(over or 0)
         else:
             compliance_status = "满足" if is_compliant else "不满足"
             height_val = _float_or_none(metrics.get("allowedHeightMeters"))
             height_limit_display = floor2(height_val or 0)
             over = _float_or_none(metrics.get("overHeightMeters"))
-            over_height_display = ceil2(over or 0)
+            over_height_display = 0.0 if is_compliant else ceil2(over or 0)
 
         gb_list = _normalize_standards(r.get("standards", {}).get("gb"))
         mh_list = _normalize_standards(r.get("standards", {}).get("mh"))
@@ -265,6 +265,7 @@ def _collect_radar_unmet_obstacles(cumulative_results: list[dict]) -> set[str]:
 
 def _build_summary(rule_results: list[dict], obstacle_count: int, radar_unmet_obstacle_names: set[str]) -> str:
     non_compliant_obstacles: dict[str, float | None] = {}
+    compliant_top_elevations: dict[str, float] = {}
     for r in rule_results:
         if not r.get("isApplicable", True):
             continue
@@ -273,23 +274,32 @@ def _build_summary(rule_results: list[dict], obstacle_count: int, radar_unmet_ob
         metrics = r.get("metrics") or {}
         if r.get("isMid") or r.get("isFilterLimit") or r.get("isFilterIntersect"):
             continue
-        if r.get("zoneCode") == "loc_building_restriction_zone" and metrics.get("enteredProtectionZone") is True:
-            continue
         if r.get("ruleCode") == "radar_rotating_reflector_16km" and metrics.get("enteredProtectionZone") is True:
             continue
 
+        name = r.get("obstacleName", "")
+        if not name:
+            continue
+
         if not r.get("isCompliant", True):
-            name = r.get("obstacleName", "")
-            if not name:
-                continue
             height = _get_metrics_height(metrics)
             if height is None:
                 continue
             prev = non_compliant_obstacles.get(name)
             non_compliant_obstacles[name] = min(prev, height) if prev is not None else height
+        else:
+            top = _float_or_none(metrics.get("topElevationMeters"))
+            if top is not None:
+                prev = compliant_top_elevations.get(name)
+                compliant_top_elevations[name] = max(prev, top) if prev is not None else top
 
     if not non_compliant_obstacles:
-        base = f"共分析障碍物{obstacle_count}个。"
+        top_vals = list(compliant_top_elevations.values())
+        max_top = max(top_vals) if top_vals else None
+        if max_top is not None and obstacle_count > 1:
+            base = f"共分析障碍物{obstacle_count}个，拟建项目顶点高程为{max_top:.2f}米。"
+        else:
+            base = f"共分析障碍物{obstacle_count}个。"
     else:
         names = sorted(non_compliant_obstacles)
         heights = [

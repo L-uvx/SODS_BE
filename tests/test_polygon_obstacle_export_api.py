@@ -804,7 +804,7 @@ class TestFlattenRuleResultsSpecialDisplay:
         assert row["standardClause"] == "/"
         assert row["complianceStatus"] == "满足"
         assert row["heightLimit"] == 80.0
-        assert row["overHeight"] == 5.0
+        assert row["overHeight"] == 0.0
         assert row["finalOverHeight"] == 0
 
     # ---- T9: both standards None → emit one row with "/" ----
@@ -1070,8 +1070,8 @@ class TestBuildSummaryRadarIntegration:
         assert "共分析障碍物1个。，满足标准要求" in result
         assert "不满足标准限高要求" not in result
 
-    # ---- T8: _build_summary skips LOC BRZ special ----
-    def test_build_summary_skips_loc_brz_entered(self):
+    # ---- T8: _build_summary includes loc_brz_entered in non-compliant count ----
+    def test_build_summary_includes_loc_brz_entered(self):
         rr = [
             {
                 "isApplicable": True,
@@ -1082,7 +1082,7 @@ class TestBuildSummaryRadarIntegration:
             },
         ]
         result = _build_summary(rr, obstacle_count=1, radar_unmet_obstacle_names=set())
-        assert "不满足标准限高要求" not in result
+        assert "不满足标准限高要求" in result
 
     # ---- T9: _build_summary skips Radar 16KM special ----
     def test_build_summary_skips_radar_16km_entered(self):
@@ -1716,7 +1716,7 @@ class TestBuildRelativePosition:
             "actualDistanceMeters": 100.0,
             "topElevationMeters": 200.0,
         }
-        rule = {"azimuth_degrees": 42.5}
+        rule = {"azimuthDegrees": 42.5}
 
         result = _build_relative_position(metrics, rule)
         # 应使用 42.5°，而不是 (30+50)/2 = 40.0°
@@ -1731,7 +1731,7 @@ class TestBuildRelativePosition:
             "max_horizontal_angle_degrees": 10.0,
             "actualDistanceMeters": 500.0,
         }
-        rule = {"azimuth_degrees": 0.0}
+        rule = {"azimuthDegrees": 0.0}
 
         result = _build_relative_position(metrics, rule)
         # 应使用 0.0°，而不是 (350+10+360)/2-360 = 0.0°（两者相同，但验证路径）
@@ -1791,7 +1791,7 @@ class TestBuildRelativePosition:
             "max_horizontal_angle_degrees": 200.0,
             "actualDistanceMeters": 800.0,
         }
-        rule = {"azimuth_degrees": 0.0}
+        rule = {"azimuthDegrees": 0.0}
 
         result = _build_relative_position(metrics, rule)
         # 应使用 0.0°，不是 (100+200)/2 = 150.0°
@@ -1803,7 +1803,7 @@ class TestBuildRelativePosition:
             "min_horizontal_angle_degrees": 10.0,
             "max_horizontal_angle_degrees": 20.0,
         }
-        rule = {"azimuth_degrees": -5.5}
+        rule = {"azimuthDegrees": -5.5}
 
         result = _build_relative_position(metrics, rule)
         assert "方位角-5.50°" in result
@@ -1823,9 +1823,9 @@ class TestBuildRelativePosition:
         metrics = {
             "min_horizontal_angle_degrees": 10.0,
             "max_horizontal_angle_degrees": 20.0,
-            "azimuth_degrees": 999.0,  # Should be ignored, only rule's matters
+            "azimuthDegrees": 999.0,  # Should be ignored, only rule's matters
         }
-        rule = {"azimuth_degrees": 45.0}
+        rule = {"azimuthDegrees": 45.0}
 
         result = _build_relative_position(metrics, rule)
         assert "方位角45.00°" in result
