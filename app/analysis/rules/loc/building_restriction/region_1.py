@@ -4,7 +4,6 @@ from shapely.geometry import Point
 
 from app.analysis.result_helpers import (
     ceil2,
-    compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_height_fixed_limit,
     compute_shape_center_azimuth_degrees,

@@ -8,7 +8,6 @@ from shapely.geometry.base import BaseGeometry
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.result_helpers import (
     ceil2,
-    compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_shape_center_azimuth_degrees,
 )

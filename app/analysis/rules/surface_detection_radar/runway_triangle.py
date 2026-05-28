@@ -5,7 +5,6 @@ from shapely.geometry import Point
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.protection_zone_spec import ProtectionZoneSpec
 from app.analysis.result_helpers import (
-    compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_shape_center_azimuth_degrees,
 )

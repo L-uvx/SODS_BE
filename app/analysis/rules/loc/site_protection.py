@@ -7,7 +7,6 @@ from shapely.ops import unary_union
 from app.analysis.config import PROTECTION_ZONE_BUILDER_DISCRETIZATION
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.result_helpers import (
-    compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_shape_center_azimuth_degrees,
 )

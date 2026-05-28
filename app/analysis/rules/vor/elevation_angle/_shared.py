@@ -7,7 +7,6 @@ from shapely.geometry.base import BaseGeometry
 from app.analysis.result_helpers import (
     _iter_boundary_coordinates,
     _normalize_azimuth_degrees,
-    compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_horizontal_angular_width,
     compute_shape_center_azimuth_degrees,

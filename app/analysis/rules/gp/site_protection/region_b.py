@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 from app.analysis.protection_zone_style import resolve_protection_zone_name
 from app.analysis.result_helpers import (
-    compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
     compute_shape_center_azimuth_degrees,
