@@ -92,6 +92,16 @@ def compute_azimuth_degrees(
     return azimuth
 
 
+# 计算站心到障碍物包围盒中心的方位角（对齐 C# Bounds.Center）。
+def compute_shape_center_azimuth_degrees(
+    station_x: float, station_y: float, shape: BaseGeometry,
+) -> float:
+    minx, miny, maxx, maxy = shape.bounds
+    center_x = (minx + maxx) / 2.0
+    center_y = (miny + maxy) / 2.0
+    return compute_azimuth_degrees(station_x, station_y, center_x, center_y)
+
+
 def compute_horizontal_angle_range_from_geometry(
     station_point: tuple[float, float],
     geometry: BaseGeometry,

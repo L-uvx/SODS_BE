@@ -9,6 +9,7 @@ from app.analysis.result_helpers import (
     compute_azimuth_degrees,
     compute_horizontal_angle_range_from_geometry,
     compute_over_distance_meters,
+    compute_shape_center_azimuth_degrees,
 )
 
 
@@ -138,3 +139,50 @@ class TestComputeOverDistanceMeters:
 
     def test_exceeds(self):
         assert compute_over_distance_meters(15.0, 10.0) == 5.0
+
+
+class TestComputeShapeCenterAzimuthDegrees:
+    def test_point_equals_azimuth_to_point(self):
+        station = (0.0, 0.0)
+        pt = wkt.loads("POINT (10 0)")
+        result = compute_shape_center_azimuth_degrees(station[0], station[1], pt)
+        expected = compute_azimuth_degrees(station[0], station[1], 10.0, 0.0)
+        assert result == pytest.approx(expected, abs=1e-9)
+        assert 0.0 <= result < 360.0
+
+    def test_rectangle_bbox_center(self):
+        station = (0.0, 0.0)
+        rect = wkt.loads("POLYGON ((2 0.5, 4 0.5, 4 1.5, 2 1.5, 2 0.5))")
+        result = compute_shape_center_azimuth_degrees(station[0], station[1], rect)
+        expected = compute_azimuth_degrees(station[0], station[1], 3.0, 1.0)
+        assert result == pytest.approx(expected, abs=1e-9)
+
+    def test_non_rectangular_bbox_center_differs_from_centroid(self):
+        station = (0.0, 0.0)
+        triangle = wkt.loads("POLYGON ((1 0, 10 0, 10 9, 1 0))")
+        result = compute_shape_center_azimuth_degrees(
+            station[0], station[1], triangle
+        )
+        center_x = (1 + 10) / 2.0
+        center_y = (0 + 9) / 2.0
+        expected = compute_azimuth_degrees(station[0], station[1], center_x, center_y)
+        assert result == pytest.approx(expected, abs=1e-9)
+        centroid_expected = compute_azimuth_degrees(
+            station[0], station[1], triangle.centroid.x, triangle.centroid.y
+        )
+        assert result != pytest.approx(centroid_expected, abs=1e-9)
+
+    def test_result_in_0_360_range(self):
+        station = (0.0, 0.0)
+        poly = wkt.loads("POLYGON ((-10 -1, -5 -1, -5 0, -10 0, -10 -1))")
+        result = compute_shape_center_azimuth_degrees(station[0], station[1], poly)
+        assert 0.0 <= result < 360.0
+
+    def test_multipolygon_uses_overall_bounds(self):
+        station = (0.0, 0.0)
+        mp = wkt.loads(
+            "MULTIPOLYGON (((1 0, 2 0, 2 1, 1 1, 1 0)), ((5 0, 8 0, 8 1, 5 1, 5 0)))"
+        )
+        result = compute_shape_center_azimuth_degrees(station[0], station[1], mp)
+        expected = compute_azimuth_degrees(station[0], station[1], 4.5, 0.5)
+        assert result == pytest.approx(expected, abs=1e-9)
