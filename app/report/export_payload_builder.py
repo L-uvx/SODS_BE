@@ -137,6 +137,7 @@ def _flatten_rule_results(rule_results: list[dict]) -> list[dict]:
         is_loc_brz_special = (
             r.get("zoneCode") == "loc_building_restriction_zone"
             and metrics.get("enteredProtectionZone") is True
+            and not is_compliant
         )
 
         # Priority 6: Radar 16KM special message
