@@ -22,7 +22,7 @@ from app.models.project import Project
 from app.models.report_export import ReportExport
 from app.models.runway import Runway
 from app.models.station import Station
-from app.report.export_payload_builder import _flatten_rule_results, _build_summary, _collect_radar_unmet_obstacles, build_export_payload
+from app.report.export_payload_builder import _flatten_rule_results, _build_summary, _collect_radar_unmet_obstacles, _build_relative_position, build_export_payload
 
 
 def _read_valid_excel_bytes() -> bytes:
@@ -1703,3 +1703,129 @@ class TestStationNamesInExport:
         assert "Station X" in payload["stationNames"]
         assert "Station Y" in payload["stationNames"]
         assert "Station A" not in payload["stationNames"]
+
+
+class TestBuildRelativePosition:
+    """测试 _build_relative_position 的方位角来源"""
+
+    def test_uses_azimuth_degrees_from_rule(self):
+        """当 rule 中有 azimuth_degrees 时，应优先使用它"""
+        metrics = {
+            "min_horizontal_angle_degrees": 30.0,
+            "max_horizontal_angle_degrees": 50.0,
+            "actualDistanceMeters": 100.0,
+            "topElevationMeters": 200.0,
+        }
+        rule = {"azimuth_degrees": 42.5}
+
+        result = _build_relative_position(metrics, rule)
+        # 应使用 42.5°，而不是 (30+50)/2 = 40.0°
+        assert "方位角42.50°" in result
+        assert "最近距离100.00米" in result
+        assert "顶部高程200.00米" in result
+
+    def test_azimuth_degrees_wrap_around(self):
+        """rule 中 azimuth_degrees 存在时，忽略 min_h/max_h 的 wrap 逻辑"""
+        metrics = {
+            "min_horizontal_angle_degrees": 350.0,
+            "max_horizontal_angle_degrees": 10.0,
+            "actualDistanceMeters": 500.0,
+        }
+        rule = {"azimuth_degrees": 0.0}
+
+        result = _build_relative_position(metrics, rule)
+        # 应使用 0.0°，而不是 (350+10+360)/2-360 = 0.0°（两者相同，但验证路径）
+        assert "方位角0.00°" in result
+
+    def test_fallback_to_min_max_average_when_azimuth_degrees_missing(self):
+        """当 azimuth_degrees 缺失时，回退到 min_h/max_h 平均"""
+        metrics = {
+            "min_horizontal_angle_degrees": 10.0,
+            "max_horizontal_angle_degrees": 30.0,
+            "actualDistanceMeters": 200.0,
+        }
+        rule = {}
+
+        result = _build_relative_position(metrics, rule)
+        # 应使用 (10+30)/2 = 20.0°
+        assert "方位角20.00°" in result
+
+    def test_fallback_wrap_around_when_azimuth_degrees_missing(self):
+        """azimuth_degrees 缺失时，回退逻辑应正确处理 wrap-around"""
+        metrics = {
+            "min_horizontal_angle_degrees": 350.0,
+            "max_horizontal_angle_degrees": 10.0,
+            "actualDistanceMeters": 300.0,
+        }
+        rule = {}
+
+        result = _build_relative_position(metrics, rule)
+        assert "方位角0.00°" in result
+
+    def test_fallback_single_min_h_when_azimuth_degrees_missing(self):
+        """azimuth_degrees 缺失且只有 min_h 时，回退到单值"""
+        metrics = {
+            "min_horizontal_angle_degrees": 45.0,
+            "actualDistanceMeters": 150.0,
+        }
+        rule = {}
+
+        result = _build_relative_position(metrics, rule)
+        assert "方位角45.00°" in result
+
+    def test_fallback_single_max_h_when_azimuth_degrees_missing(self):
+        """azimuth_degrees 缺失且只有 max_h 时，回退到单值"""
+        metrics = {
+            "max_horizontal_angle_degrees": 60.0,
+            "actualDistanceMeters": 150.0,
+        }
+        rule = {}
+
+        result = _build_relative_position(metrics, rule)
+        assert "方位角60.00°" in result
+
+    def test_azimuth_degrees_zero_is_used_over_fallback(self):
+        """azimuth_degrees=0.0 是有效值，不应回退到 min_h/max_h"""
+        metrics = {
+            "min_horizontal_angle_degrees": 100.0,
+            "max_horizontal_angle_degrees": 200.0,
+            "actualDistanceMeters": 800.0,
+        }
+        rule = {"azimuth_degrees": 0.0}
+
+        result = _build_relative_position(metrics, rule)
+        # 应使用 0.0°，不是 (100+200)/2 = 150.0°
+        assert "方位角0.00°" in result
+
+    def test_azimuth_degrees_negative_used_directly(self):
+        """azimuth_degrees 为负数时也直接使用"""
+        metrics = {
+            "min_horizontal_angle_degrees": 10.0,
+            "max_horizontal_angle_degrees": 20.0,
+        }
+        rule = {"azimuth_degrees": -5.5}
+
+        result = _build_relative_position(metrics, rule)
+        assert "方位角-5.50°" in result
+
+    def test_rule_is_none_falls_back(self):
+        """rule 为 None 时回退到 min_h/max_h"""
+        metrics = {
+            "min_horizontal_angle_degrees": 15.0,
+            "max_horizontal_angle_degrees": 25.0,
+        }
+
+        result = _build_relative_position(metrics, None)
+        assert "方位角20.00°" in result
+
+    def test_azimuth_degrees_from_rule_overrides_metrics(self):
+        """rule 中的 azimuth_degrees 覆盖 metrics 中的值"""
+        metrics = {
+            "min_horizontal_angle_degrees": 10.0,
+            "max_horizontal_angle_degrees": 20.0,
+            "azimuth_degrees": 999.0,  # Should be ignored, only rule's matters
+        }
+        rule = {"azimuth_degrees": 45.0}
+
+        result = _build_relative_position(metrics, rule)
+        assert "方位角45.00°" in result
