@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import File, Form, UploadFile
@@ -552,6 +553,56 @@ class ExportTaskResultResponse(BaseModel):
     file_name: str | None = Field(alias="fileName")
     download_url: str | None = Field(alias="downloadUrl")
     error_message: str | None = Field(alias="errorMessage")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class ProjectListItemResponse(BaseModel):
+    id: int
+    project_name: str = Field(alias="projectName")
+    obstacle_type: str = Field(alias="obstacleType")
+    analysis_task_id: str | None = Field(alias="analysisTaskId", default=None)
+    status: str
+    obstacle_count: int = Field(alias="obstacleCount")
+    target_count: int = Field(alias="targetCount")
+    non_compliant_target_count: int = Field(alias="nonCompliantTargetCount")
+    created_at: datetime = Field(alias="createdAt")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class ProjectListResponse(BaseModel):
+    items: list[ProjectListItemResponse]
+    total: int
+    page: int
+    page_size: int = Field(alias="pageSize")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class ProjectTargetItemResponse(BaseModel):
+    target_id: int = Field(alias="targetId")
+    target_name: str = Field(alias="targetName")
+    rule_count: int = Field(alias="ruleCount")
+    non_compliant_count: int = Field(alias="nonCompliantCount")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+
+class ProjectTargetListResponse(BaseModel):
+    targets: list[ProjectTargetItemResponse]
 
     model_config = ConfigDict(
         populate_by_name=True,

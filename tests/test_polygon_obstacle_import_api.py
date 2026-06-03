@@ -1,8 +1,9 @@
-from collections.abc import Generator
+﻿from collections.abc import Generator
 from contextlib import contextmanager
 from io import BytesIO
 import json
 import math
+import time
 from pathlib import Path as SysPath
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -2096,3 +2097,544 @@ class TestAirportProtectionZones:
 
         # protectionZones should NOT be in the response
         assert not hasattr(result, "protectionZones") or result.protectionZones == []
+
+
+# ---------------------------------------------------------------------------
+# Project management schema contract tests
+# ---------------------------------------------------------------------------
+
+
+def test_project_list_response_uses_pagination_envelope() -> None:
+    from app.schemas.polygon_obstacle import ProjectListResponse
+
+    response = ProjectListResponse(items=[], total=0, page=1, pageSize=10)
+    actual = response.model_dump(by_alias=True)
+    expected = {"items": [], "total": 0, "page": 1, "pageSize": 10}
+    assert actual == expected
+
+
+def test_project_list_item_response_includes_required_fields() -> None:
+    from datetime import datetime, timezone
+
+    from app.schemas.polygon_obstacle import ProjectListItemResponse
+
+    created = datetime(2026, 6, 3, 12, 0, 0, tzinfo=timezone.utc)
+    response = ProjectListItemResponse(
+        id=1,
+        projectName="Test Project",
+        obstacleType="building_general",
+        analysisTaskId="analysis-task-1",
+        status="running",
+        obstacleCount=5,
+        targetCount=3,
+        nonCompliantTargetCount=1,
+        createdAt=created,
+    )
+    actual = response.model_dump(mode="json", by_alias=True)
+    assert actual["id"] == 1
+    assert actual["projectName"] == "Test Project"
+    assert actual["obstacleType"] == "building_general"
+    assert actual["analysisTaskId"] == "analysis-task-1"
+    assert actual["status"] == "running"
+    assert actual["obstacleCount"] == 5
+    assert actual["targetCount"] == 3
+    assert actual["nonCompliantTargetCount"] == 1
+    assert actual["createdAt"] == "2026-06-03T12:00:00Z"
+
+
+def test_project_list_item_response_analysis_task_id_optional() -> None:
+    from datetime import datetime, timezone
+
+    from app.schemas.polygon_obstacle import ProjectListItemResponse
+
+    created = datetime(2026, 6, 3, 12, 0, 0, tzinfo=timezone.utc)
+    response = ProjectListItemResponse(
+        id=1,
+        projectName="Test Project",
+        obstacleType="building_general",
+        analysisTaskId=None,
+        status="not_analyzed",
+        obstacleCount=5,
+        targetCount=3,
+        nonCompliantTargetCount=0,
+        createdAt=created,
+    )
+    actual = response.model_dump(by_alias=True)
+    assert actual["analysisTaskId"] is None
+
+
+def test_project_target_list_response() -> None:
+    from app.schemas.polygon_obstacle import (
+        ProjectTargetItemResponse,
+        ProjectTargetListResponse,
+    )
+
+    item1 = ProjectTargetItemResponse(
+        targetId=1,
+        targetName="Airport A",
+        ruleCount=10,
+        nonCompliantCount=2,
+    )
+    item2 = ProjectTargetItemResponse(
+        targetId=2,
+        targetName="Airport B",
+        ruleCount=15,
+        nonCompliantCount=0,
+    )
+    response = ProjectTargetListResponse(targets=[item1, item2])
+    actual = response.model_dump(by_alias=True)
+    assert actual == {
+        "targets": [
+            {"targetId": 1, "targetName": "Airport A", "ruleCount": 10, "nonCompliantCount": 2},
+            {"targetId": 2, "targetName": "Airport B", "ruleCount": 15, "nonCompliantCount": 0},
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Repository-level tests for list_projects / get_project_targets
+# ---------------------------------------------------------------------------
+
+
+def test_repository_list_projects_empty() -> None:
+    with _create_test_client() as client:
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            rows, total = repo.list_projects(offset=0, limit=10)
+
+    assert total == 0
+    assert rows == []
+
+
+def test_repository_list_projects_includes_succeeded_import() -> None:
+    with _create_test_client() as client:
+        _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            rows, total = repo.list_projects(offset=0, limit=10)
+
+    assert total == 1
+    assert len(rows) == 1
+    item = rows[0]
+    assert item["project_name"] == "Wuhan Demo"
+    assert item["obstacle_type"] == "building"
+    assert item["analysis_task_id"] is None
+    assert item["analysis_status"] is None
+    assert item["obstacle_count"] >= 1
+    assert item["result_payload"] is None
+    assert "created_at" in item
+    assert "id" in item
+
+
+def test_repository_list_projects_filters_by_project_name() -> None:
+    with _create_test_client() as client:
+        _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            rows, total = repo.list_projects(
+                offset=0, limit=10, project_name="Wuhan"
+            )
+
+    assert total == 1
+    assert rows[0]["project_name"] == "Wuhan Demo"
+
+
+def test_repository_list_projects_filters_by_project_name_no_match() -> None:
+    with _create_test_client() as client:
+        _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            rows, total = repo.list_projects(
+                offset=0, limit=10, project_name="NONEXISTENT"
+            )
+
+    assert total == 0
+    assert rows == []
+
+
+def test_repository_list_projects_filters_by_obstacle_type() -> None:
+    with _create_test_client() as client:
+        _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            rows, total = repo.list_projects(
+                offset=0, limit=10, obstacle_type="building"
+            )
+
+    assert total == 1
+    assert rows[0]["obstacle_type"] == "building"
+
+
+def test_repository_list_projects_filters_by_obstacle_type_no_match() -> None:
+    with _create_test_client() as client:
+        _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            rows, total = repo.list_projects(
+                offset=0, limit=10, obstacle_type="高压线"
+            )
+
+    assert total == 0
+    assert rows == []
+
+
+def test_repository_list_projects_filters_by_status_running() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            repo.create_analysis_task(
+                task_id="analysis-task-running",
+                import_batch_id=import_task_id,
+                selected_target_ids=[1],
+            )
+            repo.mark_analysis_task_running("analysis-task-running")
+
+            rows, total = repo.list_projects(offset=0, limit=10, status="running")
+
+    assert total == 1
+    assert rows[0]["analysis_status"] == "running"
+
+
+def test_repository_list_projects_filters_by_status_succeeded() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            repo.create_analysis_task(
+                task_id="analysis-task-succeeded",
+                import_batch_id=import_task_id,
+                selected_target_ids=[1],
+            )
+            repo.mark_analysis_task_succeeded(
+                "analysis-task-succeeded",
+                result_payload={"targetResults": []},
+            )
+
+            rows, total = repo.list_projects(offset=0, limit=10, status="succeeded")
+
+    assert total == 1
+    assert rows[0]["analysis_status"] == "succeeded"
+
+
+def test_repository_list_projects_filters_by_status_failed() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            repo.create_analysis_task(
+                task_id="analysis-task-failed",
+                import_batch_id=import_task_id,
+                selected_target_ids=[1],
+            )
+            repo.mark_analysis_task_failed(
+                "analysis-task-failed", error_message="test failure"
+            )
+
+            rows, total = repo.list_projects(offset=0, limit=10, status="failed")
+
+    assert total == 1
+    assert rows[0]["analysis_status"] == "failed"
+
+
+def test_repository_list_projects_filters_by_status_not_analyzed() -> None:
+    with _create_test_client() as client:
+        _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            rows, total = repo.list_projects(
+                offset=0, limit=10, status="not_analyzed"
+            )
+
+    assert total == 1
+    assert rows[0]["analysis_status"] is None
+
+
+def test_repository_get_project_targets_empty_when_no_analysis() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            batch = repo.get_import_batch(import_task_id)
+            project_id = batch.project_id
+            targets = repo.get_project_targets(project_id)
+
+    assert targets == []
+
+
+def test_repository_get_project_targets_returns_target_stats() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            batch = repo.get_import_batch(import_task_id)
+            project_id = batch.project_id
+
+            repo.create_analysis_task(
+                task_id="analysis-task-targets",
+                import_batch_id=import_task_id,
+                selected_target_ids=[1, 2],
+            )
+            repo.mark_analysis_task_succeeded(
+                "analysis-task-targets",
+                result_payload={
+                    "targetResults": [
+                        {
+                            "targetId": 1,
+                            "targetName": "Airport A",
+                            "ruleResults": [
+                                {"isCompliant": True},
+                                {"isCompliant": True},
+                                {"isCompliant": False},
+                            ],
+                        },
+                        {
+                            "targetId": 2,
+                            "targetName": "Airport B",
+                            "ruleResults": [
+                                {"isCompliant": True},
+                            ],
+                        },
+                    ]
+                },
+            )
+
+            targets = repo.get_project_targets(project_id)
+
+    assert len(targets) == 2
+    assert targets[0] == {
+        "targetId": 1,
+        "targetName": "Airport A",
+        "ruleCount": 3,
+        "nonCompliantCount": 1,
+    }
+    assert targets[1] == {
+        "targetId": 2,
+        "targetName": "Airport B",
+        "ruleCount": 1,
+        "nonCompliantCount": 0,
+    }
+
+
+def test_repository_get_project_targets_uses_latest_analysis() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            from app.repository.import_batch_repository import ImportBatchRepository
+
+            repo = ImportBatchRepository(session)
+            batch = repo.get_import_batch(import_task_id)
+            project_id = batch.project_id
+
+            repo.create_analysis_task(
+                    task_id="analysis-task-old",
+                    import_batch_id=import_task_id,
+                    selected_target_ids=[1],
+            )
+            repo.mark_analysis_task_succeeded(
+                    "analysis-task-old",
+                    result_payload={
+                        "targetResults": [
+                            {
+                                "targetId": 1,
+                                "targetName": "Old Target",
+                                "ruleResults": [],
+                            },
+                        ]
+                    },
+            )
+
+            # 确保两个任务的 created_at 不同（SQLite CURRENT_TIMESTAMP 精度为秒）
+            time.sleep(1.5)
+
+            repo.create_analysis_task(
+                    task_id="analysis-task-new",
+                    import_batch_id=import_task_id,
+                    selected_target_ids=[1, 2],
+            )
+            repo.mark_analysis_task_succeeded(
+                    "analysis-task-new",
+                    result_payload={
+                        "targetResults": [
+                            {
+                                "targetId": 1,
+                                "targetName": "New Target A",
+                                "ruleResults": [
+                                    {"isCompliant": True},
+                                    {"isCompliant": False},
+                                ],
+                            },
+                            {
+                                "targetId": 2,
+                                "targetName": "New Target B",
+                                "ruleResults": [],
+                            },
+                        ]
+                    },
+            )
+
+            targets = repo.get_project_targets(project_id)
+
+    assert len(targets) == 2
+    assert targets[0]["targetName"] == "New Target A"
+    assert targets[1]["targetName"] == "New Target B"
+
+
+def test_service_get_projects_empty() -> None:
+    with _create_test_client() as client:
+        from app.application.polygon_obstacle_import import PolygonObstacleImportService
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            service = PolygonObstacleImportService(session)
+            result = service.get_projects(page=1, page_size=10, project_name=None, obstacle_type=None, status=None)
+        assert result.total == 0
+        assert result.items == []
+        assert result.page == 1
+        assert result.page_size == 10
+
+
+def test_service_get_projects_includes_imported_project() -> None:
+    with _create_test_client() as client:
+        _create_succeeded_import_task(client)
+        from app.application.polygon_obstacle_import import PolygonObstacleImportService
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            service = PolygonObstacleImportService(session)
+            result = service.get_projects(page=1, page_size=10, project_name=None, obstacle_type=None, status=None)
+        assert result.total >= 1
+        item = [i for i in result.items if i.project_name == "Wuhan Demo"][0]
+        assert item.obstacle_type == "building"
+        assert item.analysis_task_id is None
+        assert item.status == "not_analyzed"
+        assert item.obstacle_count >= 1
+        assert item.target_count == 0
+        assert item.non_compliant_target_count == 0
+
+
+def test_service_get_project_targets_not_found() -> None:
+    with _create_test_client() as client:
+        from app.application.polygon_obstacle_import import PolygonObstacleImportService
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            service = PolygonObstacleImportService(session)
+            result = service.get_project_targets(999)
+        assert result is None
+
+
+def test_service_get_project_targets_empty_when_no_analysis() -> None:
+    with _create_test_client() as client:
+        _create_succeeded_import_task(client)
+        from app.application.polygon_obstacle_import import PolygonObstacleImportService
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            service = PolygonObstacleImportService(session)
+            proj_result = service.get_projects(page=1, page_size=10, project_name=None, obstacle_type=None, status=None)
+            project_id = proj_result.items[0].id
+            result = service.get_project_targets(project_id)
+        assert result is not None
+        assert result.targets == []
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: import → analysis → project list / targets
+# ---------------------------------------------------------------------------
+
+
+def test_project_list_after_analysis_shows_succeeded_status() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(Airport(id=1, name="武汉天河国际机场", longitude=114.21, latitude=30.78))
+            session.commit()
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        response = client.get("/polygon-obstacle/projects")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] >= 1
+    items = body["items"]
+    matching = [i for i in items if i["projectName"] == "Wuhan Demo"]
+    assert len(matching) == 1
+    item = matching[0]
+    assert item["status"] == "succeeded"
+    assert item["analysisTaskId"] == analysis_task_id
+    assert item["targetCount"] >= 1
+
+
+def test_project_targets_after_analysis_returns_target_list() -> None:
+    with _create_test_client() as client:
+        import_task_id = _create_succeeded_import_task(client)
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            session.add(Airport(id=1, name="武汉天河国际机场", longitude=114.21, latitude=30.78))
+            session.commit()
+        analysis_task_id = _create_analysis_task(client, import_task_id, [1])
+        _run_analysis_task(client, analysis_task_id)
+
+        list_resp = client.get("/polygon-obstacle/projects")
+        projects = list_resp.json()["items"]
+        project_id = [i for i in projects if i["projectName"] == "Wuhan Demo"][0]["id"]
+
+        response = client.get(f"/polygon-obstacle/projects/{project_id}/targets")
+
+    assert response.status_code == 200
+    targets = response.json()["targets"]
+    assert len(targets) >= 1
+    target = next((t for t in targets if t["targetId"] == 1), None)
+    assert target is not None
+    assert target["targetName"] == "武汉天河国际机场"
+    assert "ruleCount" in target
+    assert "nonCompliantCount" in target
+
+
+def test_project_targets_nonexistent_project_returns_404() -> None:
+    with _create_test_client() as client:
+        response = client.get("/polygon-obstacle/projects/99999/targets")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "project not found"}
+
+
+def test_service_derive_project_status_not_analyzed() -> None:
+    with _create_test_client() as client:
+        from app.application.polygon_obstacle_import import PolygonObstacleImportService
+        with next(iter(app.dependency_overrides[get_db_session]())) as session:
+            service = PolygonObstacleImportService(session)
+            assert service._derive_project_status(None, None) == "not_analyzed"
+            assert service._derive_project_status(None, "succeeded") == "not_analyzed"
+            assert service._derive_project_status("task-1", "pending") == "running"
+            assert service._derive_project_status("task-1", "running") == "running"
+            assert service._derive_project_status("task-1", "succeeded") == "succeeded"
+            assert service._derive_project_status("task-1", "failed") == "failed"

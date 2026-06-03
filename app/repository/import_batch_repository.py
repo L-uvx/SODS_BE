@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.airport import Airport
@@ -257,6 +257,107 @@ class ImportBatchRepository:
         self._session.commit()
         self._session.refresh(report_export)
         return report_export
+
+    # 分页查询项目列表（仅包含成功导入的记录）。
+    def list_projects(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        project_name: str | None = None,
+        obstacle_type: str | None = None,
+        status: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        _obstacle_count_subq = (
+            select(func.count(Obstacle.id))
+            .where(Obstacle.project_id == Project.id)
+            .correlate(Project)
+            .scalar_subquery()
+            .label("obstacle_count")
+        )
+        base_stmt = (
+            select(
+                Project.id,
+                Project.name.label("project_name"),
+                Project.created_at,
+                ImportBatch.import_type.label("obstacle_type"),
+                AnalysisTask.id.label("analysis_task_id"),
+                AnalysisTask.status.label("analysis_status"),
+                AnalysisTask.result_payload,
+                _obstacle_count_subq,
+            )
+            .select_from(Project)
+            .join(ImportBatch, ImportBatch.project_id == Project.id)
+            .outerjoin(AnalysisTask, AnalysisTask.import_batch_id == ImportBatch.id)
+            .where(ImportBatch.status == "succeeded")
+        )
+
+        if project_name:
+            base_stmt = base_stmt.where(Project.name.contains(project_name))
+        if obstacle_type:
+            base_stmt = base_stmt.where(ImportBatch.import_type == obstacle_type)
+        if status == "not_analyzed":
+            base_stmt = base_stmt.where(AnalysisTask.id == None)  # noqa: E711
+        elif status == "running":
+            base_stmt = base_stmt.where(AnalysisTask.status.in_(["pending", "running"]))
+        elif status == "succeeded":
+            base_stmt = base_stmt.where(AnalysisTask.status == "succeeded")
+        elif status == "failed":
+            base_stmt = base_stmt.where(AnalysisTask.status == "failed")
+
+        subq = base_stmt.subquery()
+        count_stmt = select(func.count()).select_from(subq)
+        total = self._session.execute(count_stmt).scalar_one()
+
+        ordered_stmt = base_stmt.order_by(Project.created_at.desc()).offset(offset).limit(limit)
+        rows = list(self._session.execute(ordered_stmt).mappings().all())
+
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            result.append(
+                {
+                    "id": row["id"],
+                    "project_name": row["project_name"],
+                    "obstacle_type": row["obstacle_type"],
+                    "analysis_task_id": row["analysis_task_id"],
+                    "analysis_status": row["analysis_status"],
+                    "result_payload": row.get("result_payload"),
+                    "obstacle_count": row["obstacle_count"],
+                    "created_at": row["created_at"],
+                }
+            )
+
+        return result, total
+
+    # 根据项目编号查询目标分析统计。
+    def get_project_targets(self, project_id: int) -> list[dict[str, Any]]:
+        stmt = (
+            select(AnalysisTask)
+            .join(ImportBatch, ImportBatch.id == AnalysisTask.import_batch_id)
+            .where(ImportBatch.project_id == project_id)
+            .order_by(AnalysisTask.created_at.desc(), AnalysisTask.updated_at.desc())
+            .limit(1)
+        )
+        analysis_task = self._session.execute(stmt).scalar_one_or_none()
+
+        if analysis_task is None or analysis_task.result_payload is None:
+            return []
+
+        target_results = analysis_task.result_payload.get("targetResults", [])
+        result: list[dict[str, Any]] = []
+        for tr in target_results:
+            rule_results = tr.get("ruleResults", [])
+            result.append(
+                {
+                    "targetId": tr["targetId"],
+                    "targetName": tr["targetName"],
+                    "ruleCount": len(rule_results),
+                    "nonCompliantCount": sum(
+                        1 for rr in rule_results if rr.get("isCompliant") == False
+                    ),
+                }
+            )
+        return result
 
     # 批量创建导入后的障碍物记录。
     def create_obstacles(

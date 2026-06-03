@@ -53,6 +53,10 @@ from app.schemas.polygon_obstacle import (
     ImportTaskResultResponse,
     ImportTaskStatusResponse,
     ImportTargetResponse,
+    ProjectListItemResponse,
+    ProjectListResponse,
+    ProjectTargetItemResponse,
+    ProjectTargetListResponse,
 )
 
 
@@ -1532,6 +1536,88 @@ class PolygonObstacleImportService:
         safe_airport = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", airport_name).strip("._ ")
         file_name = f"{safe_project}-{safe_airport}.docx" if safe_project and safe_airport else f"export-{task_id}.docx"
         return export_directory / file_name, file_name
+
+    # 根据分析任务ID和分析状态推导项目状态。
+    def _derive_project_status(
+        self, analysis_task_id: str | None, analysis_status: str | None
+    ) -> str:
+        if analysis_task_id is None:
+            return "not_analyzed"
+        if analysis_status in ("pending", "running"):
+            return "running"
+        if analysis_status == "succeeded":
+            return "succeeded"
+        if analysis_status == "failed":
+            return "failed"
+        return "not_analyzed"
+
+    # 分页查询项目列表。
+    def get_projects(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        project_name: str | None,
+        obstacle_type: str | None,
+        status: str | None,
+    ) -> ProjectListResponse:
+        offset = (page - 1) * page_size
+        rows, total = self._repository.list_projects(
+            offset=offset,
+            limit=page_size,
+            project_name=project_name,
+            obstacle_type=obstacle_type,
+            status=status,
+        )
+        items: list[ProjectListItemResponse] = []
+        for row in rows:
+            result_payload = row.get("result_payload")
+            target_results = result_payload.get("targetResults", []) if isinstance(result_payload, dict) else []
+            items.append(
+                ProjectListItemResponse(
+                    id=row["id"],
+                    projectName=row["project_name"],
+                    obstacleType=row["obstacle_type"],
+                    analysisTaskId=row.get("analysis_task_id"),
+                    status=self._derive_project_status(
+                        row.get("analysis_task_id"), row.get("analysis_status")
+                    ),
+                    obstacleCount=row["obstacle_count"],
+                    targetCount=len(target_results),
+                    nonCompliantTargetCount=sum(
+                        1
+                        for tr in target_results
+                        if any(
+                            rr.get("isCompliant") is False
+                            for rr in tr.get("ruleResults", [])
+                        )
+                    ),
+                    createdAt=row["created_at"],
+                )
+            )
+        return ProjectListResponse(
+            items=items,
+            total=total,
+            page=page,
+            pageSize=page_size,
+        )
+
+    # 根据项目编号查询目标分析统计。
+    def get_project_targets(self, project_id: int) -> ProjectTargetListResponse | None:
+        project = self._repository.get_project(project_id)
+        if project is None:
+            return None
+        target_rows = self._repository.get_project_targets(project_id)
+        targets = [
+            ProjectTargetItemResponse(
+                targetId=tr["targetId"],
+                targetName=tr["targetName"],
+                ruleCount=tr["ruleCount"],
+                nonCompliantCount=tr["nonCompliantCount"],
+            )
+            for tr in target_rows
+        ]
+        return ProjectTargetListResponse(targets=targets)
 
     # 将障碍物记录转换为统一响应对象。
     def _build_imported_obstacle_response(

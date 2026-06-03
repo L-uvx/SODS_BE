@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,8 @@ from app.schemas.polygon_obstacle import (
     ImportTaskResultResponse,
     ImportTaskStatusResponse,
     ImportTargetResponse,
+    ProjectListResponse,
+    ProjectTargetListResponse,
 )
 
 
@@ -300,3 +302,36 @@ def download_export_file(
         filename=file_name,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
+
+
+# 分页查询项目列表。
+@router.get("/projects", response_model=ProjectListResponse)
+def list_projects(
+    page: int = Query(default=1, ge=1),
+    pageSize: int = Query(default=10, ge=1, le=100),
+    projectName: str | None = Query(default=None),
+    obstacleType: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> ProjectListResponse:
+    service = PolygonObstacleImportService(session)
+    return service.get_projects(
+        page=page,
+        page_size=pageSize,
+        project_name=projectName,
+        obstacle_type=obstacleType,
+        status=status,
+    )
+
+
+# 查询指定项目下的目标分析统计。
+@router.get("/projects/{project_id}/targets", response_model=ProjectTargetListResponse)
+def get_project_targets(
+    project_id: int,
+    session: Session = Depends(get_db_session),
+) -> ProjectTargetListResponse:
+    service = PolygonObstacleImportService(session)
+    result = service.get_project_targets(project_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return result
