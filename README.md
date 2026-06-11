@@ -51,3 +51,12 @@ uv run alembic upgrade head --sql  # 生成离线 SQL
 项目支持脱离 Docker/WSL 在 Windows 上运行，详见 `../SODS_Portable/README.md`。
 
 Windows 下需注意：`localhost` 可能在 psycopg 中先尝试 IPv6 导致连接挂死。若遇到数据库连接超时，将 `DATABASE_URL` 中的 `@localhost` 改为 `@127.0.0.1`。此外 Python `mimetypes` 在 Windows 上可能将 `.js` 映射为 `text/plain` 导致前端模块加载失败，`app/main.py` 启动时已通过 `mimetypes.add_type` 修复。
+
+## 许可证管理
+
+项目内部工具位于 `tools/` 目录：
+
+- `tools/license_gen.py` — 许可证签发工具（供应商使用，不交付客户）
+- `tools/private_key.pem` — RSA 私钥（不提交 git，不随发布包分发）
+
+客户许可证文件为 `data/license.json`（位于 `SODS_Portable/data/` 目录下）。

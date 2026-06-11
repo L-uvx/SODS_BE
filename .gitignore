@@ -16,3 +16,5 @@ docs
 AGENTS.md
 CLAUDE.md
 var/
+*.pem
+app/core/_public_key.py
