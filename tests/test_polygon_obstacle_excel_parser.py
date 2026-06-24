@@ -1,3 +1,4 @@
+import zipfile
 from pathlib import Path
 from io import BytesIO
 
@@ -191,6 +192,78 @@ class TestHeaderValidationRemoved:
         wb_bytes = _build_workbook_bytes(rows)
         obstacles = parse_polygon_obstacle_excel(wb_bytes)
         assert len(obstacles) == 1
+
+
+class TestIndexBasedSheet:
+    def test_no_worksheets_raises_error(self) -> None:
+        """Empty workbook (no sheets) should raise PolygonObstacleExcelParseError."""
+        buf = BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(
+                "[Content_Types].xml",
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                '<Default Extension="xml" ContentType="application/xml"/>'
+                '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+                "</Types>",
+            )
+            zf.writestr(
+                "_rels/.rels",
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+                "</Relationships>",
+            )
+            zf.writestr(
+                "xl/workbook.xml",
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                "<sheets/>"
+                "</workbook>",
+            )
+            zf.writestr(
+                "xl/_rels/workbook.xml.rels",
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
+            )
+        with pytest.raises(PolygonObstacleExcelParseError, match="工作簿中没有工作表"):
+            parse_polygon_obstacle_excel(buf.getvalue())
+
+    def test_uses_first_sheet_regardless_of_name(self) -> None:
+        """Sheet with a non-standard name at index 0 should still be parsed."""
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "CustomName"
+        ws.cell(row=2, column=1, value="障碍物A")
+        ws.cell(row=2, column=2, value="103°30'0\"")
+        ws.cell(row=2, column=3, value="30°30'0\"")
+        ws.cell(row=2, column=4, value=100)
+        buf = BytesIO()
+        wb.save(buf)
+        result = parse_polygon_obstacle_excel(buf.getvalue())
+        assert len(result) == 1
+        assert result[0].name == "障碍物A"
+
+    def test_ignores_second_sheet(self) -> None:
+        """Only the first sheet (index 0) should be parsed; second sheet ignored."""
+        wb = Workbook()
+        ws1 = wb.active
+        ws1.title = "First"
+        ws1.cell(row=2, column=1, value="障碍物A")
+        ws1.cell(row=2, column=2, value="103°30'0\"")
+        ws1.cell(row=2, column=3, value="30°30'0\"")
+        ws1.cell(row=2, column=4, value=100)
+        ws2 = wb.create_sheet("Second")
+        ws2.cell(row=2, column=1, value="障碍物B")
+        ws2.cell(row=2, column=2, value="104°30'0\"")
+        ws2.cell(row=2, column=3, value="31°30'0\"")
+        ws2.cell(row=2, column=4, value=200)
+        buf = BytesIO()
+        wb.save(buf)
+        result = parse_polygon_obstacle_excel(buf.getvalue())
+        assert len(result) == 1
+        assert result[0].name == "障碍物A"
 
 
 class TestErrorCases:

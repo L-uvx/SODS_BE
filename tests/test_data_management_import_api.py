@@ -47,6 +47,7 @@ def dualiang_xlsx_bytes() -> bytes:
 @pytest.fixture(scope="module")
 def empty_airport_xlsx_bytes() -> bytes:
     wb = Workbook()
+    wb.remove(wb.active)
     ws1 = wb.create_sheet("Sheet1", 0)
     for i, h in enumerate([
         "跑道号码", "跑道真方位（°）", "跑道长度（米）", "跑道宽度（米）",
@@ -283,7 +284,7 @@ class TestDmsCompatibleValidators:
 class TestOpenWorkbook:
     def test_valid_xlsx(self, dualiang_xlsx_bytes: bytes) -> None:
         wb = _open_workbook(dualiang_xlsx_bytes)
-        assert "Sheet1" in wb.sheetnames
+        assert len(wb.worksheets) >= 2
 
     def test_invalid_file_raises(self) -> None:
         with pytest.raises(AirportImportParseError):
@@ -323,12 +324,35 @@ class TestParseRunwaySheet:
         rows = _parse_runway_sheet(empty_airport_xlsx_bytes)
         assert rows == []
 
-    def test_missing_sheet_raises(self) -> None:
-        wb = Workbook()
-        wb.create_sheet("OtherSheet", 0)
+    def test_empty_workbook_raises(self) -> None:
+        import zipfile
+        from io import BytesIO
         buf = BytesIO()
-        wb.save(buf)
-        with pytest.raises(AirportImportParseError):
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(
+                "[Content_Types].xml",
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                '<Default Extension="xml" ContentType="application/xml"/>'
+                '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+                "</Types>",
+            )
+            zf.writestr(
+                "_rels/.rels",
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+                "</Relationships>",
+            )
+            zf.writestr(
+                "xl/workbook.xml",
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                "<sheets/>"
+                "</workbook>",
+            )
+        with pytest.raises(AirportImportParseError, match="工作簿中没有工作表"):
             _parse_runway_sheet(buf.getvalue())
 
 
@@ -391,7 +415,7 @@ class TestParseStationSheet:
             assert "latitude" in r
 
     def test_missing_sheet_raises(self, empty_airport_xlsx_bytes: bytes) -> None:
-        with pytest.raises(AirportImportParseError):
+        with pytest.raises(AirportImportParseError, match="缺少台站工作表"):
             _parse_station_sheet(empty_airport_xlsx_bytes)
 
 
@@ -449,6 +473,7 @@ class TestImportOrchestrator:
 
     def test_empty_runway_sheet_falls_back_to_stations(self) -> None:
         wb = Workbook()
+        wb.remove(wb.active)
         ws1 = wb.create_sheet("Sheet1", 0)
         all_rw_headers = [
             "跑道号码", "跑道真方位（°）", "跑道长度（米）", "跑道宽度（米）",
@@ -558,6 +583,7 @@ class TestImportAirportApi:
 
     def test_import_airport_persists_maximum_type_aircraft_on_runway(self) -> None:
         wb = Workbook()
+        wb.remove(wb.active)
         ws1 = wb.create_sheet("Sheet1", 0)
         ws1.cell(row=2, column=1, value="18")
         ws1.cell(row=2, column=14, value="C类和C类以下")

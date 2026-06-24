@@ -236,9 +236,9 @@ def _map_antenna_unit_number(value: Any) -> str | None:
 
 def _parse_runway_sheet(excel_bytes: bytes) -> list[dict[str, Any]]:
     workbook = _open_workbook(excel_bytes)
-    if 'Sheet1' not in workbook.sheetnames:
-        raise AirportImportParseError("缺少跑道工作表 Sheet1")
-    ws = workbook['Sheet1']
+    if len(workbook.worksheets) == 0:
+        raise AirportImportParseError("工作簿中没有工作表")
+    ws = workbook.worksheets[0]
 
     rows: list[dict[str, Any]] = []
     row_index = 2
@@ -279,9 +279,9 @@ def _parse_runway_sheet(excel_bytes: bytes) -> list[dict[str, Any]]:
 
 def _parse_station_sheet(excel_bytes: bytes) -> list[dict[str, Any]]:
     workbook = _open_workbook(excel_bytes)
-    if 'Sheet2' not in workbook.sheetnames:
-        raise AirportImportParseError("缺少台站工作表 Sheet2")
-    ws = workbook['Sheet2']
+    if len(workbook.worksheets) < 2:
+        raise AirportImportParseError("缺少台站工作表（第2个Sheet）")
+    ws = workbook.worksheets[1]
 
     rows: list[dict[str, Any]] = []
     row_index = 4

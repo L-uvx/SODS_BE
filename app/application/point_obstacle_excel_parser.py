@@ -6,7 +6,6 @@ from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
 from app.application.polygon_obstacle_excel_parser import (
-    EXPECTED_SHEET_NAME,
     _detect_obstacle_template,
     _parse_dms,
     _parse_dms_components,
@@ -34,12 +33,10 @@ def parse_point_obstacle_excel(excel_bytes: bytes) -> list[PointObstacle]:
     except (BadZipFile, InvalidFileException, OSError) as exc:
         raise PointObstacleExcelParseError("invalid excel file") from exc
 
-    if EXPECTED_SHEET_NAME not in workbook.sheetnames:
-        raise PointObstacleExcelParseError(
-            f"missing worksheet: {EXPECTED_SHEET_NAME}"
-        )
+    if len(workbook.worksheets) == 0:
+        raise PointObstacleExcelParseError("工作簿中没有工作表")
 
-    worksheet = workbook[EXPECTED_SHEET_NAME]
+    worksheet = workbook.worksheets[0]
     template = _detect_obstacle_template(worksheet)
 
     obstacles_by_name: dict[str, PointObstacle] = {}
