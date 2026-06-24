@@ -480,10 +480,10 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
     compliant_title = ""
     if non_compliant_rows:
         table_num += 1
-        non_compliant_title = f"{table_num}、以下项目障碍物不满足台站限制高度要求，具体如下："
+        non_compliant_title = f"{table_num}、建设项目单障碍物的台站限制高度要求如下："
     if compliant_rows:
         table_num += 1
-        compliant_title = f"{table_num}、以下项目障碍物满足上述台站的标准要求,详见如下表所示："
+        compliant_title = f"{table_num}、建设项目单障碍物满足以下台站的标准要求："
 
     em_zone_results = [
         r for r in rule_results
