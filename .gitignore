@@ -19,3 +19,4 @@ var/
 *.pem
 app/core/_public_key.py
 license/
+app/report/templates/analysis_report_template.docx.bak
