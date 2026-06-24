@@ -494,7 +494,7 @@ _STATION_PARSERS: dict[str, Any] = {
 def _import_airport_from_excel(
     *, session: Session, excel_bytes: bytes, original_filename: str,
 ) -> dict[str, Any]:
-    airport_name = os.path.splitext(original_filename)[0]
+    airport_name = os.path.splitext(os.path.basename(original_filename))[0]
     if not airport_name:
         raise AirportImportParseError("文件名不能为空")
 

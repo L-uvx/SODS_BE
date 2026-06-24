@@ -1,3 +1,4 @@
+import os
 from collections.abc import Iterable
 from typing import Any
 
@@ -337,23 +338,24 @@ class DataManagementService:
         skipped_count = 0
 
         for file_bytes, filename in files:
-            if not (filename.lower().endswith(".xlsx") or filename.lower().endswith(".xls")):
-                items.append(AirportImportItem(fileName=filename, status="skipped"))
+            clean_name = os.path.basename(filename)
+            if not (clean_name.lower().endswith(".xlsx") or clean_name.lower().endswith(".xls")):
+                items.append(AirportImportItem(fileName=clean_name, status="skipped"))
                 skipped_count += 1
                 continue
 
-            if filename.startswith("~$"):
-                items.append(AirportImportItem(fileName=filename, status="skipped"))
+            if clean_name.startswith("~$"):
+                items.append(AirportImportItem(fileName=clean_name, status="skipped"))
                 skipped_count += 1
                 continue
 
             try:
                 result = self.import_airport_from_excel(
                     excel_bytes=file_bytes,
-                    original_filename=filename,
+                    original_filename=clean_name,
                 )
                 items.append(AirportImportItem(
-                    fileName=filename,
+                    fileName=clean_name,
                     status="imported",
                     airportId=result.id,
                     airportName=result.airport_name,
@@ -363,7 +365,7 @@ class DataManagementService:
                 imported_count += 1
             except DataManagementValidationError as exc:
                 items.append(AirportImportItem(
-                    fileName=filename,
+                    fileName=clean_name,
                     status="error",
                     errorMessage=str(exc),
                 ))
