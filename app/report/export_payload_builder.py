@@ -448,6 +448,8 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
             "tableRows": [],
             "nonCompliantRows": [],
             "compliantRows": [],
+            "nonCompliantTitle": "",
+            "compliantTitle": "",
         }
 
     cumulative_mask_angle_results = compute_cumulative_horizontal_mask_angles(rule_results)
@@ -472,6 +474,16 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
     )
     non_compliant_rows.sort(key=_report_sort_key)
     compliant_rows.sort(key=_report_sort_key)
+
+    table_num = 0
+    non_compliant_title = ""
+    compliant_title = ""
+    if non_compliant_rows:
+        table_num += 1
+        non_compliant_title = f"{table_num}、以下项目障碍物不满足台站限制高度要求，具体如下："
+    if compliant_rows:
+        table_num += 1
+        compliant_title = f"{table_num}、以下项目障碍物满足上述台站的标准要求,详见如下表所示："
 
     em_zone_results = [
         r for r in rule_results
@@ -541,4 +553,6 @@ def build_export_payload(analysis_task: AnalysisTask, *, target_id: int | None =
         "tableRows": table_rows,
         "nonCompliantRows": non_compliant_rows,
         "compliantRows": compliant_rows,
+        "nonCompliantTitle": non_compliant_title,
+        "compliantTitle": compliant_title,
     }
