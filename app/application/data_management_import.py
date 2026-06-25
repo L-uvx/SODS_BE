@@ -601,7 +601,8 @@ def _resolve_station_runway(st_data: dict[str, Any], runway_map: dict[str, Runwa
             st_data['station_sub_type'] = runway_map[rn].station_sub_type
         return
     if st_type in ('LOC', 'GP', 'MB'):
-        rn = st_data.get('runway_no') or _extract_runway_info(st_data.get('name'))
+        col18 = st_data.get('runway_no')
+        rn = col18 if (col18 and col18 in runway_map) else _extract_runway_info(st_data.get('name'))
         if rn and rn in runway_map:
             runway = runway_map[rn]
             st_data['runway_no'] = rn
