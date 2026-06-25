@@ -101,6 +101,7 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
 
         station_pt = Point(self.station_point)
         max_distance = float(shape.hausdorff_distance(station_pt))
+        min_distance = float(shape.distance(station_pt))
         x = min(max_distance, self.shadow_radius_m)
         allowed_h = self.slope * x + self.intercept + self.altitude
 
@@ -156,7 +157,7 @@ class BoundVorReflectorMaskAreaRule(BoundObstacleRule):
                 "allowedHeightMeters": limit,
                 "topElevationMeters": top_elevation,
                 "overHeightMeters": max(0.0, top_elevation - allowed_h),
-                "actualDistanceMeters": max_distance,
+                "actualDistanceMeters": min_distance,
                 "shadowRadiusMeters": self.shadow_radius_m,
             },
             standards_rule_code=self.protection_zone.rule_code,
