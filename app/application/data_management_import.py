@@ -331,11 +331,7 @@ def _read_station_base_fields(ws, row_index: int) -> dict[str, Any]:
 
 
 def _read_altitude(ws, row_index: int) -> float | None:
-    st = str(ws.cell(row=row_index, column=1).value or '').strip()
-    val = _get_number_from_string(ws.cell(row=row_index, column=6).value)
-    if val is None and st in ('ADS-B', 'VHF', 'HF'):
-        raise AirportImportParseError(f"台站地势标高不能为空（行数：{row_index}）")
-    return val
+    return _get_number_from_string(ws.cell(row=row_index, column=6).value)
 
 
 # --- Per-type parsers ---
@@ -554,6 +550,7 @@ def _import_airport_from_excel(
 
     for st_data in station_rows:
         _resolve_station_runway(st_data, runway_map)
+        _fill_station_altitude(st_data, runway_map, airport.altitude)
         station = Station(
             airport_id=airport_id,
             station_type=st_data.get('station_type'),
@@ -613,6 +610,33 @@ def _resolve_station_runway(st_data: dict[str, Any], runway_map: dict[str, Runwa
             raise AirportImportParseError(f"台站 {st_data.get('name')} 无法匹配跑道（{rn}）")
         else:
             st_data['runway_no'] = rn
+
+
+def _fill_station_altitude(
+    st_data: dict[str, Any],
+    runway_map: dict[str, Runway],
+    airport_altitude: Any,
+) -> None:
+    if st_data.get('altitude') is not None:
+        return
+
+    rn = st_data.get('runway_no')
+    if rn and rn in runway_map and runway_map[rn].altitude is not None:
+        st_data['altitude'] = float(runway_map[rn].altitude)
+
+    if st_data.get('altitude') is None and airport_altitude is not None:
+        st_data['altitude'] = float(airport_altitude)
+
+    alt = st_data.get('altitude')
+    if alt is None:
+        return
+
+    st_type = st_data.get('station_type', '')
+    if st_type in ('LOC', 'NDB', 'VOR', 'GP', 'RADAR', 'Surface_Detection_Radar'):
+        st_data['fly_height'] = _int_floor((alt + 600) * 100 / 100)
+    else:
+        ah = st_data.get('antenna_hag', 0.0) or 0.0
+        st_data['fly_height'] = _int_floor((alt + ah + 40) * 100 / 100)
 
 
 def _find_airport_by_name(session: Session, name: str) -> Airport | None:

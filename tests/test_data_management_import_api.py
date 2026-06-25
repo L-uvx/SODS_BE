@@ -22,6 +22,7 @@ from app.application.data_management_import import (
     _get_number_from_string,
     _extract_runway_info,
     _int_floor,
+    _fill_station_altitude,
     _open_workbook,
     _parse_runway_sheet,
     _parse_station_sheet,
@@ -503,6 +504,78 @@ class TestImportOrchestrator:
             assert airport.latitude is not None
             assert result["runwayCount"] == 0
             assert result["stationCount"] == 1
+
+
+# --- Fill Station Altitude Tests ---
+
+class TestFillStationAltitude:
+    def test_preserves_existing_altitude(self) -> None:
+        st_data = {"altitude": 500.0, "fly_height": 1100.0, "station_type": "NDB", "runway_no": "02L"}
+        runway_map: dict[str, Runway] = {}
+        _fill_station_altitude(st_data, runway_map, 300.0)
+        assert st_data["altitude"] == 500.0
+        assert st_data["fly_height"] == 1100.0
+
+    def test_fills_from_runway(self) -> None:
+        runway = Runway(altitude=450.0)
+        st_data = {"altitude": None, "station_type": "LOC", "runway_no": "02L"}
+        runway_map = {"02L": runway}
+        _fill_station_altitude(st_data, runway_map, 300.0)
+        assert st_data["altitude"] == 450.0
+        assert st_data["fly_height"] == pytest.approx(_int_floor((450.0 + 600) * 100 / 100))
+
+    def test_fills_from_airport_when_runway_not_matched(self) -> None:
+        st_data = {"altitude": None, "station_type": "VOR", "runway_no": None}
+        runway_map: dict[str, Runway] = {}
+        _fill_station_altitude(st_data, runway_map, 200.0)
+        assert st_data["altitude"] == 200.0
+        assert st_data["fly_height"] == pytest.approx(_int_floor((200.0 + 600) * 100 / 100))
+
+    def test_fills_from_airport_when_runway_altitude_none(self) -> None:
+        runway = Runway(altitude=None)
+        st_data = {"altitude": None, "station_type": "GP", "runway_no": "02L"}
+        runway_map = {"02L": runway}
+        _fill_station_altitude(st_data, runway_map, 300.0)
+        assert st_data["altitude"] == 300.0
+        assert st_data["fly_height"] == pytest.approx(_int_floor((300.0 + 600) * 100 / 100))
+
+    def test_skips_when_no_source_available(self) -> None:
+        st_data = {"altitude": None, "station_type": "NDB", "runway_no": None}
+        runway_map: dict[str, Runway] = {}
+        _fill_station_altitude(st_data, runway_map, None)
+        assert st_data.get("altitude") is None
+        assert "fly_height" not in st_data or st_data.get("fly_height") == pytest.approx(
+            _int_floor((0.0 + 600) * 100 / 100)
+        )
+
+    def test_recalculates_fly_height_40_type(self) -> None:
+        st_data = {"altitude": None, "station_type": "MB", "runway_no": None, "antenna_hag": 5.0}
+        runway_map: dict[str, Runway] = {}
+        _fill_station_altitude(st_data, runway_map, 100.0)
+        assert st_data["altitude"] == 100.0
+        assert st_data["fly_height"] == pytest.approx(_int_floor((100.0 + 5.0 + 40) * 100 / 100))
+
+    def test_recalculates_fly_height_40_type_antenna_hag_default(self) -> None:
+        st_data = {"altitude": None, "station_type": "ADS_B", "runway_no": None}
+        runway_map: dict[str, Runway] = {}
+        _fill_station_altitude(st_data, runway_map, 100.0)
+        assert st_data["altitude"] == 100.0
+        assert st_data["fly_height"] == pytest.approx(_int_floor((100.0 + 0.0 + 40) * 100 / 100))
+
+    def test_runway_altitude_takes_priority_over_airport(self) -> None:
+        runway = Runway(altitude=450.0)
+        st_data = {"altitude": None, "station_type": "LOC", "runway_no": "02L"}
+        runway_map = {"02L": runway}
+        _fill_station_altitude(st_data, runway_map, 300.0)
+        assert st_data["altitude"] == 450.0
+
+    def test_runway_altitude_none_in_map_does_not_block(self) -> None:
+        runway = Runway(altitude=None)
+        airport_alt = 300.0
+        st_data = {"altitude": None, "station_type": "LOC", "runway_no": "02L"}
+        runway_map = {"02L": runway}
+        _fill_station_altitude(st_data, runway_map, airport_alt)
+        assert st_data["altitude"] == 300.0
 
 
 # --- API Integration Tests ---
