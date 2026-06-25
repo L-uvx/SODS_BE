@@ -17,7 +17,7 @@ from app.models.station import Station
 
 
 _DMS_DELIMITER_RE = re.compile(
-    r"[度分秒°′″'’\"\\\":EN＇＂〞º\u00b4ʹ\u02da]"
+    r"[度分秒°′″'’\u2018\u201c\u201d\"\\\":EN＇＂〞º\u00b4ʹ\u02da]"
 )
 
 _NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")

@@ -8,7 +8,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.worksheet.worksheet import Worksheet
 
 
-_DMS_PATTERN = re.compile(r'^\s*(\d+)[°º]\s*(\d+)[\'′]\s*(\d+(?:\.\d+)?)["″]\s*$')
+_DMS_PATTERN = re.compile(r'^\s*(\d+)[°º]\s*(\d+)[\u2018\u2019\uFF07′\']\s*(\d+(?:\.\d+)?)[\u201c\u201d\uFF02\u301e″"]\s*$')
 
 
 class PolygonObstacleExcelParseError(ValueError):

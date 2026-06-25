@@ -132,6 +132,14 @@ class TestParseDegree:
     def test_whitespace_string_returns_none(self) -> None:
         assert _parse_degree("   ") is None
 
+    def test_dms_with_curly_double_quotes(self) -> None:
+        expected = 103.0 + 56.0 / 60.0 + 37.8 / 3600.0
+        assert _parse_degree("103°56'37.8\u201d") == pytest.approx(expected)
+
+    def test_dms_with_curly_single_quotes(self) -> None:
+        expected = 103.0 + 56.0 / 60.0 + 37.8 / 3600.0
+        assert _parse_degree("103°56\u201937.8\"") == pytest.approx(expected)
+
     def test_boolean_raises(self) -> None:
         with pytest.raises(ValueError):
             _parse_degree(True)

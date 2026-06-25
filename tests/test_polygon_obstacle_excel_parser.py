@@ -8,6 +8,7 @@ from openpyxl import Workbook
 from app.application.polygon_obstacle_excel_parser import (
     PolygonObstacleExcelParseError,
     parse_polygon_obstacle_excel,
+    _parse_dms,
     _parse_dms_components,
     _detect_obstacle_template,
 )
@@ -48,6 +49,24 @@ class TestParseDmsComponents:
     def test_degrees_as_none(self) -> None:
         result = _parse_dms_components(None, 30.0, 0.0)
         assert result == 0.5
+
+
+class TestParseDms:
+    def test_standard_format(self) -> None:
+        result = _parse_dms("103°58'33.11\"", field_name="lon", row_number=2)
+        assert result == pytest.approx(103.975864, rel=1e-6)
+
+    def test_curly_double_quote_seconds(self) -> None:
+        result = _parse_dms("103°58'33.11\u201d", field_name="lon", row_number=2)
+        assert result == pytest.approx(103.975864, rel=1e-6)
+
+    def test_curly_single_quote_minutes(self) -> None:
+        result = _parse_dms("103°58\u201933.11\"", field_name="lon", row_number=2)
+        assert result == pytest.approx(103.975864, rel=1e-6)
+
+    def test_fullwidth_quote_seconds(self) -> None:
+        result = _parse_dms("103°58'33.11\uff02", field_name="lon", row_number=2)
+        assert result == pytest.approx(103.975864, rel=1e-6)
 
 
 class TestDetectObstacleTemplate:
