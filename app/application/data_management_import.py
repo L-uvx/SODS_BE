@@ -54,6 +54,20 @@ def _parse_degree(value: Any) -> float | None:
     m = float(numeric_parts[1]) if len(numeric_parts) > 1 else 0.0
     s = float(numeric_parts[2]) if len(numeric_parts) > 2 else 0.0
 
+    # 容许多写 1 个进位单位：60"→1'，60'→1°（实际数据常见：103°58'60"）
+    # 超过 60 仍拒收，视为数据错误
+    if s == 60.0:
+        m += 1.0
+        s = 0.0
+    elif s > 60.0:
+        raise ValueError(f"seconds out of range: {s}")
+
+    if m == 60.0:
+        d += 1.0
+        m = 0.0
+    elif m > 60.0:
+        raise ValueError(f"minutes out of range: {m}")
+
     if m < 0 or m >= 60:
         raise ValueError(f"minutes out of range: {m}")
     if s < 0 or s >= 60:
@@ -271,7 +285,7 @@ def _parse_runway_sheet(excel_bytes: bytes) -> list[dict[str, Any]]:
         except AirportImportParseError:
             raise
         except Exception as exc:
-            raise AirportImportParseError(f"跑道数据解析失败（行数：{row_index}") from exc
+            raise AirportImportParseError(f"跑道数据解析失败（行数：{row_index}）：{exc}") from exc
         row_index += 1
 
     return rows
@@ -309,7 +323,7 @@ def _parse_station_sheet(excel_bytes: bytes) -> list[dict[str, Any]]:
             raise
         except Exception as exc:
             raise AirportImportParseError(
-                f"台站数据解析失败请检查表格格式或度分秒符号是否正确（行数：{row_index}）"
+                f"台站数据解析失败请检查表格格式或度分秒符号是否正确（行数：{row_index}）：{exc}"
             ) from exc
         row_index += 1
 

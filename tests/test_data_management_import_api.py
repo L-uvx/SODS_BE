@@ -100,6 +100,19 @@ class TestParseDegree:
         expected = 103.0 + 56.0 / 60.0 + 37.8 / 3600.0
         assert _parse_degree("103度56分37.8秒") == pytest.approx(expected)
 
+    def test_dms_seconds_60_carries_to_minutes(self) -> None:
+        assert _parse_degree("103°58'60\"") == pytest.approx(103.0 + 59.0 / 60.0)
+
+    def test_dms_seconds_over_60_raises(self) -> None:
+        with pytest.raises(ValueError, match="seconds out of range"):
+            _parse_degree("103°58'90\"")
+
+    def test_dms_minutes_60_carries_to_degrees(self) -> None:
+        assert _parse_degree("103°60'0\"") == pytest.approx(104.0)
+
+    def test_dms_minutes_and_seconds_both_carry(self) -> None:
+        assert _parse_degree("103°59'60\"") == pytest.approx(104.0)
+
     def test_plain_float_string(self) -> None:
         assert _parse_degree("30.53463") == pytest.approx(30.53463)
 
@@ -112,12 +125,12 @@ class TestParseDegree:
     def test_float_returns_float(self) -> None:
         assert _parse_degree(103.5) == pytest.approx(103.5)
 
-    def test_minutes_out_of_range_raises(self) -> None:
-        with pytest.raises(ValueError):
+    def test_minutes_65_raises(self) -> None:
+        with pytest.raises(ValueError, match="minutes out of range"):
             _parse_degree("103°65'37.8\"")
 
-    def test_seconds_out_of_range_raises(self) -> None:
-        with pytest.raises(ValueError):
+    def test_seconds_65_raises(self) -> None:
+        with pytest.raises(ValueError, match="seconds out of range"):
             _parse_degree("103°56'65.0\"")
 
     def test_abbreviated_dms_degrees_only(self) -> None:
