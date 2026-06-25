@@ -350,11 +350,14 @@ def _parse_loc(ws, row_index, base):
     der = _get_number_from_string(ws.cell(row=row_index, column=10).value)
     if der is None:
         raise AirportImportParseError(f"LOC与跑道末端距离不能为空（行数：{row_index}）")
+    rn = _safe_str(ws.cell(row=row_index, column=18).value)
+    if rn:
+        rn = rn.replace(' ', '')
     alt = base.get('altitude') or 0.0
     return {
         **base, 'station_type': 'LOC', 'antenna_hag': ah, 'coverage_radius': 46300.0,
         'fly_height': _int_floor((alt + 600) * 100 / 100), 'unit_number': un,
-        'distance_endo_runway': der, 'runway_no': None, 'station_sub_type': None,
+        'distance_endo_runway': der, 'runway_no': rn, 'station_sub_type': None,
     }
 
 
@@ -382,12 +385,15 @@ def _parse_gp(ws, row_index, base):
     if da is None:
         da = 3.0
     ga = _get_number_from_string(ws.cell(row=row_index, column=14).value)
+    rn = _safe_str(ws.cell(row=row_index, column=18).value)
+    if rn:
+        rn = rn.replace(' ', '')
     alt = base.get('altitude') or 0.0
     return {
         **base, 'station_type': 'GP', 'antenna_hag': ah, 'coverage_radius': 18520.0,
         'downward_angle': da, 'fly_height': _int_floor((alt + 600) * 100 / 100),
         'distance_to_runway': dtr, 'distance_v_to_runway': dvr, 'antenna_height': ga,
-        'runway_no': None, 'station_sub_type': None,
+        'runway_no': rn, 'station_sub_type': None,
     }
 
 
@@ -429,10 +435,13 @@ def _parse_ndb(ws, row_index, base):
 
 def _parse_mb(ws, row_index, base):
     ah = base['antenna_hag_raw'] or 0.0
+    rn = _safe_str(ws.cell(row=row_index, column=18).value)
+    if rn:
+        rn = rn.replace(' ', '')
     alt = base.get('altitude') or 0.0
     return {
         **base, 'station_type': 'MB', 'antenna_hag': ah, 'coverage_radius': 30.0,
-        'fly_height': _int_floor((alt + ah + 40) * 100 / 100), 'runway_no': None,
+        'fly_height': _int_floor((alt + ah + 40) * 100 / 100), 'runway_no': rn,
     }
 
 
@@ -595,7 +604,7 @@ def _resolve_station_runway(st_data: dict[str, Any], runway_map: dict[str, Runwa
             st_data['station_sub_type'] = runway_map[rn].station_sub_type
         return
     if st_type in ('LOC', 'GP', 'MB'):
-        rn = _extract_runway_info(st_data.get('name'))
+        rn = st_data.get('runway_no') or _extract_runway_info(st_data.get('name'))
         if rn and rn in runway_map:
             runway = runway_map[rn]
             st_data['runway_no'] = rn
