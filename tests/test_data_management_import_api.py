@@ -165,6 +165,9 @@ class TestGetNumberFromString:
     def test_number_with_space(self) -> None:
         assert _get_number_from_string(" 3600 ") == pytest.approx(3600.0)
 
+    def test_multi_value_takes_first(self) -> None:
+        assert _get_number_from_string("9034 9078 9122 9166") == pytest.approx(9034.0)
+
     def test_km_conversion(self) -> None:
         assert _get_number_from_string("3km") == pytest.approx(3000.0)
 

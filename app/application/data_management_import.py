@@ -79,6 +79,7 @@ def _parse_degree(value: Any) -> float | None:
 def _get_number_from_string(value: Any) -> float | None:
     """
     从字符串中提取数值，支持 km/nm 单位转换。
+    多值以空格分隔时仅取第一个值（如 "9034 9078 9122 9166" → 9034）。
     """
     if value is None:
         return None
@@ -87,18 +88,23 @@ def _get_number_from_string(value: Any) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
 
-    cleaned = str(value).replace(" ", "")
-    match = _NUMBER_RE.search(cleaned)
+    text = str(value).strip()
+    tokens = text.split()
+    if not tokens:
+        return None
+
+    first = tokens[0]
+    suffix = "".join(tokens[1:])
+
+    match = _NUMBER_RE.search(first)
     if match is None:
-        # 对齐 C# GetNumberFromString：无数字时返回原字符串
         try:
-            return float(cleaned)
+            return float(first)
         except ValueError:
             return None
 
     num = float(match.group())
-
-    suffix = cleaned[: match.start()] + cleaned[match.end() :]
+    suffix = first[match.end() :] + suffix
     if _KM_RE.search(suffix):
         return num * 1000.0
     if _NM_RE.search(suffix):
@@ -540,15 +546,16 @@ def _import_airport_from_excel(
 
     runway_map: dict[str, Runway] = {}
     for rw_data in runway_rows:
+        ctx = f"跑道 {rw_data.get('run_number', '?')}"
         runway = Runway(
             airport_id=airport_id,
             run_number=rw_data['run_number'],
             name=rw_data['name'],
-            direction=_to_decimal(rw_data.get('direction')),
-            length=_to_decimal(rw_data.get('length')),
-            width=_to_decimal(rw_data.get('width')),
-            enter_height=_to_decimal(rw_data.get('enter_height')),
-            maximum_airworthiness=_to_decimal(rw_data.get('maximum_airworthiness')),
+            direction=_check_numeric_10_2(rw_data.get('direction'), 'direction', ctx),
+            length=_check_numeric_10_2(rw_data.get('length'), 'length', ctx),
+            width=_check_numeric_10_2(rw_data.get('width'), 'width', ctx),
+            enter_height=_check_numeric_10_2(rw_data.get('enter_height'), 'enter_height', ctx),
+            maximum_airworthiness=_check_numeric_10_2(rw_data.get('maximum_airworthiness'), 'maximum_airworthiness', ctx),
             longitude=_to_decimal(rw_data.get('longitude')),
             latitude=_to_decimal(rw_data.get('latitude')),
             altitude=_to_decimal(rw_data.get('altitude')),
@@ -565,29 +572,31 @@ def _import_airport_from_excel(
     for st_data in station_rows:
         _resolve_station_runway(st_data, runway_map)
         _fill_station_altitude(st_data, runway_map, airport.altitude)
+        ctx = f"台站 {st_data.get('name')}"
         station = Station(
             airport_id=airport_id,
             station_type=st_data.get('station_type'),
             name=st_data.get('name'),
-            frequency=_to_decimal(st_data.get('frequency')),
+            frequency=_check_numeric_10_2(st_data.get('frequency'), 'frequency', ctx),
             longitude=_to_decimal(st_data.get('longitude')),
             latitude=_to_decimal(st_data.get('latitude')),
             altitude=_to_decimal(st_data.get('altitude')),
-            coverage_radius=_to_decimal(st_data.get('coverage_radius')),
-            fly_height=_to_decimal(st_data.get('fly_height')),
-            antenna_hag=_to_decimal(st_data.get('antenna_hag')),
+            coverage_radius=_check_numeric_10_2(st_data.get('coverage_radius'), 'coverage_radius', ctx),
+            fly_height=_check_numeric_10_2(st_data.get('fly_height'), 'fly_height', ctx),
+            antenna_hag=_check_numeric_10_2(st_data.get('antenna_hag'), 'antenna_hag', ctx),
             runway_no=st_data.get('runway_no'),
-            reflection_net_hag=_to_decimal(st_data.get('reflection_net_hag')),
-            center_antenna_h=_to_decimal(st_data.get('center_antenna_h')),
-            b_antenna_h=_to_decimal(st_data.get('b_antenna_h')),
-            b_to_center_distance=_to_decimal(st_data.get('b_to_center_distance')),
-            reflection_diameter=_to_decimal(st_data.get('reflection_diameter')),
-            downward_angle=_to_decimal(st_data.get('downward_angle')),
-            distance_to_runway=_to_decimal(st_data.get('distance_to_runway')),
-            distance_v_to_runway=_to_decimal(st_data.get('distance_v_to_runway')),
-            distance_endo_runway=_to_decimal(st_data.get('distance_endo_runway')),
+            reflection_net_hag=_check_numeric_10_2(st_data.get('reflection_net_hag'), 'reflection_net_hag', ctx),
+            center_antenna_h=_check_numeric_10_2(st_data.get('center_antenna_h'), 'center_antenna_h', ctx),
+            b_antenna_h=_check_numeric_10_2(st_data.get('b_antenna_h'), 'b_antenna_h', ctx),
+            b_to_center_distance=_check_numeric_10_2(st_data.get('b_to_center_distance'), 'b_to_center_distance', ctx),
+            reflection_diameter=_check_numeric_10_2(st_data.get('reflection_diameter'), 'reflection_diameter', ctx),
+            downward_angle=_check_numeric_10_2(st_data.get('downward_angle'), 'downward_angle', ctx),
+            antenna_tag=_check_numeric_10_2(st_data.get('antenna_tag'), 'antenna_tag', ctx),
+            distance_to_runway=_check_numeric_10_2(st_data.get('distance_to_runway'), 'distance_to_runway', ctx),
+            distance_v_to_runway=_check_numeric_10_2(st_data.get('distance_v_to_runway'), 'distance_v_to_runway', ctx),
+            distance_endo_runway=_check_numeric_10_2(st_data.get('distance_endo_runway'), 'distance_endo_runway', ctx),
             unit_number=st_data.get('unit_number'),
-            antenna_height=_to_decimal(st_data.get('antenna_height')),
+            antenna_height=_check_numeric_10_2(st_data.get('antenna_height'), 'antenna_height', ctx),
             station_sub_type=st_data.get('station_sub_type'),
         )
         session.add(station)
@@ -668,3 +677,18 @@ def _to_decimal(value: Any) -> Any:
     if value is None:
         return None
     return Decimal(str(value))
+
+
+_MAX_NUMERIC_10_2 = Decimal("99999999.99")
+
+
+def _check_numeric_10_2(value: Any, field_name: str, context: str) -> Decimal | None:
+    d = _to_decimal(value)
+    if d is None:
+        return None
+    if d > _MAX_NUMERIC_10_2 or d < -_MAX_NUMERIC_10_2:
+        raise AirportImportParseError(
+            f"数值溢出（{context} {field_name} = {d}）："
+            f"超出 NUMERIC(10, 2) 最大范围 ±{_MAX_NUMERIC_10_2}"
+        )
+    return d
