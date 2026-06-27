@@ -89,7 +89,10 @@ class ImportBatchRepository:
 
     # 将导入批次标记为失败。
     def mark_import_batch_failed(
-        self, task_id: str, error_message: str
+        self,
+        task_id: str,
+        error_message: str,
+        status_message: str | None = None,
     ) -> ImportBatch | None:
         import_batch = self.get_import_batch(task_id)
         if import_batch is None:
@@ -97,7 +100,7 @@ class ImportBatchRepository:
 
         import_batch.status = "failed"
         import_batch.progress_percent = 100
-        import_batch.status_message = "import task failed"
+        import_batch.status_message = status_message if status_message is not None else "import task failed"
         import_batch.error_message = error_message
         import_batch.finished_at = datetime.now(timezone.utc)
         self._session.commit()

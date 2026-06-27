@@ -1,5 +1,8 @@
+import logging
 from pathlib import Path
 import re
+
+logger = logging.getLogger(__name__)
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -20,7 +23,10 @@ from app.application.polygon_obstacle_excel_parser import (
     PolygonObstacleExcelParseError,
     parse_polygon_obstacle_excel,
 )
-from app.application.polygon_obstacle_geometry import build_multipolygon_geometry
+from app.application.polygon_obstacle_geometry import (
+    PolygonObstacleGeometryError,
+    build_multipolygon_geometry,
+)
 from app.application.point_obstacle_excel_parser import (
     PointObstacleExcelParseError,
     parse_point_obstacle_excel,
@@ -139,8 +145,21 @@ class PolygonObstacleImportService:
                 self._run_point_import_batch(import_batch)
             else:
                 self._run_polygon_import_batch(import_batch)
-        except (PolygonObstacleExcelParseError, PointObstacleExcelParseError) as exc:
-            self._repository.mark_import_batch_failed(task_id, str(exc))
+        except (
+            PolygonObstacleExcelParseError,
+            PointObstacleExcelParseError,
+            PolygonObstacleGeometryError,
+        ) as exc:
+            self._repository.mark_import_batch_failed(
+                task_id, error_message=str(exc), status_message=str(exc)
+            )
+        except Exception as exc:
+            logger.exception("import task %s encountered an unexpected error", task_id)
+            self._repository.mark_import_batch_failed(
+                task_id,
+                error_message=str(exc),
+                status_message="导入任务遇到意外错误，请联系管理员",
+            )
 
     # 执行点状导入任务并写入障碍物数据。
     def run_point_import_task(self, task_id: str) -> None:
@@ -183,6 +202,22 @@ class PolygonObstacleImportService:
         parsed_obstacles = parse_polygon_obstacle_excel(
             Path(source_file_path).read_bytes()
         )
+
+        # 检测所有障碍物是否均不足3个独立顶点，判定为点状数据误传入多边形导入
+        if parsed_obstacles:
+            distinct_counts = []
+            for obs in parsed_obstacles:
+                distinct_pts = len(
+                    {(p.longitude_decimal, p.latitude_decimal) for p in obs.points}
+                )
+                distinct_counts.append(distinct_pts)
+            if all(n < 3 for n in distinct_counts):
+                raise PolygonObstacleExcelParseError(
+                    "检测到Excel数据格式与多边形导入类型不匹配："
+                    f"全部{len(parsed_obstacles)}个障碍物顶点均不足3个，可能为点状障碍物数据。"
+                    "请确认您选择了正确的导入类型（点状障碍物/多边形障碍物）"
+                )
+
         obstacle_payloads = []
         for obstacle in parsed_obstacles:
             built_geometry = build_multipolygon_geometry(obstacle)

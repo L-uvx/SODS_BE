@@ -735,14 +735,13 @@ def test_run_import_task_marks_failed_for_invalid_excel_template() -> None:
         response = client.get(f"/polygon-obstacle/import/{task_id}/status")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "taskId": task_id,
-        "status": "failed",
-        "message": "import task failed",
-        "progressPercent": 100,
-        "projectId": 1,
-        "obstacleBatchId": task_id,
-    }
+    json_data = response.json()
+    assert json_data["status"] == "failed"
+    assert json_data["message"] != "import task failed"
+    assert "经度" in json_data["message"]
+    assert json_data["progressPercent"] == 100
+    assert json_data["projectId"] == 1
+    assert json_data["obstacleBatchId"] == task_id
 
 
 def test_run_import_task_marks_failed_for_non_excel_file() -> None:
@@ -763,14 +762,180 @@ def test_run_import_task_marks_failed_for_non_excel_file() -> None:
         response = client.get(f"/polygon-obstacle/import/{task_id}/status")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "taskId": task_id,
-        "status": "failed",
-        "message": "import task failed",
-        "progressPercent": 100,
-        "projectId": 1,
-        "obstacleBatchId": task_id,
-    }
+    json_data = response.json()
+    assert json_data["status"] == "failed"
+    assert json_data["message"] != "import task failed"
+    assert "excel" in json_data["message"].lower()
+    assert json_data["progressPercent"] == 100
+    assert json_data["projectId"] == 1
+    assert json_data["obstacleBatchId"] == task_id
+
+
+def _build_point_like_excel_bytes() -> bytes:
+    """Excel with single-row obstacles that will fail polygon geometry building."""
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["障碍物名称", "经度", "纬度", "顶部高程"])
+    ws.append(["点障碍物1", "103°58'33.11\"", "030°30'24.77\"", 549.9])
+    ws.append(["点障碍物2", "103°59'12.34\"", "030°31'45.67\"", 620.5])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_point_data_to_polygon_import_marks_failed_for_type_mismatch() -> None:
+    """Point-like Excel data uploaded to polygon import should fail with type mismatch."""
+    with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        create_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Point Import Test",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("point_data.xlsx", _build_point_like_excel_bytes())},
+        )
+        task_id = create_response.json()["taskId"]
+        _run_import_task(client, task_id)
+
+        response = client.get(f"/polygon-obstacle/import/{task_id}/status")
+
+    assert response.status_code == 200
+    json_data = response.json()
+    assert json_data["status"] == "failed"
+    assert "不匹配" in json_data["message"]
+    assert "多边形" in json_data["message"]
+    assert json_data["progressPercent"] == 100
+
+
+def test_unexpected_error_during_import_marks_failed() -> None:
+    """Any unexpected exception during import should mark the batch as failed."""
+    with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        create_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Unexpected Error Test",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("valid.xlsx", _read_valid_excel_bytes())},
+        )
+        task_id = create_response.json()["taskId"]
+
+        from unittest.mock import patch
+        from app.application.polygon_obstacle_import import PolygonObstacleImportService
+
+        with patch.object(
+            PolygonObstacleImportService,
+            "_run_polygon_import_batch",
+            side_effect=_SentinelRuntimeError("unexpected crash"),
+        ):
+            _run_import_task(client, task_id)
+
+        response = client.get(f"/polygon-obstacle/import/{task_id}/status")
+
+    assert response.status_code == 200
+    json_data = response.json()
+    assert json_data["status"] == "failed"
+    assert json_data["message"] == "导入任务遇到意外错误，请联系管理员"
+    assert json_data["progressPercent"] == 100
+
+
+def test_valid_polygon_import_succeeds() -> None:
+    """Valid polygon data should import successfully."""
+    with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        create_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Valid Polygon Test",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("import_demo.xlsx", _read_valid_excel_bytes())},
+        )
+        task_id = create_response.json()["taskId"]
+        _run_import_task(client, task_id)
+
+        response = client.get(f"/polygon-obstacle/import/{task_id}/status")
+
+    assert response.status_code == 200
+    json_data = response.json()
+    assert json_data["status"] == "succeeded"
+    assert json_data["message"] == "import task succeeded"
+    assert json_data["progressPercent"] == 100
+
+
+class _SentinelRuntimeError(RuntimeError):
+    """Distinct exception type to verify patch applies correctly."""
+
+
+def _build_partial_mismatch_excel_bytes() -> bytes:
+    """Excel with 2 valid polygon obstacles (>=3 points each) and 1 point-like obstacle (<3 points)."""
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["障碍物名称", "经度", "纬度", "顶部高程"])
+    ws.append(["多边形1", "103°58'33.11\"", "030°30'24.77\"", 500.0])
+    ws.append(["多边形1", "104°00'10.00\"", "030°31'00.00\"", 500.0])
+    ws.append(["多边形1", "104°02'30.00\"", "030°32'15.00\"", 500.0])
+    ws.append(["多边形2", "103°59'00.00\"", "029°50'00.00\"", 600.0])
+    ws.append(["多边形2", "104°00'00.00\"", "029°51'00.00\"", 600.0])
+    ws.append(["多边形2", "104°01'00.00\"", "029°52'00.00\"", 600.0])
+    ws.append(["点障碍物", "104°03'00.00\"", "029°53'00.00\"", 700.0])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_partial_mismatch_geometry_error_marks_failed() -> None:
+    """Mixed data with most obstacles valid but one deficient should fail at geometry stage."""
+    with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        create_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Partial Mismatch Test",
+                "obstacleType": "building",
+            },
+            files={
+                "excelFile": ("partial.xlsx", _build_partial_mismatch_excel_bytes())
+            },
+        )
+        task_id = create_response.json()["taskId"]
+        _run_import_task(client, task_id)
+
+        response = client.get(f"/polygon-obstacle/import/{task_id}/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+
+
+def test_point_data_to_polygon_import_result_returns_empty_obstacles() -> None:
+    """Point data to polygon import should return empty obstacles in result."""
+    with _create_test_client() as client:
+        app.state.dispatch_import_task = _DispatchRecorder().delay
+        runtime.dispatch_import_task = app.state.dispatch_import_task
+        create_response = client.post(
+            "/polygon-obstacle/import",
+            data={
+                "projectName": "Point Result Test",
+                "obstacleType": "building",
+            },
+            files={"excelFile": ("point_data.xlsx", _build_point_like_excel_bytes())},
+        )
+        task_id = create_response.json()["taskId"]
+        _run_import_task(client, task_id)
+
+        response = client.get(f"/polygon-obstacle/import/{task_id}/result")
+
+    assert response.status_code == 200
+    json_data = response.json()
+    assert json_data["status"] == "failed"
+    assert json_data["importedCount"] == 0
+    assert json_data["obstacles"] == []
 
 
 def test_create_analysis_task_returns_minimal_task_payload() -> None:
